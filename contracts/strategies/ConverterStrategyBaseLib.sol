@@ -15,7 +15,6 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../libs/IterationPlanLib.sol";
-import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -726,21 +725,16 @@ library ConverterStrategyBaseLib {
     uint len = tokens_.length;
     IForwarder forwarder = IForwarder(IController(controller_).forwarder());
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      console.log("_sendTokensToForwarder.i", i);
-      console.log("_sendTokensToForwarder.thresholds_[i]", thresholds_[i]);
-      console.log("_sendTokensToForwarder.amounts_[i]", amounts_[i]);
       if (thresholds_[i] > amounts_[i]) {
         amounts_[i] = 0; // it will be excluded in filterZeroAmounts() below
       } else {
         AppLib.approveIfNeeded(tokens_[i], amounts_[i], address(forwarder));
       }
-      console.log("_sendTokensToForwarder.amounts_[i]", amounts_[i]);
     }
 
     (tokensOut, amountsOut) = TokenAmountsLib.filterZeroAmounts(tokens_, amounts_);
     if (tokensOut.length != 0) {
       forwarder.registerIncome(tokensOut, amountsOut, ISplitter(splitter_).vault(), true);
-      console.log("_sendTokensToForwarder.tokensOut.tokensOut", tokensOut.length);
     }
   }
 
