@@ -23,11 +23,11 @@ import {
   PriceOracleImitator,
   ProxyControlled,
   StrategySplitterV2__factory, SwapManager__factory,
-  TetuConverter, TetuConverter__factory,
+  TetuConverter, TetuConverter__factory, TetuLiquidator,
   TetuLiquidator__factory,
   TetuVaultV2,
   TetuVaultV2__factory,
-  TetuVoter__factory,
+  TetuVoter__factory, Uni3Swapper,
   Uni3Swapper__factory,
   UniswapV3Callee,
   UniswapV3ConverterStrategy,
@@ -50,7 +50,7 @@ import {generateAssetPairs} from "../utils/ConverterUtils";
 import {BigNumber, BigNumberish} from "ethers";
 import {DeployerUtilsLocal} from "../utils/DeployerUtilsLocal";
 import {RunHelper} from "../utils/RunHelper";
-import {IContracts, IRebalanceDebtSwapPoolParams, IVaultUniswapV3StrategyInfo} from "./types";
+import {IRebalanceDebtSwapPoolParams, IVaultUniswapV3StrategyInfo} from "./types";
 
 export async function deployBacktestSystem(
   signer: SignerWithAddress,
@@ -62,7 +62,28 @@ export async function deployBacktestSystem(
   tickRange: number,
   rebalanceTickRange: number,
   rebalanceDebtSwapPoolParams: IRebalanceDebtSwapPoolParams
-): Promise<IContracts> {
+): Promise<{
+  gauge: MultiGauge;
+  rebalanceDebtSwapPool: UniswapV3Pool | undefined;
+  controller: ControllerV2;
+  priceOracleImitator: PriceOracleImitator;
+  reader: PairBasedStrategyReader;
+  pool: UniswapV3Pool;
+  compPriceOracleImitator: CompPriceOracleImitator;
+  uni3swapper: Uni3Swapper;
+  tetuConverter: TetuConverter;
+  cTokens: { [p: string]: CErc20Immutable };
+  uniswapV3Factory: UniswapV3Factory;
+  comptroller: Comptroller;
+  liquidator: TetuLiquidator;
+  compInterestRateModel: JumpRateModelV2;
+  tokens: { [p: string]: MockToken };
+  uniswapV3Helper: UniswapV3Lib;
+  uniswapV3Calee: UniswapV3Callee;
+  strategy: UniswapV3ConverterStrategy;
+  vaultFactory: VaultFactory;
+  vault: TetuVaultV2
+}> {
   console.log('Deploying backtest system..')
   // deploy tokens
   const tokens: {[realAddress: string]: MockToken} = {}
@@ -145,13 +166,13 @@ export async function deployBacktestSystem(
     tokenOut: string,
   }[] = []
   liquidatorPoolsForStrategy.push({
-    pool: useRebalanceDebtSwapPool ? rebalanceDebtSwapPool.address : pool.address,
+    pool: useRebalanceDebtSwapPool && rebalanceDebtSwapPool ? rebalanceDebtSwapPool.address : pool.address,
     swapper: uni3swapper.address,
     tokenIn: await pool.token0(),
     tokenOut: await pool.token1(),
   })
   liquidatorPoolsForStrategy.push({
-    pool: useRebalanceDebtSwapPool ? rebalanceDebtSwapPool.address : pool.address,
+    pool: useRebalanceDebtSwapPool && rebalanceDebtSwapPool ? rebalanceDebtSwapPool.address : pool.address,
     swapper: uni3swapper.address,
     tokenIn: await pool.token1(),
     tokenOut: await pool.token0(),
@@ -533,7 +554,6 @@ export async function deployAndInitVaultAndUniswapV3Strategy<T>(
     uniswapV3PoolAddress,
     range,
     rebalanceRange,
-    [0, 0, Misc.MAX_UINT, 0],
     [0, 0, Misc.MAX_UINT, 0],
   );
 

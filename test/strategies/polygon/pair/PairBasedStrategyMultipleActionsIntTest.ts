@@ -250,7 +250,6 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
         0,
         0,
         [0, 0, Misc.MAX_UINT, 0],
-        [0, 0, Misc.MAX_UINT, 0],
       );
 
       await b.splitter.connect(b.gov).scheduleStrategies([strategy2.address]);

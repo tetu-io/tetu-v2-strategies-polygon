@@ -91,9 +91,7 @@ contract PairBasedStrategyReader {
 
     if (
       PairBasedStrategyLib.isFuseTriggeredOn(
-        PairBasedStrategyLib.FuseStatus(nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A])
-      ) || PairBasedStrategyLib.isFuseTriggeredOn(
-        PairBasedStrategyLib.FuseStatus(nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B])
+        PairBasedStrategyLib.FuseStatus(nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS])
       )
     ) {
       // fuse is enabled: full withdraw to underlying is required

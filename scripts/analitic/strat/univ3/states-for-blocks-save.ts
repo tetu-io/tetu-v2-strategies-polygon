@@ -1,3 +1,4 @@
+/*
 import hre, { ethers } from 'hardhat';
 import {
   ConverterStrategyBase__factory,
@@ -99,10 +100,10 @@ async function getStateForBlock(
   );
 }
 
-/**
+/!**
  * to run the script on stand-alone hardhat:
  *      npx hardhat run scripts/analitic/strat/univ3/states-for-blocks-save.ts
- */
+ *!/
 async function main() {
   const pathOut = "./tmp/states.csv";
   // const signer = await DeployerUtilsLocal.impersonate(SENDER);
@@ -179,3 +180,4 @@ main()
     console.error(error);
     process.exit(1);
   });
+*/

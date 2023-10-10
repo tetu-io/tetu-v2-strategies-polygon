@@ -2,6 +2,7 @@
 pragma solidity 0.8.17;
 
 import "../../strategies/pair/PairBasedStrategyLogicLib.sol";
+import "../../strategies/pair/PairBasedStrategyLib.sol";
 
 contract PairBasedStrategyLogicLibFacade {
   mapping(address => uint) public liquidationThresholds;
@@ -21,7 +22,8 @@ contract PairBasedStrategyLogicLibFacade {
     bool depositorSwapTokens,
     uint128 totalLiquidity,
     address strategyProfitHolder,
-    PairBasedStrategyLib.FuseStateParams[2] memory fuseAB,
+    PairBasedStrategyLib.FuseStatus status_,
+    uint[4] memory thresholds_,
     uint withdrawDone,
     uint lastRebalanceNoSwap
   ) external {
@@ -39,8 +41,8 @@ contract PairBasedStrategyLogicLibFacade {
     pairState.depositorSwapTokens = depositorSwapTokens;
     pairState.totalLiquidity = totalLiquidity;
     pairState.strategyProfitHolder = strategyProfitHolder;
-    pairState.fuseAB[0] = fuseAB[0];
-    pairState.fuseAB[1] = fuseAB[1];
+    pairState.fuseAB.status = status_;
+    pairState.fuseAB.thresholds = thresholds_;
 
     pairState.withdrawDone = withdrawDone;
     pairState.lastRebalanceNoSwap = lastRebalanceNoSwap;
@@ -54,7 +56,7 @@ contract PairBasedStrategyLogicLibFacade {
     bool depositorSwapTokens,
     uint128 totalLiquidity,
     address strategyProfitHolder,
-    uint[10] memory fuseParams, // [fuse A status, 4 thresholds of fuse A, fuse B status, 4 thresholds of fuse B]
+    uint[10] memory fuseParams, // [fuse status, 4 thresholds of fuse, 5 deprecated valuues]
     uint withdrawDone
   ) {
     return (
@@ -66,16 +68,16 @@ contract PairBasedStrategyLogicLibFacade {
       pairState.totalLiquidity,
       pairState.strategyProfitHolder,
       [
-        uint(pairState.fuseAB[0].status),
-        pairState.fuseAB[0].thresholds[0],
-        pairState.fuseAB[0].thresholds[1],
-        pairState.fuseAB[0].thresholds[2],
-        pairState.fuseAB[0].thresholds[3],
-        uint(pairState.fuseAB[1].status),
-        pairState.fuseAB[1].thresholds[0],
-        pairState.fuseAB[1].thresholds[1],
-        pairState.fuseAB[1].thresholds[2],
-        pairState.fuseAB[1].thresholds[3]
+        uint(pairState.fuseAB.status),
+        pairState.fuseAB.thresholds[0],
+        pairState.fuseAB.thresholds[1],
+        pairState.fuseAB.thresholds[2],
+        pairState.fuseAB.thresholds[3],
+        0,
+        0,
+        0,
+        0,
+        0
       ],
       pairState.withdrawDone
     );
@@ -119,8 +121,8 @@ contract PairBasedStrategyLogicLibFacade {
     uint poolPrice
   ) external view returns (
     bool needRebalance,
-    bool[2] memory fuseStatusChangedAB,
-    PairBasedStrategyLib.FuseStatus[2] memory fuseStatusAB
+    bool fuseStatusChangedAB,
+    PairBasedStrategyLib.FuseStatus fuseStatusAB
   ) {
     return PairBasedStrategyLogicLib.needStrategyRebalance(pairState, converter_, tick, poolPrice);
   }
@@ -129,15 +131,14 @@ contract PairBasedStrategyLogicLibFacade {
     address[4] calldata addr,
     int24[4] calldata tickData,
     bool isStablePool_,
-    uint[4] calldata fuseThresholdsA,
-    uint[4] calldata fuseThresholdsB
+    uint[4] calldata fuseThresholds
   ) external {
-    PairBasedStrategyLogicLib.setInitialDepositorValues(pairState, addr, tickData, isStablePool_, fuseThresholdsA, fuseThresholdsB);
+    PairBasedStrategyLogicLib.setInitialDepositorValues(pairState, addr, tickData, isStablePool_, fuseThresholds);
   }
 
   function updateFuseStatus(
-    bool[2] calldata fuseStatusChangedAB,
-    PairBasedStrategyLib.FuseStatus[2] calldata fuseStatusAB
+    bool fuseStatusChangedAB,
+    PairBasedStrategyLib.FuseStatus fuseStatusAB
   ) external {
     PairBasedStrategyLogicLib.updateFuseStatus(pairState, fuseStatusChangedAB, fuseStatusAB);
   }

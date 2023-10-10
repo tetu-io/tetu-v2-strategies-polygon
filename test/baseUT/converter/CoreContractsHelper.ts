@@ -27,69 +27,6 @@ export class CoreContractsHelper {
     )) as ConverterController;
   }
 
-  static async createController(
-    deployer: SignerWithAddress,
-    tetuConverterFabric: (
-      controller: ConverterController,
-      borrowManager: string,
-      debtMonitor: string,
-      swapManager: string,
-      keeper: string,
-      priceOracle: string
-    ) => Promise<string>,
-    borrowManagerFabric: (controller: ConverterController) => Promise<string>,
-    debtMonitorFabric: (
-      controller: ConverterController,
-      borrowManager: string
-    ) => Promise<string>,
-    keeperFabric: (controller: ConverterController) => Promise<string>,
-    tetuLiquidatorFabric: () => Promise<string>,
-    swapManagerFabric: (
-      controller: ConverterController,
-      tetuLiquidator: string,
-      priceOracle: string
-    ) => Promise<string>,
-    priceOracleFabric: () => Promise<string>,
-    minHealthFactor2: number = 101,
-    targetHealthFactor2: number = 200,
-    maxHealthFactor2: number = 400,
-    countBlocksPerDay: number = 40000
-  ): Promise<ConverterController> {
-    const tetuLiquidator = await tetuLiquidatorFabric();
-    const priceOracle = await priceOracleFabric();
-
-    const controller = await this.deployController(deployer, tetuLiquidator, priceOracle);
-    const borrowManager = await borrowManagerFabric(controller);
-    const keeper = await keeperFabric(controller);
-
-    const swapManager = await swapManagerFabric(controller, tetuLiquidator, priceOracle);
-    const debtMonitor = await debtMonitorFabric(controller, borrowManager);
-
-    const tetuConverter = await tetuConverterFabric(
-      controller,
-      borrowManager,
-      debtMonitor,
-      swapManager,
-      keeper,
-      priceOracle
-    );
-
-    await controller.initialize(
-      deployer.address,
-      countBlocksPerDay,
-      minHealthFactor2,
-      targetHealthFactor2,
-      maxHealthFactor2,
-      tetuConverter,
-      borrowManager,
-      debtMonitor,
-      keeper,
-      swapManager,
-      1000
-    );
-    return controller;
-  }
-
   public static async createDebtMonitor(
     signer: SignerWithAddress,
     controllerAddress: string,

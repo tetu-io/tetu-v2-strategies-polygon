@@ -67,7 +67,6 @@ describe('PairBasedStrategySetupIntTest', () => {
           0,
           0,
           [0, 0, Misc.MAX_UINT, 0],
-          [0, 0, Misc.MAX_UINT, 0],
         );
 
         return _strategy as unknown as IStrategyV2;
@@ -112,7 +111,6 @@ describe('PairBasedStrategySetupIntTest', () => {
             endTime: 4104559500
           },
           [0, 0, Misc.MAX_UINT, 0],
-          [0, 0, Misc.MAX_UINT, 0],
         );
 
         return _strategy as unknown as IStrategyV2;
@@ -151,7 +149,6 @@ describe('PairBasedStrategySetupIntTest', () => {
           true,
           pId,
           [0, 0, Misc.MAX_UINT, 0],
-          [0, 0, Misc.MAX_UINT, 0],
         );
 
         return _strategy as unknown as IStrategyV2;
@@ -179,41 +176,33 @@ describe('PairBasedStrategySetupIntTest', () => {
     });
 
     interface ISetFuseStatusParams {
-      fuses: {
-        index: number;
-        status: number;
-      }[];
+      fuseStatus: number;
       notAsOperator?: boolean;
     }
 
     interface ISetFuseStatusResults {
-      status: number[];
+      status: number;
     }
 
     async function callSetFuseStatus(strategy: ISetupPairBasedStrategy, p: ISetFuseStatusParams): Promise<ISetFuseStatusResults> {
       const s = p.notAsOperator
         ? strategy.connect(await Misc.impersonate(ethers.Wallet.createRandom().address))
         : strategy.connect(operator);
-      for (const fuse of p.fuses) {
-        await s.setFuseStatus(fuse.index, fuse.status);
-      }
+      await s.setFuseStatus(p.fuseStatus);
       const state = await PackedData.getDefaultState(strategy as unknown as IPairBasedDefaultStateProvider);
-      return {status: [state.fuseStatusTokenA, state.fuseStatusTokenB]}
+      return {status: state.fuseStatus}
     }
 
     describe("Univ3", () => {
       it("should set expected values", async () => {
         const ret = await callSetFuseStatus(strategyUniv3, {
-          fuses: [
-            {status: 1, index: 0},
-            {status: 3, index: 1}
-          ]
+          fuseStatus: 1,
         });
-        expect(ret.status.join()).eq([1, 3].join());
+        expect(ret.status).eq(1);
       });
       it("should revert if not operator", async () => {
         await expect(callSetFuseStatus(strategyUniv3, {
-          fuses: [{status: 1, index: 0}],
+          fuseStatus: 1,
           notAsOperator: true
         })).revertedWith("SB: Denied"); // DENIED
       });
@@ -222,16 +211,13 @@ describe('PairBasedStrategySetupIntTest', () => {
     describe("Algebra", () => {
       it("should set expected values", async () => {
         const ret = await callSetFuseStatus(strategyAlgebra, {
-          fuses: [
-            {status: 1, index: 0},
-            {status: 3, index: 1}
-          ]
+          fuseStatus: 1,
         });
-        expect(ret.status.join()).eq([1, 3].join());
+        expect(ret.status).eq(1);
       });
       it("should revert if not operator", async () => {
         await expect(callSetFuseStatus(strategyAlgebra, {
-          fuses: [{status: 1, index: 0}],
+          fuseStatus: 1,
           notAsOperator: true
         })).revertedWith("SB: Denied"); // DENIED
       });
@@ -240,16 +226,13 @@ describe('PairBasedStrategySetupIntTest', () => {
     describe("Kyber", () => {
       it("should set expected values", async () => {
         const ret = await callSetFuseStatus(strategyKyber, {
-          fuses: [
-            {status: 1, index: 0},
-            {status: 3, index: 1}
-          ]
+          fuseStatus: 1,
         });
-        expect(ret.status.join()).eq([1, 3].join());
+        expect(ret.status).eq(1);
       });
       it("should revert if not operator", async () => {
         await expect(callSetFuseStatus(strategyKyber, {
-          fuses: [{status: 1, index: 0}],
+          fuseStatus: 1,
           notAsOperator: true
         })).revertedWith("SB: Denied"); // DENIED
       });
@@ -266,14 +249,12 @@ describe('PairBasedStrategySetupIntTest', () => {
     });
 
     interface ISetFuseThresholdsParams {
-      thresholdsA: string[];
-      thresholdsB: string[];
+      thresholds: string[];
       notAsOperator?: boolean;
     }
 
     interface ISetFuseThresholdsResults {
-      thresholdsA: number[];
-      thresholdsB: number[];
+      thresholds: number[];
     }
 
     async function callSetFuseStatus(strategy: ISetupPairBasedStrategy, p: ISetFuseThresholdsParams): Promise<ISetFuseThresholdsResults> {
@@ -281,32 +262,26 @@ describe('PairBasedStrategySetupIntTest', () => {
         ? strategy.connect(await Misc.impersonate(ethers.Wallet.createRandom().address))
         : strategy.connect(operator);
       const ttA = new Array<BigNumber>(4);
-      const ttB = new Array<BigNumber>(4);
       for (let i = 0; i < 4; ++i) {
-        ttA[i] = parseUnits(p.thresholdsA[i], 18);
-        ttB[i] = parseUnits(p.thresholdsB[i], 18);
+        ttA[i] = parseUnits(p.thresholds[i], 18);
       }
-      await s.setFuseThresholds(0, [ttA[0], ttA[1], ttA[2], ttA[3]]);
-      await s.setFuseThresholds(1, [ttB[0], ttB[1], ttB[2], ttB[3]]);
+      await s.setFuseThresholds([ttA[0], ttA[1], ttA[2], ttA[3]]);
       const state = await PackedData.getDefaultState(strategy as unknown as IPairBasedDefaultStateProvider);
       return {
-        thresholdsA: state.fuseThresholdsA,
-        thresholdsB: state.fuseThresholdsB
+        thresholds: state.fuseThresholds,
       }
     }
 
     describe("Univ3", () => {
       it("should set expected values", async () => {
         const ret = await callSetFuseStatus(strategyUniv3, {
-          thresholdsA: ["1", "2", "4", "3"],
-          thresholdsB: ["5", "6", "8", "7"]
+          thresholds: ["1", "2", "4", "3"],
         });
-        expect([...ret.thresholdsA, ...ret.thresholdsB].join()).eq([1, 2, 4, 3, 5, 6, 8, 7].join());
+        expect([...ret.thresholds].join()).eq([1, 2, 4, 3].join());
       });
       it("should revert if not operator", async () => {
         await expect(callSetFuseStatus(strategyUniv3, {
-          thresholdsA: ["1", "2", "4", "3"],
-          thresholdsB: ["5", "6", "8", "7"],
+          thresholds: ["1", "2", "4", "3"],
           notAsOperator: true
         })).revertedWith("SB: Denied"); // DENIED
       });
@@ -315,15 +290,13 @@ describe('PairBasedStrategySetupIntTest', () => {
     describe("Algebra", () => {
       it("should set expected values", async () => {
         const ret = await callSetFuseStatus(strategyAlgebra, {
-          thresholdsA: ["1", "2", "4", "3"],
-          thresholdsB: ["5", "6", "8", "7"]
+          thresholds: ["1", "2", "4", "3"],
         });
-        expect([...ret.thresholdsA, ...ret.thresholdsB].join()).eq([1, 2, 4, 3, 5, 6, 8, 7].join());
+        expect([...ret.thresholds].join()).eq([1, 2, 4, 3].join());
       });
       it("should revert if not operator", async () => {
         await expect(callSetFuseStatus(strategyAlgebra, {
-          thresholdsA: ["1", "2", "4", "3"],
-          thresholdsB: ["5", "6", "8", "7"],
+          thresholds: ["1", "2", "4", "3"],
           notAsOperator: true
         })).revertedWith("SB: Denied"); // DENIED
       });
@@ -332,15 +305,13 @@ describe('PairBasedStrategySetupIntTest', () => {
     describe("Kyber", () => {
       it("should set expected values", async () => {
         const ret = await callSetFuseStatus(strategyKyber, {
-          thresholdsA: ["1", "2", "4", "3"],
-          thresholdsB: ["5", "6", "8", "7"]
+          thresholds: ["1", "2", "4", "3"],
         });
-        expect([...ret.thresholdsA, ...ret.thresholdsB].join()).eq([1, 2, 4, 3, 5, 6, 8, 7].join());
+        expect([...ret.thresholds].join()).eq([1, 2, 4, 3].join());
       });
       it("should revert if not operator", async () => {
         await expect(callSetFuseStatus(strategyKyber, {
-          thresholdsA: ["1", "2", "4", "3"],
-          thresholdsB: ["5", "6", "8", "7"],
+          thresholds: ["1", "2", "4", "3"],
           notAsOperator: true
         })).revertedWith("SB: Denied"); // DENIED
       });

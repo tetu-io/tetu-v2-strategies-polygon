@@ -218,7 +218,6 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
           true,
           t[4],
           [0, 0, Misc.MAX_UINT, 0],
-          [0, 0, Misc.MAX_UINT, 0],
         );
         const mainAssetSymbol = await IERC20Metadata__factory.connect(asset, signer).symbol()
         statesParams[t[1]] = {

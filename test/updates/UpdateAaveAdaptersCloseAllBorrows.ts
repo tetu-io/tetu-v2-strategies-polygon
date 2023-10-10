@@ -11,7 +11,7 @@ import {
   ConverterController__factory,
   ConverterStrategyBase__factory, DebtMonitor,
   DebtMonitor__factory,
-  IBorrowManager, IPoolAdapter__factory, IRebalancingV2Strategy__factory,
+  IPoolAdapter__factory, IRebalancingV2Strategy__factory,
   StrategySplitterV2__factory,
   TetuConverter__factory,
   TetuVaultV2__factory
@@ -32,7 +32,7 @@ import fs from "fs";
 import {BigNumber} from "ethers";
 import {vault} from "../../typechain/@tetu_io/tetu-contracts-v2/contracts";
 
-describe("UpdateAaveAdaptersCloseAllBorrows", () => {
+describe("UpdateAaveAdaptersCloseAllBorrows @skip-on-coverage", () => {
   const VAULT_NSR = "0x0D397F4515007AE4822703b74b9922508837A04E";
   const VAULT_OLD = "0xF9D7A7fDd6fa57eBcA160d6D2B5B6C4651F7E740";
   const OPERATOR = "0xF1dCce3a6c321176C62b71c091E3165CC9C3816E";
@@ -110,7 +110,7 @@ describe("UpdateAaveAdaptersCloseAllBorrows", () => {
     return CustomConverterDeployHelper.createAaveTwoPlatformAdapter(
       signer,
       converterController.address,
-      MaticAddresses.AAVE3_POOL,
+      MaticAddresses.AAVE_LENDING_POOL,
       converterNormalTwo.address,
     );
   }
@@ -141,8 +141,18 @@ describe("UpdateAaveAdaptersCloseAllBorrows", () => {
       const countPositionsBeforeWithdraw = (await debtMonitor.getPositionsForUser(strategy)).length;
       const avgApr = await splitter.averageApr(strategy);
 
+      console.log("continueInvesting");
+      await splitter.continueInvesting(strategy, 1);
+      console.log("doHardWork");
+      await splitter.connect(operator).doHardWork();
+      console.log("pauseInvesting");
+      await splitter.pauseInvesting(strategy);
+
       await getPlatformsAdapterInfoForStrategy("before emergency exit", strategy, debtMonitor);
+      console.log("investedAssets", await converterStrategyBase.investedAssets());
       await converterStrategyBase.emergencyExit();
+      console.log("investedAssets after emergencyExit1", await converterStrategyBase.investedAssets());
+
       await getPlatformsAdapterInfoForStrategy("after emergency exit", strategy, debtMonitor);
 
       const countPositionsAfterWithdraw = (await debtMonitor.getPositionsForUser(strategy)).length;
@@ -248,7 +258,9 @@ describe("UpdateAaveAdaptersCloseAllBorrows", () => {
       await saver("b");
 
       const rebalancingV2Strategy = IRebalancingV2Strategy__factory.connect(si.strategy, signer);
-      await rebalancingV2Strategy.rebalanceNoSwaps(false);
+      console.log("rebalanceNoSwaps.start", si.strategy);
+      await rebalancingV2Strategy.rebalanceNoSwaps(false, {gasLimit: 19_000_000});
+      console.log("rebalanceNoSwaps.end");
 
       await saver("a");
     }

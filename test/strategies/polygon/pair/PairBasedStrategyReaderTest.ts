@@ -326,7 +326,7 @@ describe('PairBasedStrategyReaderTest', function() {
 
       totalAssets: string;
 
-      fuseStatus?: number[];
+      fuseStatus?: number;
       withdrawDone?: number;
       allowedLockedAmountPercent?: number;
 
@@ -344,17 +344,17 @@ describe('PairBasedStrategyReaderTest', function() {
       await strategy.setPoolTokens(p.underlying.address, p.secondAsset.address);
       await strategy.setDefaultStateNums([
         0, // IDX_NUMS_DEFAULT_STATE_TOTAL_LIQUIDITY = 0;
-        p?.fuseStatus ? p?.fuseStatus[0] : 1, // IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A = 1;
-        p?.fuseStatus ? p?.fuseStatus[1] : 1, // IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B = 2;
+        p?.fuseStatus ?? 1, // IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A = 1;
+        0, // IDX_NUMS_DEFAULT_STATE_RESERVED_0 = 2
         p.withdrawDone ?? 0, // IDX_NUMS_DEFAULT_STATE_WITHDRAW_DONE = 3;
-        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_0 = 4;
-        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_1 = 5;
-        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_2 = 6;
-        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_3 = 7;
-        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_0 = 8;
-        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_1 = 9;
-        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_2 = 10;
-        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_3 = 11;
+        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_0 = 4;
+        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_1 = 5;
+        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_2 = 6;
+        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_3 = 7;
+        0, // IDX_NUMS_DEFAULT_STATE_RESERVED_0 = 8;
+        0, // IDX_NUMS_DEFAULT_STATE_RESERVED_1 = 9;
+        0, // IDX_NUMS_DEFAULT_STATE_RESERVED_2 = 10;
+        0, // IDX_NUMS_DEFAULT_STATE_RESERVED_3 = 11;
         0, // IDX_NUMS_DEFAULT_STATE_LAST_REBALANCE_NO_SWAP = 12;
       ]);
 
@@ -386,7 +386,7 @@ describe('PairBasedStrategyReaderTest', function() {
         const r = await callIsWithdrawByAggCallRequired({
           underlying: usdc,
           secondAsset: wmatic,
-          fuseStatus: [0, 0],
+          fuseStatus: 0,
           totalAssets: "500",
           repays: []
         });
@@ -396,7 +396,7 @@ describe('PairBasedStrategyReaderTest', function() {
         const r = await callIsWithdrawByAggCallRequired({
           underlying: usdc,
           secondAsset: wmatic,
-          fuseStatus: [1, 1],
+          fuseStatus: 1,
           totalAssets: "500",
           repays: []
         });
@@ -406,19 +406,7 @@ describe('PairBasedStrategyReaderTest', function() {
         const r = await callIsWithdrawByAggCallRequired({
           underlying: usdc,
           secondAsset: wmatic,
-          fuseStatus: [3, 1],
-          withdrawDone: 0,
-
-          totalAssets: "500",
-          repays: []
-        });
-        expect(r.callResult).eq(1);
-      });
-      it("should return 1 if a fuse B is triggered and withdraw is not completed", async () => {
-        const r = await callIsWithdrawByAggCallRequired({
-          underlying: usdc,
-          secondAsset: wmatic,
-          fuseStatus: [1, 2],
+          fuseStatus: 3,
           withdrawDone: 0,
 
           totalAssets: "500",
@@ -430,7 +418,7 @@ describe('PairBasedStrategyReaderTest', function() {
         const r = await callIsWithdrawByAggCallRequired({
           underlying: usdc,
           secondAsset: wmatic,
-          fuseStatus: [1, 2],
+          fuseStatus: 2,
           withdrawDone: 1,
 
           totalAssets: "500",

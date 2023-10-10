@@ -51,7 +51,7 @@ library AlgebraConverterStrategyLogicLib {
 
   struct RebalanceLocal {
     /// @notice Fuse for token A and token B
-    PairBasedStrategyLib.FuseStateParams[2] fuseAB;
+    PairBasedStrategyLib.FuseStateParams fuseAB;
     ITetuConverter converter;
     IAlgebraPool pool;
     address tokenA;
@@ -59,8 +59,8 @@ library AlgebraConverterStrategyLogicLib {
     bool isStablePool;
     uint[2] liquidationThresholdsAB;
 
-    bool[2] fuseStatusChangedAB;
-    PairBasedStrategyLib.FuseStatus[2] fuseStatusAB;
+    bool fuseStatusChangedAB;
+    PairBasedStrategyLib.FuseStatus fuseStatusAB;
 
     uint poolPrice;
     uint poolPriceAdjustment;
@@ -87,8 +87,7 @@ library AlgebraConverterStrategyLogicLib {
   //region ------------------------------------------------ Helpers
 
   /// @param controllerPool [controller, pool]
-  /// @param fuseThresholdsA Fuse thresholds for token A (stable pool only)
-  /// @param fuseThresholdsB Fuse thresholds for token B (stable pool only)
+  /// @param fuseThresholds Fuse thresholds for tokens (stable pool only)
   function initStrategyState(
     State storage state,
     address[2] calldata controllerPool,
@@ -96,8 +95,7 @@ library AlgebraConverterStrategyLogicLib {
     int24 rebalanceTickRange,
     address asset_,
     bool isStablePool,
-    uint[4] calldata fuseThresholdsA,
-    uint[4] calldata fuseThresholdsB
+    uint[4] calldata fuseThresholds
   ) external {
     require(controllerPool[1] != address(0), AppErrors.ZERO_ADDRESS);
     address token0 = IAlgebraPool(controllerPool[1]).token0();
@@ -120,8 +118,7 @@ library AlgebraConverterStrategyLogicLib {
       [controllerPool[1], asset_, token0, token1],
       tickData,
       isStablePool,
-      fuseThresholdsA,
-      fuseThresholdsB
+      fuseThresholds
     );
 
     address liquidator = IController(controllerPool[0]).liquidator();

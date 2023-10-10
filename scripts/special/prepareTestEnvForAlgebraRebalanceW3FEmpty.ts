@@ -9,7 +9,6 @@ import {
   ControllerV2__factory, IERC20__factory, IStrategyV2,
 } from "../../typechain";
 import {DeployerUtilsLocal} from "../utils/DeployerUtilsLocal";
-import {UniswapV3StrategyUtils} from "../../test/UniswapV3StrategyUtils";
 import {MaticAddresses} from "../addresses/MaticAddresses";
 import {parseUnits} from "ethers/lib/utils";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
@@ -18,6 +17,8 @@ import {getConverterAddress, Misc} from "../utils/Misc";
 import {ConverterUtils} from "../../test/baseUT/utils/ConverterUtils";
 import {UniversalTestUtils} from "../../test/baseUT/utils/UniversalTestUtils";
 import {TokenUtils} from "../utils/TokenUtils";
+import {UniversalUtils} from "../../test/baseUT/strategies/UniversalUtils";
+import {PackedData} from "../../test/baseUT/utils/PackedData";
 
 async function main() {
   const chainId = Misc.getChainId();
@@ -58,7 +59,8 @@ async function main() {
           pool: MaticAddresses.ALGEBRA_USDC_USDT,
           startTime: 1663631794,
           endTime: 4104559500
-        }
+        },
+          [0, 0, Misc.MAX_UINT, 0],
       );
 
       return _strategy as unknown as IStrategyV2;
@@ -86,7 +88,8 @@ async function main() {
 
   // prepare to rebalance
   console.log('Swap..')
-  await UniswapV3StrategyUtils.movePriceUp(signer, strategy.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('1200000', 6));
+  const state = await PackedData.getDefaultState(strategy);
+  await UniversalUtils.movePoolPriceUp(signer, state, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('1200000', 6))
 
   const needRebalance = await strategy.needRebalance()
   if (!needRebalance) {

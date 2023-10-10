@@ -38,8 +38,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     int24 rebalanceTickRange_,
     bool isStablePool,
     IncentiveKey memory key,
-    uint[4] calldata fuseThresholdsA,
-    uint[4] calldata fuseThresholdsB
+    uint[4] calldata fuseThresholds
   ) external initializer {
     __ConverterStrategyBase_init(controller_, splitter_, converter_);
     AlgebraConverterStrategyLogicLib.initStrategyState(
@@ -49,8 +48,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
       rebalanceTickRange_,
       ISplitter(splitter_).asset(),
       isStablePool,
-      fuseThresholdsA,
-      fuseThresholdsB
+      fuseThresholds
     );
 
     AlgebraConverterStrategyLogicLib.initFarmingState(state, key);
@@ -64,10 +62,9 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
   /// @notice Manually set status of the fuse
   /// @param status See PairBasedStrategyLib.FuseStatus enum for possile values
-  /// @param index01 0 - token A, 1 - token B
-  function setFuseStatus(uint index01, uint status) external {
+  function setFuseStatus(uint status) external {
     StrategyLib2.onlyOperators(controller());
-    PairBasedStrategyLib.setFuseStatus(state.pair.fuseAB[index01], PairBasedStrategyLib.FuseStatus(status));
+    PairBasedStrategyLib.setFuseStatus(state.pair.fuseAB, PairBasedStrategyLib.FuseStatus(status));
   }
 
   /// @notice Set thresholds for the fuse: [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
@@ -76,10 +73,9 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   ///         Price falls below 0.9 - fuse is ON. Price rises back up to 0.92 - fuse is OFF.
   ///         Price raises more and reaches 1.1 - fuse is ON again. Price falls back and reaches 1.08 - fuse OFF again.
   /// @param values Price thresholds: [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
-  /// @param index01 0 - token A, 1 - token B
-  function setFuseThresholds(uint index01, uint[4] memory values) external {
+  function setFuseThresholds(uint[4] memory values) external {
     StrategyLib2.onlyOperators(controller());
-    PairBasedStrategyLib.setFuseThresholds(state.pair.fuseAB[index01], values);
+    PairBasedStrategyLib.setFuseThresholds(state.pair.fuseAB, values);
   }
 
   function setStrategyProfitHolder(address strategyProfitHolder) external {
@@ -295,10 +291,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     uint strategyLoss
   ) {
-    if (
-      PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[0].status)
-      || PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[1].status)
-    ) {
+    if (PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB.status)) {
       uint[] memory tokenAmounts = new uint[](2);
       tokenAmounts[0] = amount_;
       emit OnDepositorEnter(tokenAmounts, tokenAmounts);
@@ -342,8 +335,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   }
 
   function _isFuseTriggeredOn() internal view returns (bool) {
-    return PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[0].status)
-      || PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[1].status);
+    return PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB.status);
   }
   //endregion--------------------------------------- INTERNAL LOGIC
 }
