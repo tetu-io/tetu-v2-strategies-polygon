@@ -17,8 +17,9 @@ export class MaticAddresses {
 
   // tokens
   public static WETH_TOKEN = "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619".toLowerCase();
-  public static ADDY_TOKEN = "0xc3FdbadC7c795EF1D6Ba111e06fF8F16A20Ea539".toLowerCase();
   public static USDC_TOKEN = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174".toLowerCase();
+  public static USDT_TOKEN = "0xc2132D05D31c914a87C6611C10748AEb04B58e8F".toLowerCase();
+  public static DAI_TOKEN = "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063".toLowerCase();
   public static WMATIC_TOKEN = "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270".toLowerCase();
   public static STMATIC_TOKEN = "0x3A58a54C066FdC0f2D55FC9C89F0415C92eBf3C4".toLowerCase();
   public static QUICK_TOKEN = "0xB5C064F955D8e7F38fE0460C556a72987494eE17".toLowerCase(); // QUICK (new)
@@ -32,9 +33,7 @@ export class MaticAddresses {
   public static GRT_TOKEN = "0x5fe2B58c013d7601147DcdD68C143A77499f5531".toLowerCase();
   public static FRAX_TOKEN = "0x104592a158490a9228070E0A8e5343B499e125D0".toLowerCase();
   public static FXS_TOKEN = "0x3e121107F6F22DA4911079845a470757aF4e1A1b".toLowerCase();
-  public static DAI_TOKEN = "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063".toLowerCase();
   public static CRV_TOKEN = "0x172370d5Cd63279eFa6d502DAB29171933a610AF".toLowerCase();
-  public static USDT_TOKEN = "0xc2132D05D31c914a87C6611C10748AEb04B58e8F".toLowerCase();
   public static LINK_TOKEN = "0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39".toLowerCase();
   public static AAVE_TOKEN = "0xD6DF932A45C0f255f85145f286eA0b292B21C90B".toLowerCase();
   public static WOOFY_TOKEN = "0xD0660cD418a64a1d44E9214ad8e459324D8157f1".toLowerCase();
