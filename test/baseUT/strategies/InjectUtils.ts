@@ -88,19 +88,61 @@ export class InjectUtils {
     }
 
     // create new platform adapter for AAVE3
-    const converterNormal = await CustomConverterDeployHelper.createAave3PoolAdapter(signer);
-    const converterEMode = await CustomConverterDeployHelper.createAave3PoolAdapterEMode(signer);
-    const platformAdapter = await CustomConverterDeployHelper.createAave3PlatformAdapter(
-      signer,
-      controller,
-      MaticAddresses.AAVE3_POOL,
-      converterNormal.address,
-      converterEMode.address,
-    );
+    // const converterNormal = await CustomConverterDeployHelper.createAave3PoolAdapter(signer);
+    // const converterEMode = await CustomConverterDeployHelper.createAave3PoolAdapterEMode(signer);
+    // const platformAdapter = await CustomConverterDeployHelper.createAave3PlatformAdapter(
+    //   signer,
+    //   controller,
+    //   MaticAddresses.AAVE3_POOL,
+    //   converterNormal.address,
+    //   converterEMode.address,
+    // );
 
     // register all pairs with new platform adapter
     await borrowManager.addAssetPairs(
-      platformAdapter.address,
+      "0x861af5e04ac40DFa479BcA240391FE68d9Cc91fF", // platformAdapter.address,
+      pairs.map(x => x.assetLeft),
+      pairs.map(x => x.assetRight)
+    );
+  }
+
+  static async redeployAaveTwoPoolAdapters(signer: SignerWithAddress) {
+    const tetuConverter = getConverterAddress();
+    const controller = await TetuConverter__factory.connect(tetuConverter, signer).controller();
+    const converterGovernance = await Misc.impersonate(
+      await ConverterController__factory.connect(controller, signer).governance()
+    );
+    const borrowManager = BorrowManager__factory.connect(
+      await ConverterController__factory.connect(controller, signer).borrowManager(),
+      converterGovernance
+    );
+
+    // freeze current version of AAVE2 pool adapter
+    const oldPlatformAdapterAaveTwo = await ConverterUtils.disableAaveV2(signer);
+
+    // unregister all asset pairs for AAVE2 pool adapter
+    const countPairs = (await borrowManager.platformAdapterPairsLength(oldPlatformAdapterAaveTwo)).toNumber();
+    const pairs: BorrowManager.AssetPairStructOutput[] = [];
+    for (let i = 0; i < countPairs; ++i) {
+      const pair = await borrowManager.platformAdapterPairsAt(oldPlatformAdapterAaveTwo, i);
+      pairs.push(pair);
+    }
+
+    // create new platform adapter for AAVE2
+    // const converterNormal = await CustomConverterDeployHelper.createAave3PoolAdapter(signer);
+    // const converterEMode = await CustomConverterDeployHelper.createAave3PoolAdapterEMode(signer);
+    // const platformAdapter = await CustomConverterDeployHelper.createAave3PlatformAdapter(
+    //   signer,
+    //   controller,
+    //   MaticAddresses.AAVE3_POOL,
+    //   converterNormal.address,
+    //   converterEMode.address,
+    // );
+
+    // register all pairs with new platform adapter
+    console.log("0xD0879ABD0f2EAFaBa07A0701cC1AD2f70e69a069");
+    await borrowManager.addAssetPairs(
+      "0xD0879ABD0f2EAFaBa07A0701cC1AD2f70e69a069", // platformAdapter.address,
       pairs.map(x => x.assetLeft),
       pairs.map(x => x.assetRight)
     );
