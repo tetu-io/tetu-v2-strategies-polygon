@@ -18,7 +18,9 @@ async function main() {
   let lowestStrat = '';
   let lowestStratTvl = 0;
 
+  console.log('all strat', strategies.length);
   for (const strat of strategies) {
+    console.log('strat', strat);
     const total = await IStrategyV2__factory.connect(strat, signer).totalAssets();
     if (total.isZero()) {
       continue;
@@ -37,7 +39,7 @@ async function main() {
   console.log('lowestStrat', lowestStrat);
   console.log('lowestStratApr', lowestStratApr);
 
-  const gas = await splitter.estimateGas.rebalance(rebalancePerc, 10)
+  const gas = await splitter.estimateGas.rebalance(rebalancePerc, 10);
 
   const txParam = await txParams2();
   await RunHelper.runAndWaitAndSpeedUp(

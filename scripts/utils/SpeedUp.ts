@@ -16,7 +16,7 @@ const EthereumTx = require('ethereumjs-tx').Transaction;
 
 export class SpeedUp {
   public static increase() {
-    return 1.5
+    return 2
   }
 
   public static waitCycles() {

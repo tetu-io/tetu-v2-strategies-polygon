@@ -156,12 +156,12 @@ export async function runResolver(
   const allowedLockedPercent = config[0];
   const isNeedRebalance = await strategy.needRebalance();
   const r = await reader.getLockedUnderlyingAmount(strategyAddress) as [BigNumber, BigNumber];
-  if (r[1].eq(0)) {
-    return {
-      canExec: false,
-      message: 'Strategy dont have assets.',
-    };
-  }
+  // if (r[1].eq(0)) {
+  //   return {
+  //     canExec: false,
+  //     message: 'Strategy dont have assets.',
+  //   };
+  // }
 
   const defaultState = await strategy.getDefaultState();
   // console.log('Rebalance debt config', defaultState)
