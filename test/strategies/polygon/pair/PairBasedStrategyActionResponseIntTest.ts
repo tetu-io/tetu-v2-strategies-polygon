@@ -239,7 +239,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
           await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
           const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-
           expect(stateAfter.vault.totalAssets).gt(stateBefore.vault.totalAssets);
         });
         it("should withdraw successfully", async () => {

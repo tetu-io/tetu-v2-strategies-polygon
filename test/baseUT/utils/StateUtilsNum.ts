@@ -236,6 +236,8 @@ export class StateUtilsNum {
       const poolAddress = this.getBalancerPoolAddress(await boostedStrategy.poolId());
       const pool = IERC20Metadata__factory.connect(poolAddress, signer);
       liquidity = +formatUnits(await pool.balanceOf(strategy.address), await pool.decimals());
+      // todo it's not allowed to deploy contract on each call of this function
+      // todo check if the facade is really required and move it to IGetStateParams
       const depositorFacade = await MockHelper.createBalancerBoostedDepositorFacade(signer, poolAddress);
 
       borrowAssetsAddresses = await depositorFacade._depositorPoolAssetsAccess();
@@ -304,19 +306,19 @@ export class StateUtilsNum {
             rebalanceEarned1: specificState.rebalanceEarned1,
           }
           const pool = await IUniswapV3Pool__factory.connect(state.pool, signer);
-          const slot0 = await pool.slot0();
-          const facade = await MockHelper.createUniswapV3LibFacade(signer);
-          const poolAmountsForLiquidity = await facade.getAmountsForLiquidity(
-            slot0.sqrtPriceX96,
-            state.lowerTick,
-            state.upperTick,
-            state.totalLiquidity
-          );
+          // const slot0 = await pool.slot0();
+          // const facade = await MockHelper.createUniswapV3LibFacade(signer);
+          // const poolAmountsForLiquidity = await facade.getAmountsForLiquidity(
+          //   slot0.sqrtPriceX96,
+          //   state.lowerTick,
+          //   state.upperTick,
+          //   state.totalLiquidity
+          // );
           univ3Pool = {
             token0: await pool.token0(),
             token1: await pool.token1(),
-            amount0: poolAmountsForLiquidity.amount0,
-            amount1: poolAmountsForLiquidity.amount1
+            amount0: BigNumber.from(0), // poolAmountsForLiquidity.amount0,
+            amount1: BigNumber.from(0), // poolAmountsForLiquidity.amount1
           };
         }
 
