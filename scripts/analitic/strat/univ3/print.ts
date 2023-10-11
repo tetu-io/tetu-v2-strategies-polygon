@@ -1,3 +1,4 @@
+/*
 import { univ3ConverterData } from './univ3-converter-data';
 import { ethers } from 'hardhat';
 
@@ -17,3 +18,4 @@ main()
     console.error(error);
     process.exit(1);
   });
+*/

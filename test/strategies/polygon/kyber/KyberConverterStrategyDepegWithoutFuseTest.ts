@@ -87,7 +87,6 @@ describe('KyberConverterStrategyDepegWithoutFuseTest', function() {
           true,
           pId,
             [0, 0, Misc.MAX_UINT, 0],
-            [0, 0, Misc.MAX_UINT, 0],
         );
 
         return _strategy as unknown as IStrategyV2;
@@ -143,10 +142,10 @@ describe('KyberConverterStrategyDepegWithoutFuseTest', function() {
   });
 
   it('Depeg USDT', async() => {
-    const changeTicksPerStep = 10
-    const steps = 5
-    const rowsCaption = ['Step', 'USDT Price', 'Total assets', 'USDT Collateral', 'USDC Amount to repay', 'Locked underlying', 'Health Factor']
-    const rows: [string, number, number, number, number, number, number][] = []
+    const changeTicksPerStep = 1
+    const steps = 30
+    const rowsCaption = ['Step', 'USDT Price', 'Total assets', 'USDT Collateral', 'USDC Amount to repay', 'Locked underlying %', 'Locked underlying amount', 'Health Factor']
+    const rows: [string, number, number, number, number, number, number, number][] = []
     const s = strategy
     const state = await PackedData.getDefaultState(s);
 
@@ -160,7 +159,16 @@ describe('KyberConverterStrategyDepegWithoutFuseTest', function() {
     let swapAmount
     let borrowInfo = await getBorrowInfo(s as unknown as ConverterStrategyBase, signer)
     const priceBStart = await lib.getPrice(MaticAddresses.KYBER_USDC_USDT, MaticAddresses.USDT_TOKEN)
-    rows.push(['#0', +formatUnits(priceBStart, 6), +formatUnits(await s.totalAssets(), 6), borrowInfo[1].collaterals[0], borrowInfo[1].amountsToRepay[0], borrowInfo[1].totalLockedAmountInUnderlying, borrowInfo[0].healthFactors[0][0]])
+    rows.push([
+        '#0',
+      +formatUnits(priceBStart, 6),
+      +formatUnits(await s.totalAssets(), 6),
+      borrowInfo[1].collaterals[0],
+      borrowInfo[1].amountsToRepay[0],
+      borrowInfo[1].totalLockedAmountInUnderlying / +formatUnits(await s.totalAssets(), 6) * 100,
+      borrowInfo[1].totalLockedAmountInUnderlying,
+      borrowInfo[0].healthFactors[0][0]]
+    )
 
     for (let i = 1; i <= steps; i++) {
       console.log(``)
@@ -200,7 +208,16 @@ describe('KyberConverterStrategyDepegWithoutFuseTest', function() {
         expect(await s.needRebalance()).eq(false)
 
         borrowInfo = await getBorrowInfo(s as unknown as ConverterStrategyBase, signer)
-        const row: [string, number, number, number, number, number, number] = ['#' + i, +formatUnits(priceBAfter, 6), +formatUnits(await s.totalAssets(), 6), borrowInfo[1].collaterals[0], borrowInfo[1].amountsToRepay[0], borrowInfo[1].totalLockedAmountInUnderlying, borrowInfo[1].healthFactors[0][0]]
+        const row: [string, number, number, number, number, number, number, number] = [
+            '#' + i,
+          +formatUnits(priceBAfter, 6),
+          +formatUnits(await s.totalAssets(), 6),
+          borrowInfo[1].collaterals[0],
+          borrowInfo[1].amountsToRepay[0],
+          borrowInfo[1].totalLockedAmountInUnderlying / +formatUnits(await s.totalAssets(), 6) * 100,
+          borrowInfo[1].totalLockedAmountInUnderlying,
+          borrowInfo[1].healthFactors[0][0]
+        ]
         console.log(row)
         rows.push(row)
       }

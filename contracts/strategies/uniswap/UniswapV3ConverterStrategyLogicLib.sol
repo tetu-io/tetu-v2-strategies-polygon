@@ -44,13 +44,13 @@ library UniswapV3ConverterStrategyLogicLib {
     PairBasedStrategyLogicLib.PairState pair;
     // additional (specific) state
 
-    /// @notice reserve space for future needs
+    /// @dev reserve space for future needs
     uint[10] __gap;
   }
 
   struct RebalanceLocal {
     /// @notice Fuse for token A and token B
-    PairBasedStrategyLib.FuseStateParams[2] fuseAB;
+    PairBasedStrategyLib.FuseStateParams fuseAB;
     ITetuConverter converter;
     IUniswapV3Pool pool;
     address tokenA;
@@ -58,8 +58,8 @@ library UniswapV3ConverterStrategyLogicLib {
     bool isStablePool;
     uint[2] liquidationThresholdsAB;
 
-    bool[2] fuseStatusChangedAB;
-    PairBasedStrategyLib.FuseStatus[2] fuseStatusAB;
+    bool fuseStatusChangedAB;
+    PairBasedStrategyLib.FuseStatus fuseStatusAB;
 
     uint poolPrice;
     uint poolPriceAdjustment;
@@ -82,8 +82,7 @@ library UniswapV3ConverterStrategyLogicLib {
     return pool.fee() == 100;
   }
 
-  /// @param fuseThresholdsA Fuse thresholds for token A (stable pool only)
-  /// @param fuseThresholdsB Fuse thresholds for token B (stable pool only)
+  /// @param fuseThresholds Fuse thresholds for tokens (stable pool only)
   function initStrategyState(
     State storage state,
     address controller_,
@@ -91,8 +90,7 @@ library UniswapV3ConverterStrategyLogicLib {
     int24 tickRange,
     int24 rebalanceTickRange,
     address asset_,
-    uint[4] calldata fuseThresholdsA,
-    uint[4] calldata fuseThresholdsB
+    uint[4] calldata fuseThresholds
   ) external {
     require(pool != address(0), AppErrors.ZERO_ADDRESS);
     address token0 = IUniswapV3Pool(pool).token0();
@@ -115,8 +113,7 @@ library UniswapV3ConverterStrategyLogicLib {
       [pool, asset_, token0, token1],
       tickData,
       isStablePool(IUniswapV3Pool(pool)),
-      fuseThresholdsA,
-      fuseThresholdsB
+      fuseThresholds
     );
 
     address liquidator = IController(controller_).liquidator();

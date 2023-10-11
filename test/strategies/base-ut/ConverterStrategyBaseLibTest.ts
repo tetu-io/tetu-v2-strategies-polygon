@@ -34,7 +34,7 @@ import {
 import {IERC20Metadata__factory} from "../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
 import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 import {areAlmostEqual} from "../../baseUT/utils/MathUtils";
-import { HardhatUtils, HARDHAT_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
+import {HardhatUtils, HARDHAT_NETWORK_ID} from '../../baseUT/utils/HardhatUtils';
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -1135,7 +1135,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
       // set up expected liquidations
       const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
-      if (! p.noLiquidationRoute) {
+      if (!p.noLiquidationRoute) {
         await setupMockedLiquidation(liquidator, p.liquidation);
       }
       await setupIsConversionValid(
@@ -1689,7 +1689,7 @@ describe('ConverterStrategyBaseLibTest', () => {
     });
   });
 
-  describe('recycle', () => {
+  describe("_recycle", () => {
     interface IRecycleTestParams {
       compoundRatio: number;
 
@@ -1750,7 +1750,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
       for (const liquidation of p.liquidations) {
         await setupMockedLiquidation(liquidator, liquidation);
-        if (! p.isConversionValidDetailed) {
+        if (!p.isConversionValidDetailed) {
           await setupIsConversionValid(
             converter,
             liquidation,
@@ -1768,7 +1768,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       }
 
       // make test
-      const {amountsToForward, amountToPerformanceAndInsurance} = await facade.callStatic.recycle(
+      const {amountsToForward, amountToPerformanceAndInsurance} = await facade.callStatic._recycle(
         converter.address,
         p.tokens[p.assetIndex].address,
         p.compoundRatio,
@@ -1781,7 +1781,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       );
       console.log(amountsToForward, amountToPerformanceAndInsurance);
 
-      const tx = await facade.recycle(
+      const tx = await facade._recycle(
         converter.address,
         p.tokens[p.assetIndex].address,
         p.compoundRatio,
@@ -2179,6 +2179,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 performanceFee: 80_000
               });
             }
+
             // 100 => 80 P + 18 C + 2 F
 
             it("should return expected amounts for the forwarder", async () => {
@@ -3773,16 +3774,16 @@ describe('ConverterStrategyBaseLibTest', () => {
 
   describe('getCollaterals', () => {
     let snapshot: string;
-    beforeEach(async function() {
+    beforeEach(async function () {
       snapshot = await TimeUtils.snapshot();
     });
-    afterEach(async function() {
+    afterEach(async function () {
       await TimeUtils.rollback(snapshot);
     });
 
     describe('Good paths', () => {
       describe('Same prices, same weights', () => {
-        it('should return expected values', async() => {
+        it('should return expected values', async () => {
           const assetAmount = parseUnits('1000', 6);
           const priceOracle = await MockHelper.createPriceOracle(
             signer,
@@ -3809,7 +3810,7 @@ describe('ConverterStrategyBaseLibTest', () => {
         });
       });
       describe('Same prices, different weights', () => {
-        it('should return expected values', async() => {
+        it('should return expected values', async () => {
           const assetAmount = parseUnits('1000', 6);
           const priceOracle = await MockHelper.createPriceOracle(
             signer,
@@ -3836,7 +3837,7 @@ describe('ConverterStrategyBaseLibTest', () => {
         });
       });
       describe('Some amounts are already on balance', () => {
-        it('should return expected values', async() => {
+        it('should return expected values', async () => {
           const assets = [dai, weth, usdc, tetu];
           const assetAmount = parseUnits('1000', 6);
           const priceOracle = await MockHelper.createPriceOracle(
@@ -3875,7 +3876,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       });
     });
     describe('Gas estimation @skip-on-coverage', () => {
-      it('should return expected values', async() => {
+      it('should return expected values', async () => {
         const assetAmount = parseUnits('1000', 6);
         const priceOracle = await MockHelper.createPriceOracle(
           signer,
@@ -3900,10 +3901,10 @@ describe('ConverterStrategyBaseLibTest', () => {
 
   describe('openPosition', () => {
     let snapshot: string;
-    beforeEach(async function() {
+    beforeEach(async function () {
       snapshot = await TimeUtils.snapshot();
     });
-    afterEach(async function() {
+    afterEach(async function () {
       await TimeUtils.rollback(snapshot);
     });
 
@@ -4030,7 +4031,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
     describe('Good paths', () => {
       describe('Entry kind 0', () => {
-        it('should return expected values, single borrow', async() => {
+        it('should return expected values, single borrow', async () => {
           const converter = ethers.Wallet.createRandom().address;
           const r = await makeOpenPositionTest(
             '0x',
@@ -4070,7 +4071,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
           expect(ret).eq(expected);
         });
-        it('should return expected values, two borrows', async() => {
+        it('should return expected values, two borrows', async () => {
           const converter1 = ethers.Wallet.createRandom().address;
           const converter2 = ethers.Wallet.createRandom().address;
           const r = await makeOpenPositionTest(
@@ -4118,7 +4119,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
           expect(ret).eq(expected);
         });
-        it('should return expected values, two borrows, platforms don\'t have enough amount', async() => {
+        it('should return expected values, two borrows, platforms don\'t have enough amount', async () => {
           const converter1 = ethers.Wallet.createRandom().address;
           const converter2 = ethers.Wallet.createRandom().address;
           const r = await makeOpenPositionTest(
@@ -4165,7 +4166,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
           expect(ret).eq(expected);
         });
-        it('should return expected values, two borrows, platforms have more then required liquidity', async() => {
+        it('should return expected values, two borrows, platforms have more then required liquidity', async () => {
           const converter1 = ethers.Wallet.createRandom().address;
           const converter2 = ethers.Wallet.createRandom().address;
           const r = await makeOpenPositionTest(
@@ -4213,7 +4214,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           expect(ret).eq(expected);
         });
         describe('threshold is used, first conversion provides a bit less amount than required', () => {
-          it('should return expected values, single borrow', async() => {
+          it('should return expected values, single borrow', async () => {
             const converter1 = ethers.Wallet.createRandom().address;
             const converter2 = ethers.Wallet.createRandom().address;
             const r = await makeOpenPositionTest(
@@ -4276,7 +4277,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       });
       describe('Entry kind 1', () => {
         describe('proportions 1:1', () => {
-          it('should return expected values, single borrow, single converter', async() => {
+          it('should return expected values, single borrow, single converter', async () => {
             const converter = ethers.Wallet.createRandom().address;
             const r = await makeOpenPositionTest(
               defaultAbiCoder.encode(['uint256', 'uint256', 'uint256'], [1, 1, 1]),
@@ -4320,7 +4321,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
             expect(ret).eq(expected);
           });
-          it('should return expected values, single borrow, multiple converters', async() => {
+          it('should return expected values, single borrow, multiple converters', async () => {
             const converter = ethers.Wallet.createRandom().address;
             const r = await makeOpenPositionTest(
               defaultAbiCoder.encode(['uint256', 'uint256', 'uint256'], [1, 1, 1]),
@@ -4364,7 +4365,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
             expect(ret).eq(expected);
           });
-          it('should return expected values, two borrows', async() => {
+          it('should return expected values, two borrows', async () => {
             const converter1 = ethers.Wallet.createRandom().address;
             const converter2 = ethers.Wallet.createRandom().address;
             const r = await makeOpenPositionTest(
@@ -4433,7 +4434,7 @@ describe('ConverterStrategyBaseLibTest', () => {
            *    unchanged amount = $100 - $60 = $40
            * and incorrect result proportions.
            */
-          it('should return expected values, two borrows, platforms don\'t have enough amount', async() => {
+          it('should return expected values, two borrows, platforms don\'t have enough amount', async () => {
             const converter1 = ethers.Wallet.createRandom().address;
             const converter2 = ethers.Wallet.createRandom().address;
             const r = await makeOpenPositionTest(
@@ -4502,7 +4503,7 @@ describe('ConverterStrategyBaseLibTest', () => {
            *    borrowed amount = 30 + 20 = 50 matic
            *    unchanged amount = $100 - $75 = $25
            */
-          it('should return expected values, two borrows, platforms have more then required liquidity', async() => {
+          it('should return expected values, two borrows, platforms have more then required liquidity', async () => {
             const converter1 = ethers.Wallet.createRandom().address;
             const converter2 = ethers.Wallet.createRandom().address;
             const r = await makeOpenPositionTest(
@@ -4575,7 +4576,7 @@ describe('ConverterStrategyBaseLibTest', () => {
            */
           it(
             'should return expected values, two borrows, platforms have more then required liquidity, usdc => dai',
-            async() => {
+            async () => {
               const converter1 = ethers.Wallet.createRandom().address;
               const converter2 = ethers.Wallet.createRandom().address;
               const r = await makeOpenPositionTest(
@@ -4629,7 +4630,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           );
           it(
             'should return expected values, two borrows, platforms have more then required liquidity, dai => usdc',
-            async() => {
+            async () => {
               const converter1 = ethers.Wallet.createRandom().address;
               const converter2 = ethers.Wallet.createRandom().address;
               const r = await makeOpenPositionTest(
@@ -4683,7 +4684,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           );
         });
         describe('use threshold, reproduce case openPosition.dust [matic block 40302700]', () => {
-          it('should return expected values, single borrow', async() => {
+          it('should return expected values, single borrow', async () => {
             const converter1 = ethers.Wallet.createRandom().address;
             const converter2 = ethers.Wallet.createRandom().address;
             const r = await makeOpenPositionTest(
@@ -4739,7 +4740,7 @@ describe('ConverterStrategyBaseLibTest', () => {
         });
       });
       describe('Entry kind 2', () => {
-        it('should return expected values, single borrow', async() => {
+        it('should return expected values, single borrow', async () => {
           const converter = ethers.Wallet.createRandom().address;
           const r = await makeOpenPositionTest(
             defaultAbiCoder.encode(['uint256'], [2]),
@@ -4781,7 +4782,7 @@ describe('ConverterStrategyBaseLibTest', () => {
         });
         it(
           'should return expected values, two platforms together have exactly required amount (unreal case)',
-          async() => {
+          async () => {
             const converter1 = ethers.Wallet.createRandom().address;
             const converter2 = ethers.Wallet.createRandom().address;
             const r = await makeOpenPositionTest(
@@ -4830,7 +4831,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             expect(ret).eq(expected);
           },
         );
-        it('should return expected values, two borrows, platforms don\'t have enough amount', async() => {
+        it('should return expected values, two borrows, platforms don\'t have enough amount', async () => {
           const converter1 = ethers.Wallet.createRandom().address;
           const converter2 = ethers.Wallet.createRandom().address;
           const r = await makeOpenPositionTest(
@@ -4877,7 +4878,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
           expect(ret).eq(expected);
         });
-        it('should return expected values, two borrows, platforms have more then required liquidity', async() => {
+        it('should return expected values, two borrows, platforms have more then required liquidity', async () => {
           const converter1 = ethers.Wallet.createRandom().address;
           const converter2 = ethers.Wallet.createRandom().address;
           const r = await makeOpenPositionTest(
@@ -4925,7 +4926,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           expect(ret).eq(expected);
         });
         describe('threshold is used, first conversion provides a bit less amount than required', () => {
-          it('should return expected values, single borrow', async() => {
+          it('should return expected values, single borrow', async () => {
             const converter1 = ethers.Wallet.createRandom().address;
             const converter2 = ethers.Wallet.createRandom().address;
             const r = await makeOpenPositionTest(
@@ -5039,7 +5040,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       });
     })
     describe('Gas estimation @skip-on-coverage', () => {
-      it('should not exceed gas limits', async() => {
+      it('should not exceed gas limits', async () => {
         const converter1 = ethers.Wallet.createRandom().address;
         const converter2 = ethers.Wallet.createRandom().address;
         const r = await makeOpenPositionTest(
@@ -5657,7 +5658,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
-            expect(r.balances.join()).eq([15038-40, 0, 0].join());
+            expect(r.balances.join()).eq([15038 - 40, 0, 0].join());
           });
         });
         describe("repay(usdc=>dai,usdt), swap(dai,usdt=>usdc)", () => {
@@ -5765,7 +5766,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
-            expect(r.balances.join()).eq([15038-40, 0, 0].join());
+            expect(r.balances.join()).eq([15038 - 40, 0, 0].join());
           });
         });
         describe("repay(dai,usdt=>usdc), swap(dai,usdt=>usdc)", () => {

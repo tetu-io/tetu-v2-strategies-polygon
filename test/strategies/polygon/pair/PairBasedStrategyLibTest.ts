@@ -3501,10 +3501,8 @@ describe('PairBasedStrategyLibTest', () => {
       }
 
       const ret = await facade.needChangeFuseStatus(
-        {
-          status: p.status,
-          thresholds: [tt[0], tt[1], tt[2], tt[3]]
-        },
+        p.status,
+        [tt[0], tt[1], tt[2], tt[3]],
         parseUnits(p.newPrice || "1", 18),
         parseUnits(p.newPricePool || "1", 18)
       );

@@ -33,11 +33,11 @@ export async function strategyBacktest(
   disableBurns: boolean = false,
   disableMints: boolean = false,
   rebalanceDebt = false,
-  reader: PairBasedStrategyReader|undefined,
+  reader: PairBasedStrategyReader,
   allowedLockedPercent: number = 25,
   forceRebalanceDebtLockedPercent: number = 70,
   rebalanceDebtDelay: number = 3600,
-  rebalanceDebtSwapPool: UniswapV3Pool|undefined
+  rebalanceDebtSwapPool: UniswapV3Pool|undefined = undefined
 ): Promise<IBacktestResult> {
   const state = await strategy.getDefaultState();
   const startTimestampLocal = Math.floor(Date.now() / 1000);
@@ -322,7 +322,7 @@ export async function strategyBacktest(
             }
 
             // console.log(`Tick in RDS ${(await rebalanceDebtSwapPool.slot0()).tick}`)
-            expect((await rebalanceDebtSwapPool.slot0()).tick, targetTick)
+            expect((await rebalanceDebtSwapPool.slot0()).tick == targetTick, 'tick != targetTick')
 
             // sync price
             rdsPoolSlot0 = await rebalanceDebtSwapPool.slot0()
@@ -530,10 +530,10 @@ export function getApr(earned: BigNumber, investAmount: BigNumber, startTimestam
   return +formatUnits(apr, 3)
 }
 
-export function showBacktestResult(r: IBacktestResult, fuseThresholds: [] = [], startBlock: number, endBlock: number, RDSPoolParams: IRebalanceDebtSwapPoolParams) {
+export function showBacktestResult(r: IBacktestResult, fuseThresholds: string[] = [], startBlock: number, endBlock: number, RDSPoolParams: IRebalanceDebtSwapPoolParams) {
   console.log(`Strategy ${r.vaultName}. Tick range: ${r.tickRange} (+-${r.tickRange /
   100}% price). Rebalance tick range: ${r.rebalanceTickRange} (+-${r.rebalanceTickRange / 100}% price).`);
-  console.log(`Allowed locked: ${r.allowedLockedPercent}%. Forced rebalance debt locked: ${r.forceRebalanceDebtLockedPercent}%. Rebalance debt delay: ${r.rebalanceDebtDelay} secs. Fuse thresholds: [${fuseThresholds[0].join(',')}], [${fuseThresholds[1].join(',')}].`)
+  console.log(`Allowed locked: ${r.allowedLockedPercent}%. Forced rebalance debt locked: ${r.forceRebalanceDebtLockedPercent}%. Rebalance debt delay: ${r.rebalanceDebtDelay} secs. Fuse thresholds: ${fuseThresholds.join(',')}.`)
 
   // depositorSwapTokens == false, todo for true
   console.log(`Rebalance debt swap pool params: tickLower ${RDSPoolParams.tickLower}, tickLower ${RDSPoolParams.tickUpper}, amount0Desired ${formatUnits(RDSPoolParams.amount0Desired, r.vaultAssetDecimals)}, amount1Desired ${formatUnits(RDSPoolParams.amount1Desired, r.tokenBDecimals)}.`)
@@ -598,7 +598,7 @@ export function periodHuman(periodSecs: number) {
   return periodStr;
 }
 
-async function getLockedPercent(reader: PairBasedStrategyReader, strategyAddress) {
+async function getLockedPercent(reader: PairBasedStrategyReader, strategyAddress: string) {
   const r = await reader.getLockedUnderlyingAmount(strategyAddress) as [BigNumber, BigNumber]
   return  r[0].mul(100).div(r[1]).toNumber();
 }

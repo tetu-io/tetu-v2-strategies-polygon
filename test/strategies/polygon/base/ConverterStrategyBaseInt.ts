@@ -897,7 +897,8 @@ describe("ConverterStrategyBaseInt", () => {
         await cc.vault.controller(),
         cc.splitter.address,
         p.tokens,
-        p.amounts.map((amount, index) => parseUnits(amount, decimals[index]))
+        p.amounts.map((amount, index) => parseUnits(amount, decimals[index])),
+        p.tokens.map((x, index) => parseUnits("0.0001", decimals[index]))
       );
 
       return {

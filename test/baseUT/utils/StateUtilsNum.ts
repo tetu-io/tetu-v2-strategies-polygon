@@ -109,8 +109,8 @@ export interface IStateNum {
     borrowAssetsNames: string[];
   };
 
-  fuseStatusA?: number;
-  fuseStatusB?: number;
+  fuseStatus?: number;
+  // fuseStatusB?: number;
   withdrawDone?: number;
 
   /**
@@ -216,7 +216,7 @@ export class StateUtilsNum {
     let gaugeDecimals: number = 0;
 
     let fuseStatusA: number | undefined;
-    let fuseStatusB: number | undefined;
+    // let fuseStatusB: number | undefined;
     let withdrawDone: number | undefined;
 
     let currentTick: ILiquidityAmountInTick | undefined;
@@ -274,8 +274,8 @@ export class StateUtilsNum {
         directBorrows = await this.getBorrowInfo(signer, converter, borrowManager, strategy, [asset.address], [state.tokenB], priceOracle, true);
         reverseBorrows = await this.getBorrowInfo(signer, converter, borrowManager, strategy, [state.tokenB], [asset.address], priceOracle, false);
 
-        fuseStatusA = state.fuseStatusTokenA;
-        fuseStatusB = state.fuseStatusTokenB;
+        fuseStatusA = state.fuseStatus;
+        // fuseStatusB = state.fuseStatusTokenB;
         withdrawDone = state.withdrawDone;
 
         if (p?.lib) {
@@ -402,8 +402,8 @@ export class StateUtilsNum {
         borrowAssetsNames
       },
 
-      fuseStatusA,
-      fuseStatusB,
+      fuseStatus: fuseStatusA,
+      // fuseStatusB,
       withdrawDone,
 
       lockedInConverter: Math.abs(directBorrows.totalLockedAmountInUnderlying) + Math.abs(reverseBorrows.totalLockedAmountInUnderlying),
@@ -703,8 +703,8 @@ export class StateUtilsNum {
       item.univ3Pool?.amount0,
       item.univ3Pool?.amount1,
 
-      item.fuseStatusA,
-      item.fuseStatusB,
+      item.fuseStatus,
+      // item.fuseStatusB,
       item.withdrawDone,
 
       item.events?.lossSplitter,

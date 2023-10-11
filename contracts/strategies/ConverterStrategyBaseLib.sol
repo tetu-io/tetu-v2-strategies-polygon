@@ -642,7 +642,6 @@ library ConverterStrategyBaseLib {
   /// @dev {_recycle} is implemented as separate (inline) function to simplify unit testing
   /// @param rewardTokens_ Full list of reward tokens received from tetuConverter and depositor
   /// @param rewardAmounts_ Amounts of {rewardTokens_}; we assume, there are no zero amounts here
-  /// @return Amounts sent to the forwarder
   function recycle(
     IStrategyV3.BaseState storage baseState,
     ITetuConverter converter,
@@ -651,7 +650,7 @@ library ConverterStrategyBaseLib {
     mapping(address => uint) storage liquidationThresholds,
     address[] memory rewardTokens_,
     uint[] memory rewardAmounts_
-  ) external returns (uint[] memory) {
+  ) external {
     RecycleLocal memory v;
     v.asset = baseState.asset;
     v.compoundRatio = baseState.compoundRatio;
@@ -685,7 +684,6 @@ library ConverterStrategyBaseLib {
     (rewardTokens_, v.amountsToForward) = _sendTokensToForwarder(controller, splitter, rewardTokens_, v.amountsToForward, v.thresholds);
 
     emit Recycle(rewardTokens_, v.amountsToForward, v.toPerf, v.toInsurance);
-    return v.amountsToForward;
   }
 
   /// @notice Send {amount_} of {asset_} to {receiver_} and insurance

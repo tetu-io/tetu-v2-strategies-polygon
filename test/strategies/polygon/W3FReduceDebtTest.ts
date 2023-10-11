@@ -50,7 +50,7 @@ describe('Strategy reduce debt by Web3 Function tests', function() {
     userArgs = {
       strategy: strategy.address,
       reader: process.env.READER,
-      config: process.env.CONFIG,
+      config: process.env.CONFIG || '',
       agg: "1inch", // 'openocean' | '1inch' | ''
       oneInchProtocols: "POLYGON_BALANCER_V2", // '' | 'POLYGON_BALANCER_V2'
     };
@@ -69,9 +69,9 @@ describe('Strategy reduce debt by Web3 Function tests', function() {
       || defaultState[2][2].toString() === '2'
       || defaultState[2][2].toString() === '3'
 
-    const reader = PairBasedStrategyReader__factory.connect(process.env.READER, signer)
+    const reader = PairBasedStrategyReader__factory.connect(process.env.READER || '', signer)
 
-    const config = await RebalanceDebtConfig__factory.connect(process.env.CONFIG, signer).strategyConfig(strategy.address)
+    const config = await RebalanceDebtConfig__factory.connect(process.env.CONFIG || '', signer).strategyConfig(strategy.address)
     console.log("Config", config)
 
     for (let i = 0; i < 10; i++) {
@@ -91,6 +91,7 @@ describe('Strategy reduce debt by Web3 Function tests', function() {
       console.log('w3f result', result)
 
       if (!isFuseTriggered && percent < config.lockedPercentForDelayedRebalance.toNumber()) {
+        // @ts-ignore
         expect(result.message).eq(`Not need to reduce debt. Current locked: ${percent}%. Max allowed locked: ${config.lockedPercentForDelayedRebalance.toNumber()}%`)
 
         break
@@ -98,6 +99,7 @@ describe('Strategy reduce debt by Web3 Function tests', function() {
 
       defaultState = await strategy.getDefaultState()
       if (isFuseTriggered && percent === 0 && defaultState[2][3].toString() === '1') {
+        // @ts-ignore
         expect(result.message).eq('Not need to reduce debt. Fuse triggered. Withdraw done. Current locked: 0%.')
         console.log('balanceUSDT', balanceUSDT.toString())
         expect(balanceUSDT).lt(parseUnits('1', 6))

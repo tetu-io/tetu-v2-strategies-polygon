@@ -1303,7 +1303,7 @@ describe('PairBasedNoSwapIntTest', function() {
 
             it("initially should set fuse triggered ON", async () => {
               const state = await PackedData.getDefaultState(builderResults.strategy);
-              expect(state.fuseStatusTokenA > FUSE_OFF_1 || state.fuseStatusTokenB > FUSE_OFF_1).eq(true);
+              expect(state.fuseStatus > FUSE_OFF_1).eq(true);
             });
             it("initially should set withdrawDone = 0", async () => {
               const state = await PackedData.getDefaultState(builderResults.strategy);

@@ -1,3 +1,4 @@
+/*
 import { ethers } from 'hardhat';
 import { IERC20Metadata__factory, UniswapV3ConverterStrategy__factory } from '../../../../typechain';
 import { formatUnits } from 'ethers/lib/utils';
@@ -89,3 +90,4 @@ export async function univ3ConverterData(strategyAdr: string, block: number) {
 
   console.log(result);
 }
+*/

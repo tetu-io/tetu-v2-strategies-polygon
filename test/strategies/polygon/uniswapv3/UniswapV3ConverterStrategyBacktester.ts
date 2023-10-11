@@ -34,10 +34,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
   const allowedLockedPercent = 25;
   const forceRebalanceDebtLockedPercent = 70;
   const rebalanceDebtDelay = 7200;
-  const fuseThresholds = [
-    ['0.999', '0.9991', '1.001', '1.0009',],
-    ['0.999', '0.9991', '1.001', '1.0009',],
-  ]
+  const fuseThresholds = ['0.999', '0.9991', '1.001', '1.0009',]
 
   /*const params = {
     vaultAsset: MaticAddresses.WMATIC_TOKEN,
@@ -227,10 +224,13 @@ describe('UmiswapV3 converter strategy backtester', function() {
       rebalanceDebtSwapPoolParams
     )
 
-    await contracts.strategy.setFuseThresholds(0, fuseThresholds[0].map(a => parseUnits(a)))
-    await contracts.strategy.setFuseThresholds(1, fuseThresholds[1].map(a => parseUnits(a)))
-    // console.log('Fuse threshold 0', fuseThresholds[0].map(a => parseUnits(a).toString()))
-    // console.log('Fuse threshold 1', fuseThresholds[1].map(a => parseUnits(a).toString()))
+    await contracts.strategy.setFuseThresholds([
+      parseUnits(fuseThresholds[0]),
+      parseUnits(fuseThresholds[1]),
+      parseUnits(fuseThresholds[2]),
+      parseUnits(fuseThresholds[3]),
+    ])
+    // console.log('Fuse thresholds', fuseThresholds.map(a => parseUnits(a).toString()))
 
     // await contracts.uniswapV3Calee.toggleNoRevert()
   });

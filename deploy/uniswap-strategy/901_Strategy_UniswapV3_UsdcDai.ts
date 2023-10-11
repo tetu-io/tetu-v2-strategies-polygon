@@ -7,6 +7,7 @@ import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/Co
 import { isContractExist, txParams } from '../../deploy_constants/deploy-helpers';
 import { RunHelper } from '../../scripts/utils/RunHelper';
 import {Misc} from "../../scripts/utils/Misc";
+import {parseUnits} from "ethers/lib/utils";
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts } = hre;
@@ -49,8 +50,12 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     UNISWAPV3_USDC_DAI_100,
     0,
     0,
-    [0, 0, Misc.MAX_UINT, 0],
-    [0, 0, Misc.MAX_UINT, 0],
+    [
+      parseUnits('0.999'),
+      parseUnits('0.9991'),
+      parseUnits('1.001'),
+      parseUnits('1.0009'),
+    ],
     {
       ...params,
     },
