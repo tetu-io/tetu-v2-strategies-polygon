@@ -1,4 +1,9 @@
-import { IStrategyV2__factory, StrategySplitterV2__factory, TetuVaultV2__factory } from '../../typechain';
+import {
+  ISplitter__factory,
+  IStrategyV2__factory,
+  StrategySplitterV2__factory,
+  TetuVaultV2__factory,
+} from '../../typechain';
 import { ethers } from 'hardhat';
 import { formatUnits } from 'ethers/lib/utils';
 import { txParams2 } from '../../deploy_constants/deploy-helpers';
@@ -19,18 +24,28 @@ async function main() {
   let lowestStratTvl = 0;
 
   console.log('all strat', strategies.length);
+  let found = false;
   for (const strat of strategies) {
-    console.log('strat', strat);
     const total = await IStrategyV2__factory.connect(strat, signer).totalAssets();
-    if (total.isZero()) {
+    const name = await IStrategyV2__factory.connect(strat, signer).strategySpecificName();
+    const cap = await splitter.getStrategyCapacity(strat);
+
+    const apr = (await splitter.averageApr(strat)).toNumber();
+    console.log('strat', name, formatUnits(apr, 3), formatUnits(total, decimals));
+
+    if (total.lt(cap.add(1000))) {
       continue;
     }
-    const apr = (await splitter.averageApr(strat)).toNumber();
     if (apr < lowestStratApr) {
+      found = true;
       lowestStratApr = apr;
       lowestStrat = strat;
       lowestStratTvl = +formatUnits(total, decimals);
     }
+  }
+  if (!found) {
+    console.log('all strategies at highest capacities');
+    return;
   }
 
   const rebalancePerc = Math.min(Math.floor((REBALANCE_AMOUNT / lowestStratTvl) * 100), 100);
