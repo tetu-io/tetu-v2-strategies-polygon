@@ -18,31 +18,6 @@ interface IConfig {
 }
 
 const strategyConfigs: { [addr: string]: IConfig } = {
-  // Strategy UniV3 USDC/USDT-100 NSR old
-  '0x6565e8136CD415F053C81Ff3656E72574F726a5E': {
-    lockedPercentForDelayedRebalance: 25,
-    lockedPercentForForcedRebalance: 70,
-    rebalanceDebtDelay: 7200,
-  },
-  // Strategy Algebra USDC/USDT NSR old
-  '0x7bbCDcEe68c3DB2Dce5C9b132E426Ef778b48533': {
-    lockedPercentForDelayedRebalance: 25,
-    lockedPercentForForcedRebalance: 70,
-    rebalanceDebtDelay: 7200,
-  },
-  // Strategy Kyber USDC/USDT NSR old
-  '0x4B8bD2623d7480850E406B9f2960305f44c7aDeb': {
-    lockedPercentForDelayedRebalance: 25,
-    lockedPercentForForcedRebalance: 70,
-    rebalanceDebtDelay: 7200,
-  },
-  // Strategy Kyber USDC/DAI NSR old
-  '0x8EC9134046740F83BDED78d6DDcAdAEC42fC61b0': {
-    lockedPercentForDelayedRebalance: 25,
-    lockedPercentForForcedRebalance: 70,
-    rebalanceDebtDelay: 7200,
-  },
-
   // Strategy UniV3 USDC/USDT-100 NSR
   '0xCdc5560AB926Dca3d4989bF814469Af3f989Ab2C': {
     lockedPercentForDelayedRebalance: 25,
