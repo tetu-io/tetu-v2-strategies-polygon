@@ -174,7 +174,7 @@ export async function runResolver(
   // console.log('isFuseTriggered', isFuseTriggered)
   // console.log('isWithdrawDone', isWithdrawDone)
 
-  const percent = r[0].mul(100).div(r[1]).toNumber();
+  const percent = r[0].mul(100).div(r[1].isZero() ? BigNumber.from('1') : r[1]).toNumber();
   // console.log("Locked percent", percent)
   if (!isFuseTriggered && percent <= allowedLockedPercent) {
     return {
