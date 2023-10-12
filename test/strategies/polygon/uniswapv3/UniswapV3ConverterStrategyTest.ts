@@ -17,6 +17,7 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 const { expect } = chai;
 
@@ -53,6 +54,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
     [signer, signer2, signer3] = await ethers.getSigners();
     gov = await DeployerUtilsLocal.getControllerGovernance(signer);
+    await InjectUtils.injectTetuConverter(signer);
 
     const core = Addresses.getCore();
     controller = DeployerUtilsLocal.getController(signer);

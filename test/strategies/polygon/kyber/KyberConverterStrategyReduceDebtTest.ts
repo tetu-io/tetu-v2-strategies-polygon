@@ -25,6 +25,7 @@ import {PackedData} from "../../../baseUT/utils/PackedData";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {PLAN_REPAY_SWAP_REPAY} from "../../../baseUT/AppConstants";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 describe('KyberConverterStrategy reduce debt by agg test', function() {
 
@@ -44,6 +45,7 @@ describe('KyberConverterStrategy reduce debt by agg test', function() {
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
+    await InjectUtils.injectTetuConverter(signer);
 
     const core = Addresses.getCore();
     const controller = DeployerUtilsLocal.getController(signer);

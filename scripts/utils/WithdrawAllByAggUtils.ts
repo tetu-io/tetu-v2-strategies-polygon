@@ -109,5 +109,9 @@ export async function makeFullWithdraw(strategyAsOperator: IRebalancingV2Strateg
     } else {
       if (completed) break;
     }
+
+    if (aggregator === MaticAddresses.AGG_ONEINCH_V5) {
+      await new Promise(r => setTimeout(r, 5000));
+    }
   }
 }

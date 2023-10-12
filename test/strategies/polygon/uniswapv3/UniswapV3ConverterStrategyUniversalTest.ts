@@ -34,6 +34,7 @@ import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatU
 import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 // const {expect} = chai;
 chai.use(chaiAsPromised);
@@ -62,6 +63,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
 
     const [signer] = await ethers.getSigners();
 
+    await InjectUtils.injectTetuConverter(signer);
     await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
     await StrategyTestUtils.deployAndSetCustomSplitter(signer, core);
     // Disable DForce (as it reverts on repay after block advance)

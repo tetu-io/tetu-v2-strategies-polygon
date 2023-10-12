@@ -29,6 +29,7 @@ import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatU
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 describe('AlgebraConverterStrategyTest', function() {
 
@@ -46,6 +47,7 @@ describe('AlgebraConverterStrategyTest', function() {
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
+    await InjectUtils.injectTetuConverter(signer);
 
     const core = Addresses.getCore();
     const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);

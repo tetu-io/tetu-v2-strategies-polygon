@@ -27,6 +27,7 @@ import {IGetStateParams, IStateNum, StateUtilsNum} from "../../../baseUT/utils/S
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 /**
  * Try to make several actions one by one
@@ -52,6 +53,7 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
 
     snapshotBefore = await TimeUtils.snapshot();
     [signer, signer2, signer3, signer4, signer5] = await ethers.getSigners();
+    await InjectUtils.injectTetuConverter(signer);
   })
 
   after(async function() {

@@ -27,6 +27,7 @@ import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {PLAN_REPAY_SWAP_REPAY} from "../../../baseUT/AppConstants";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 describe('AlgebraConverterStrategy reduce debt by agg test', function() {
 
@@ -43,6 +44,7 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
     await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID, -1);
     snapshotBefore = await TimeUtils.snapshot();
     await HardhatUtils.switchToMostCurrentBlock(); // 1inch works on current block only
+    await InjectUtils.injectTetuConverter(signer);
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);

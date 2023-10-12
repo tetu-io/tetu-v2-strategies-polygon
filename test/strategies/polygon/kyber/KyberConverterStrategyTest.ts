@@ -32,6 +32,7 @@ import {KYBER_PID, KYBER_PID_DEFAULT_BLOCK} from '../../../baseUT/strategies/Pai
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 describe('KyberConverterStrategyTest', function() {
 
@@ -50,6 +51,7 @@ describe('KyberConverterStrategyTest', function() {
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
+    await InjectUtils.injectTetuConverter(signer);
 
     const core = Addresses.getCore();
     const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);

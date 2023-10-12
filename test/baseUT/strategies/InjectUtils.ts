@@ -17,29 +17,36 @@ import {CustomConverterDeployHelper} from "../converter/CustomConverterDeployHel
 
 /** Utils to replace currently deployed implementation of contracts by most recent versions */
 export class InjectUtils {
-  /**
-   * Deploy new implementation of TetuConverter-contract and upgrade proxy
-   */
+  /** Setup converter before running tests */
   static async injectTetuConverter(signer: SignerWithAddress) {
-    const core = await DeployerUtilsLocal.getCoreAddresses();
+
+    // -------------------------------------------- Deploy new version of TetuConverter
+    // const core = await DeployerUtilsLocal.getCoreAddresses();
+    // const tetuConverter = getConverterAddress();
+    // const converterController = await TetuConverter__factory.connect(tetuConverter, signer).controller();
+    // const debtMonitor = await ConverterController__factory.connect(converterController, signer).debtMonitor();
+    // const borrowManager = await ConverterController__factory.connect(converterController, signer).borrowManager();
+    //
+    // const converterLogic = await DeployerUtils.deployContract(signer, "TetuConverter");
+    // const debtMonitorLogic = await DeployerUtils.deployContract(signer, "DebtMonitor");
+    // const borrowManagerLogic = await DeployerUtils.deployContract(signer, "BorrowManager");
+    // const controller = ControllerV2__factory.connect(core.controller, signer);
+    // const governance = await controller.governance();
+    // const controllerAsGov = controller.connect(await Misc.impersonate(governance));
+    //
+    // await controllerAsGov.announceProxyUpgrade(
+    //   [tetuConverter, debtMonitor, borrowManager],
+    //   [converterLogic.address, debtMonitorLogic.address, borrowManagerLogic.address]
+    // );
+    // await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
+    // await controllerAsGov.upgradeProxy([tetuConverter, debtMonitor]);
+
+    // -------------------------------------------- Set up TetuConverter
     const tetuConverter = getConverterAddress();
     const converterController = await TetuConverter__factory.connect(tetuConverter, signer).controller();
-    const debtMonitor = await ConverterController__factory.connect(converterController, signer).debtMonitor();
-    const borrowManager = await ConverterController__factory.connect(converterController, signer).borrowManager();
-
-    const converterLogic = await DeployerUtils.deployContract(signer, "TetuConverter");
-    const debtMonitorLogic = await DeployerUtils.deployContract(signer, "DebtMonitor");
-    const borrowManagerLogic = await DeployerUtils.deployContract(signer, "BorrowManager");
-    const controller = ControllerV2__factory.connect(core.controller, signer);
-    const governance = await controller.governance();
-    const controllerAsGov = controller.connect(await Misc.impersonate(governance));
-
-    await controllerAsGov.announceProxyUpgrade(
-      [tetuConverter, debtMonitor, borrowManager],
-      [converterLogic.address, debtMonitorLogic.address, borrowManagerLogic.address]
-    );
-    await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
-    await controllerAsGov.upgradeProxy([tetuConverter, debtMonitor]);
+    const converterGovernance = await Misc.impersonate(await ConverterController__factory.connect(converterController, signer).governance());
+    const converterControllerAsGov = ConverterController__factory.connect(converterController, converterGovernance);
+    await converterControllerAsGov.setRebalanceOnBorrowEnabled(true);
   }
 
   /**

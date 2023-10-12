@@ -27,6 +27,7 @@ import {
   KYBER_PID_DEFAULT_BLOCK,
   KYBER_USDC_DAI_PID_DEFAULT_BLOCK
 } from '../../../baseUT/strategies/PairBasedStrategyBuilder';
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 // const {expect} = chai;
 chai.use(chaiAsPromised);
@@ -50,6 +51,7 @@ describe('KyberConverterStrategyUniversalTest', async () => {
 
     const [signer] = await ethers.getSigners();
 
+    await InjectUtils.injectTetuConverter(signer);
     await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
     await StrategyTestUtils.deployAndSetCustomSplitter(signer, core);
     // Disable DForce (as it reverts on repay after block advance)

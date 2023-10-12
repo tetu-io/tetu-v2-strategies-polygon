@@ -34,6 +34,7 @@ import {writeFileSync} from "fs";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {KYBER_PID} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 describe('KyberConverterStrategyDepegWithoutFuseTest', function() {
 
@@ -54,6 +55,7 @@ describe('KyberConverterStrategyDepegWithoutFuseTest', function() {
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
+    await InjectUtils.injectTetuConverter(signer);
 
     const core = Addresses.getCore();
     const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);

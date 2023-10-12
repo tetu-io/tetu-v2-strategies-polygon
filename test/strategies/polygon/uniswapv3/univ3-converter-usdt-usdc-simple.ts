@@ -22,6 +22,7 @@ import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 
 const { expect } = chai;
@@ -58,6 +59,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     snapshotBefore = await TimeUtils.snapshot();
     [signer, signer2] = await ethers.getSigners();
     gov = await Misc.impersonate(MaticAddresses.GOV_ADDRESS);
+    await InjectUtils.injectTetuConverter(signer);
 
     core = Addresses.getCore() as CoreAddresses;
     pool = MaticAddresses.UNISWAPV3_USDC_USDT_100;

@@ -14,6 +14,7 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 const block = 44151797
 
@@ -29,6 +30,7 @@ describe.skip(`AlgebraConverterStrategyHardworkOnSpecifiedBlockTest`, function()
     snapshotBefore = await TimeUtils.snapshot();
 
     await HardhatUtils.switchToMostCurrentBlock();
+    await InjectUtils.injectTetuConverter(signer);
 
     [signer] = await ethers.getSigners();
 

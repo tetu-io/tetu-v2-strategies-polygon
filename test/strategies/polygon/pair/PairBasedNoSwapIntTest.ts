@@ -252,7 +252,7 @@ describe('PairBasedNoSwapIntTest', function() {
           {kyberPid: KYBER_PID_DEFAULT_BLOCK}
         );
 
-        // await InjectUtils.injectTetuConverter(signer);
+        await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV3(signer);
         await InjectUtils.redeployAaveTwoPoolAdapters(signer);
 
@@ -1024,7 +1024,7 @@ describe('PairBasedNoSwapIntTest', function() {
     ];
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
-        // await InjectUtils.injectTetuConverter(signer);
+        await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
@@ -1488,7 +1488,7 @@ describe('PairBasedNoSwapIntTest', function() {
     ];
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
-        // await InjectUtils.injectTetuConverter(signer);
+        await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 

@@ -200,7 +200,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
         await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(signer, b.strategy.address);
 
-        // await InjectUtils.injectTetuConverter(signer);
+        await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
@@ -406,7 +406,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             }
         );
         await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(signer, b.strategy.address);
-        // await InjectUtils.injectTetuConverter(signer);
+        await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
@@ -589,7 +589,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             }
         );
         await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(signer, b.strategy.address);
-        // await InjectUtils.injectTetuConverter(signer);
+        await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
@@ -1143,7 +1143,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const states: IStateNum[] = [];
           const pathOut = `./tmp/${strategyInfo.name}-folded-debts-up-user-prepare-strategy.csv`;
 
-          // await InjectUtils.injectTetuConverter(signer);
+          await InjectUtils.injectTetuConverter(signer);
           await ConverterUtils.disableAaveV2(signer);
           await ConverterUtils.disableDForce(signer);
           await InjectUtils.redeployAave3PoolAdapters(signer);
@@ -1405,7 +1405,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const states: IStateNum[] = [];
           const pathOut = `./tmp/${strategyInfo.name}-folded-debts-down-user-prepare-strategy.csv`;
 
-          // await InjectUtils.injectTetuConverter(signer);
+          await InjectUtils.injectTetuConverter(signer);
           await ConverterUtils.disableAaveV2(signer);
           await ConverterUtils.disableDForce(signer);
           await InjectUtils.redeployAave3PoolAdapters(signer);
@@ -1754,7 +1754,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(signer, b.strategy.address);
         const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-        // await InjectUtils.injectTetuConverter(signer);
+        await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
@@ -1856,7 +1856,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           "0.00001" // we need very small amout to avoid increasing of share price on hardwork
         );
 
-        // await InjectUtils.injectTetuConverter(signer);
+        await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
@@ -2083,7 +2083,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           }
         );
         await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(signer, b.strategy.address);
-        // await InjectUtils.injectTetuConverter(signer);
+        await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 

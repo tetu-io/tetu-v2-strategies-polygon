@@ -24,6 +24,7 @@ import {IterationPlanLib} from "../../../../typechain/contracts/test/facades/Pai
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {PLAN_REPAY_SWAP_REPAY, PLATFORM_KIND_AAVE2_2, PLATFORM_KIND_AAVE3_3} from "../../../baseUT/AppConstants";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 describe('PairBasedStrategyLibIntTest', () => {
 
@@ -44,6 +45,7 @@ describe('PairBasedStrategyLibIntTest', () => {
     await HardhatUtils.switchToMostCurrentBlock(); // 1inch works on current block only
 
     [signer] = await ethers.getSigners();
+    await InjectUtils.injectTetuConverter(signer);
 
     facade = await MockHelper.createPairBasedStrategyLibFacade(signer);
     converter = ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer);
@@ -541,7 +543,7 @@ describe('PairBasedStrategyLibIntTest', () => {
       const signerFacade = await DeployerUtilsLocal.impersonate(facade.address);
 
       // we need only AAVE3 adapter, disable others
-      // await InjectUtils.injectTetuConverter(signer);
+      await InjectUtils.injectTetuConverter(signer);
 
       // set up current balances
       await TokenUtils.getToken(p.tokenX, facade.address, parseUnits(p.balanceX, decimalsX));

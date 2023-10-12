@@ -23,6 +23,7 @@ import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/Pai
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 const { expect } = chai;
 
@@ -39,6 +40,7 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
     await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     snapshotBefore = await TimeUtils.snapshot();
     await HardhatUtils.switchToMostCurrentBlock();
+    await InjectUtils.injectTetuConverter(signer);
 
     [signer, signer2] = await ethers.getSigners();
     reader = await MockHelper.createPairBasedStrategyReader(signer);
