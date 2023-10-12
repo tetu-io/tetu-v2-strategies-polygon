@@ -156,12 +156,12 @@ export async function runResolver(
   const allowedLockedPercent = config[0];
   const isNeedRebalance = await strategy.needRebalance();
   const r = await reader.getLockedUnderlyingAmount(strategyAddress) as [BigNumber, BigNumber];
-  if (r[1].eq(0)) {
-    return {
-      canExec: false,
-      message: 'Strategy dont have assets.',
-    };
-  }
+  // if (r[1].eq(0)) {
+  //   return {
+  //     canExec: false,
+  //     message: 'Strategy dont have assets.',
+  //   };
+  // }
 
   const defaultState = await strategy.getDefaultState();
   // console.log('Rebalance debt config', defaultState)
@@ -174,7 +174,7 @@ export async function runResolver(
   // console.log('isFuseTriggered', isFuseTriggered)
   // console.log('isWithdrawDone', isWithdrawDone)
 
-  const percent = r[0].mul(100).div(r[1]).toNumber();
+  const percent = r[0].mul(100).div(r[1].isZero() ? BigNumber.from('1') : r[1]).toNumber();
   // console.log("Locked percent", percent)
   if (!isFuseTriggered && percent <= allowedLockedPercent) {
     return {
