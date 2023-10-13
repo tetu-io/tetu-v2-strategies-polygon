@@ -22,25 +22,25 @@ const strategyConfigs: { [addr: string]: IConfig } = {
   '0xCdc5560AB926Dca3d4989bF814469Af3f989Ab2C': {
     lockedPercentForDelayedRebalance: 25,
     lockedPercentForForcedRebalance: 70,
-    rebalanceDebtDelay: 7200,
+    rebalanceDebtDelay: 600,
   },
   // Strategy Algebra USDC/USDT NSR
   '0xA8105284aA9C9A20A2081EEE1ceeF03d9719A5AD': {
     lockedPercentForDelayedRebalance: 25,
     lockedPercentForForcedRebalance: 70,
-    rebalanceDebtDelay: 7200,
+    rebalanceDebtDelay: 600,
   },
   // Strategy Kyber USDC/USDT NSR
   '0x792Bcc2f14FdCB9FAf7E12223a564e7459eA4201': {
     lockedPercentForDelayedRebalance: 25,
     lockedPercentForForcedRebalance: 70,
-    rebalanceDebtDelay: 7200,
+    rebalanceDebtDelay: 600,
   },
   // Strategy Kyber USDC/DAI NSR
   '0xd0Dff2a31516fEDb80824C9B9E2DDcbfeF2C41e2': {
     lockedPercentForDelayedRebalance: 25,
     lockedPercentForForcedRebalance: 70,
-    rebalanceDebtDelay: 7200,
+    rebalanceDebtDelay: 600,
   },
 };
 

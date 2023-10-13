@@ -33,7 +33,7 @@ async function main() {
     const apr = (await splitter.averageApr(strat)).toNumber();
     console.log('strat', name, formatUnits(apr, 3), formatUnits(total, decimals));
 
-    if (total.lt(cap.add(1000))) {
+    if (total.gt(cap.add(1000))) {
       continue;
     }
     if (apr < lowestStratApr) {
