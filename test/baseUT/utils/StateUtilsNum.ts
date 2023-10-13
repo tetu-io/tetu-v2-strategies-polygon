@@ -598,8 +598,7 @@ export class StateUtilsNum {
       "pool.amount0",
       "pool.amount1",
 
-      'fuseStatusA',
-      'fuseStatusB',
+      'fuseStatus',
       'withdrawDone',
 
       'events.lossSplitter',
@@ -622,9 +621,6 @@ export class StateUtilsNum {
 
       'fixPriceChanges.investedAssetsBefore',
       'fixPriceChanges.investedAssetsAfter',
-
-      'pair.tick.A',
-      'pair.tick.B',
     ];
 
     return { stateHeaders };
@@ -704,7 +700,6 @@ export class StateUtilsNum {
       item.univ3Pool?.amount1,
 
       item.fuseStatus,
-      // item.fuseStatusB,
       item.withdrawDone,
 
       item.events?.lossSplitter,
@@ -735,9 +730,6 @@ export class StateUtilsNum {
 
       item.events?.investedAssetsBeforeFixPriceChanges,
       item.events?.investedAssetsAfterFixPriceChanges,
-
-      item.pairCurrentTick?.amountTokenA,
-      item.pairCurrentTick?.amountTokenB,
     ]);
 
     writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', { encoding: 'utf8', flag: override ? 'w' : 'a'});

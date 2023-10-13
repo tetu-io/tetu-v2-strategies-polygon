@@ -190,4 +190,48 @@ describe("Scb807-899 @skip-on-coverage", () => {
       }
     })
   });
+
+  describe("rebalanceNoSwaps, reproduce high loss", () => {
+    const BLOCK = 48635757;
+    const STRATEGY = "0x792bcc2f14fdcb9faf7e12223a564e7459ea4201";
+    const SENDER = "0xddddd5541d5d8c5725765352793c8651a06f5b09";
+    const pathOut = "./tmp/rebalanceNoSwaps-high-loss.csv";
+    const OPERATOR = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
+
+    it("rebalanceNoSwaps", async () => {
+
+      const states: IStateNum[] = [];
+
+      if (fs.existsSync(pathOut)) {
+        fs.rmSync(pathOut);
+      }
+
+      const saver = async (title: string, e?: IEventsSet) => {
+        const state = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, title, {eventsSet: e});
+        states.push(state);
+        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, {mainAssetSymbol: MaticAddresses.USDC_TOKEN});
+      };
+
+      // const signer = await DeployerUtilsLocal.impersonate(SENDER);
+      const signer = (await ethers.getSigners())[0];
+      await HardhatUtils.switchToBlock(BLOCK - 1);
+      // await HardhatUtils.switchToMostCurrentBlock();
+
+      const operator = await DeployerUtilsLocal.impersonate(SENDER);
+
+      const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, operator);
+      const converterStrategyBase = ConverterStrategyBase__factory.connect(STRATEGY, operator);
+      const vault = TetuVaultV2__factory.connect(
+        await (await StrategySplitterV2__factory.connect(await converterStrategyBase.splitter(), operator)).vault(),
+        signer
+      );
+
+      // await InjectUtils.injectStrategy(signer, STRATEGY, "KyberConverterStrategy");
+
+      await saver("b");
+
+      const eventsSet = await CaptureEvents.makeRebalanceNoSwap(strategyAsOperator);
+      await saver("a", eventsSet);
+    });
+  });
 });
