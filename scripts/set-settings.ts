@@ -17,6 +17,12 @@ interface IConfig {
   rebalanceDebtDelay: number;
 }
 
+//          why rebalanceDebtDelay 600?
+// we tried 7200 period
+// but during 2h period we got huge loss on price movement
+// rebalance https://polygonscan.com/tx/0x949dea290e5bc9fd47ad813b9dada2222c1589e931bc4861b84a3e026b816125
+// then nsr with loss 0.3% https://polygonscan.com/tx/0xedd222dce98d67f73bebc4ac75dd588518606e1e552fb36f57f36ecec3fa8d9f
+
 const strategyConfigs: { [addr: string]: IConfig } = {
   // Strategy UniV3 USDC/USDT-100 NSR
   '0xCdc5560AB926Dca3d4989bF814469Af3f989Ab2C': {
