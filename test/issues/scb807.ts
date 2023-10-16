@@ -4,13 +4,11 @@ import {
   IRebalancingV2Strategy__factory, StrategySplitterV2__factory,
   TetuVaultV2__factory
 } from "../../typechain";
-import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
 import {MaticAddresses} from "../../scripts/addresses/MaticAddresses";
 import {TimeUtils} from "../../scripts/utils/TimeUtils";
 import {HardhatUtils, POLYGON_NETWORK_ID} from '../baseUT/utils/HardhatUtils';
 import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
 import {PackedData} from "../baseUT/utils/PackedData";
-import {Misc} from "../../scripts/utils/Misc";
 import {AggregatorUtils} from "../baseUT/utils/AggregatorUtils";
 import {ENTRY_TO_POOL_DISABLED, ENTRY_TO_POOL_IS_ALLOWED, PLAN_SWAP_REPAY} from "../baseUT/AppConstants";
 import {IStateNum, StateUtilsNum} from "../baseUT/utils/StateUtilsNum";
@@ -23,6 +21,8 @@ import {makeFullWithdraw} from "../../scripts/utils/WithdrawAllByAggUtils";
 import {PLATFORM_KYBER} from "../baseUT/strategies/AppPlatforms";
 import {TokenUtils} from "../../scripts/utils/TokenUtils";
 import {InjectUtils} from "../baseUT/strategies/InjectUtils";
+import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
+import {Misc} from "../../scripts/utils/Misc";
 
 describe("Scb807-899 @skip-on-coverage", () => {
   let snapshotBefore: string;
@@ -227,6 +227,96 @@ describe("Scb807-899 @skip-on-coverage", () => {
       );
 
       // await InjectUtils.injectStrategy(signer, STRATEGY, "KyberConverterStrategy");
+
+      await saver("b");
+
+      const eventsSet = await CaptureEvents.makeRebalanceNoSwap(strategyAsOperator);
+      await saver("a", eventsSet);
+    });
+  });
+
+  describe("send amount to insurance twice", () => {
+    const BLOCK = 48662469;
+    const STRATEGY = "0x792bcc2f14fdcb9faf7e12223a564e7459ea4201";
+    const SENDER = "0xddddd5541d5d8c5725765352793c8651a06f5b09";
+    const pathOut = "./tmp/hardwork-insurance-twice.csv";
+    const OPERATOR = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
+
+    it("doHardWork", async () => {
+
+      const states: IStateNum[] = [];
+
+      if (fs.existsSync(pathOut)) {
+        fs.rmSync(pathOut);
+      }
+
+      const saver = async (title: string, e?: IEventsSet) => {
+        const state = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, title, {eventsSet: e});
+        states.push(state);
+        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, {mainAssetSymbol: MaticAddresses.USDC_TOKEN});
+      };
+
+      // const signer = await DeployerUtilsLocal.impersonate(SENDER);
+      const signer = (await ethers.getSigners())[0];
+      await HardhatUtils.switchToBlock(BLOCK - 1);
+      // await HardhatUtils.switchToMostCurrentBlock();
+
+      const operator = await DeployerUtilsLocal.impersonate(SENDER);
+
+      const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, operator);
+      const converterStrategyBase = ConverterStrategyBase__factory.connect(STRATEGY, operator);
+      const vault = TetuVaultV2__factory.connect(
+        await (await StrategySplitterV2__factory.connect(await converterStrategyBase.splitter(), operator)).vault(),
+        signer
+      );
+      const splitter = await vault.splitter();
+
+      await InjectUtils.injectStrategy(signer, STRATEGY, "KyberConverterStrategy");
+
+      await saver("b");
+      const strategyAsSplitter = converterStrategyBase.connect(await DeployerUtilsLocal.impersonate(splitter));
+      const eventsSet = await CaptureEvents.makeHardwork(strategyAsSplitter);
+      await saver("a", eventsSet);
+    });
+  });
+
+  describe("SCB-818: rebalanceNoSwaps, reproduce TS-23", () => {
+    const BLOCK = 48773278;
+    const STRATEGY = "0xA8105284aA9C9A20A2081EEE1ceeF03d9719A5AD";
+    const SENDER = "0xddddd5541d5d8c5725765352793c8651a06f5b09";
+    const pathOut = "./tmp/rebalanceNoSwaps-ts23.csv";
+    const OPERATOR = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
+
+    it("rebalanceNoSwaps", async () => {
+
+      const states: IStateNum[] = [];
+
+      if (fs.existsSync(pathOut)) {
+        fs.rmSync(pathOut);
+      }
+
+      const saver = async (title: string, e?: IEventsSet) => {
+        const state = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, title, {eventsSet: e});
+        states.push(state);
+        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, {mainAssetSymbol: MaticAddresses.USDC_TOKEN});
+      };
+
+      // const signer = await DeployerUtilsLocal.impersonate(SENDER);
+      const signer = (await ethers.getSigners())[0];
+      await HardhatUtils.switchToBlock(BLOCK - 1);
+      // await HardhatUtils.switchToMostCurrentBlock();
+
+      const operator = await DeployerUtilsLocal.impersonate(SENDER);
+
+      const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, operator);
+      const converterStrategyBase = ConverterStrategyBase__factory.connect(STRATEGY, operator);
+      const vault = TetuVaultV2__factory.connect(
+        await (await StrategySplitterV2__factory.connect(await converterStrategyBase.splitter(), operator)).vault(),
+        signer
+      );
+
+      await InjectUtils.injectTetuConverter(signer);
+      await InjectUtils.injectStrategy(signer, STRATEGY, "AlgebraConverterStrategy");
 
       await saver("b");
 

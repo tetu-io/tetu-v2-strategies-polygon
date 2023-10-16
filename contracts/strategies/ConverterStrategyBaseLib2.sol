@@ -16,6 +16,7 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../interfaces/IConverterStrategyBase.sol";
+import "hardhat/console.sol";
 
 /// @notice Continuation of ConverterStrategyBaseLib (workaround for size limits)
 library ConverterStrategyBaseLib2 {
@@ -227,6 +228,8 @@ library ConverterStrategyBaseLib2 {
     uint sentAmount,
     uint unsentAmount
   ) {
+    console.log("sendToInsurance.amount", amount);
+    console.log("sendToInsurance.balance", balance);
     return _sendToInsurance(asset, amount, splitter, totalAssets_, balance);
   }
 
@@ -234,6 +237,8 @@ library ConverterStrategyBaseLib2 {
     uint sentAmount,
     uint unsentAmount
   ) {
+    console.log("_sendToInsurance.amount", amount);
+    console.log("_sendToInsurance.balance", balance);
     uint amountToSend = Math.min(amount, balance);
     if (amountToSend != 0) {
       // max amount that can be send to insurance is limited by PRICE_CHANGE_PROFIT_TOLERANCE
@@ -346,6 +351,8 @@ library ConverterStrategyBaseLib2 {
         ? balanceTheAsset_
         : AppLib.balance(underlying);
 
+      console.log("sendProfitGetAssetBalance.earnedByPrices_", earnedByPrices_);
+      console.log("sendProfitGetAssetBalance.balanceUnderlying", balanceUnderlying);
       _sendToInsurance(underlying, earnedByPrices_, baseState_.splitter, investedAssets_ + balanceUnderlying, balanceUnderlying);
 
       if (theAsset_ == underlying) {
