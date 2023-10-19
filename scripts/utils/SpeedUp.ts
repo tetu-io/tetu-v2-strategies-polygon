@@ -1,11 +1,11 @@
-import axios, {AxiosResponse} from "axios";
+import axios, { AxiosResponse } from 'axios';
 import Web3 from 'web3';
-import {Logger} from "tslog";
-import logSettings from "../../log_settings";
-import {sendMessageToTelegram} from "../telegram/tg-sender";
-import {BigNumber, providers} from "ethers";
-import {formatUnits} from "ethers/lib/utils";
-import {Misc} from "./Misc";
+import { Logger } from 'tslog';
+import logSettings from '../../log_settings';
+import { sendMessageToTelegram } from '../telegram/tg-sender';
+import { BigNumber, providers } from 'ethers';
+import { formatUnits } from 'ethers/lib/utils';
+import { Misc } from './Misc';
 import { EnvSetup } from './EnvSetup';
 import hre from 'hardhat';
 // import {Transaction as EthereumTx} from '@ethereumjs/tx'
@@ -16,15 +16,15 @@ const EthereumTx = require('ethereumjs-tx').Transaction;
 
 export class SpeedUp {
   public static increase() {
-    return 2
+    return 2;
   }
 
   public static waitCycles() {
-    return 20
+    return 20;
   }
 
   public static getRpcUrl() {
-    return EnvSetup.getEnv().maticRpcUrl || ''
+    return EnvSetup.getEnv().maticRpcUrl || '';
   }
 
   public static async getBlockGasLimit(provider: providers.Provider) {
@@ -37,12 +37,12 @@ export class SpeedUp {
       case 250:
         return 9_000_000;
       default:
-        throw new Error('Unknown net ' + net.chainId)
+        throw new Error('Unknown net ' + net.chainId);
     }
   }
 
   public static async speedUp(txHash: string, provider: providers.Provider): Promise<string> {
-    log.debug('SPEEDUP', txHash)
+    log.debug('SPEEDUP', txHash);
 
     const url = hre.config.networks.hardhat.forking?.url || '';
 
@@ -52,12 +52,13 @@ export class SpeedUp {
 
     let response: AxiosResponse;
     try {
-      response = await axios.post(url,
+      response = await axios.post(
+        url,
         `{"jsonrpc":"2.0","method":"eth_getTransactionByHash","params":["${txHash}"],"id":1}`,
         {
           headers: {
             'Content-Type': 'application/json',
-          }
+          },
         },
       );
     } catch (e) {
@@ -68,7 +69,7 @@ export class SpeedUp {
     const result = response.data.result;
     log.debug('OLD TX', txHash, result);
     if (!result) {
-      console.error('tx for speedup receipt is empty!', response)
+      console.error('tx for speedup receipt is empty!', response);
       await sendMessageToTelegram(`tx for speedup receipt is empty!`);
       return 'error';
     }
@@ -76,8 +77,8 @@ export class SpeedUp {
     const nonce = Web3.utils.hexToNumber(result.nonce); // + addNonce probably will require for some cases but now we are dropping all if have error
     log.debug('nonce', nonce);
 
-    const maxFeePerGasOrig = Web3.utils.hexToNumber(result.maxFeePerGas) as number
-    const maxPriorityFeePerGasOrig = Web3.utils.hexToNumber(result.maxPriorityFeePerGas) as number
+    const maxFeePerGasOrig = Web3.utils.hexToNumber(result.maxFeePerGas) as number;
+    const maxPriorityFeePerGasOrig = Web3.utils.hexToNumber(result.maxPriorityFeePerGas) as number;
     log.debug('original maxFeePerGas', formatUnits(maxFeePerGasOrig, 9));
     log.debug('original maxPriorityFeePerGas', formatUnits(maxPriorityFeePerGasOrig, 9));
 
@@ -87,8 +88,8 @@ export class SpeedUp {
     log.debug('current maxFeePerGas', formatUnits(feeData.maxFeePerGas ?? BigNumber.from(0), 9));
     log.debug('current lastBaseFeePerGas', formatUnits(feeData.lastBaseFeePerGas ?? BigNumber.from(0), 9));
 
-    let maxFeePerGasAdj = Math.floor(maxFeePerGasOrig * SpeedUp.increase())
-    let maxPriorityFeePerGasAdj = maxPriorityFeePerGasOrig
+    let maxFeePerGasAdj = Math.floor(maxFeePerGasOrig * SpeedUp.increase());
+    let maxPriorityFeePerGasAdj = maxPriorityFeePerGasOrig;
 
     if (maxFeePerGasAdj < (feeData.maxFeePerGas?.toNumber() ?? 0)) {
       maxFeePerGasAdj = Math.floor((feeData.maxFeePerGas?.toNumber() ?? 0) * SpeedUp.increase());
@@ -113,7 +114,8 @@ export class SpeedUp {
         maxPriorityFeePerGas: Web3.utils.numberToHex(maxPriorityFeePerGasAdj),
         gasLimit: Web3.utils.numberToHex(limit),
       },
-      {common: chain});
+      { common: chain },
+    );
 
 
     tx.sign(Buffer.from(EnvSetup.getEnv().privateKey, 'hex'));
@@ -126,30 +128,32 @@ export class SpeedUp {
   public static async sendAndWait(txRaw: string, web3Provider: Web3) {
     let newHash = '';
     let finished = false;
-    web3Provider.eth.sendSignedTransaction(txRaw,)
+    web3Provider.eth.sendSignedTransaction(txRaw)
       .on('error', (err: unknown) => {
         log.debug('send raw error', err);
-        newHash = 'error'
+        newHash = 'error';
         finished = true;
       })
       .on('transactionHash', (hash) => newHash = hash)
       // tslint:disable-next-line:no-any
       .on('receipt', (res: any) => {
-        log.debug('send raw receipt', res)
+        log.debug('send raw receipt', res);
         if (res.status) {
-          newHash = res.transactionHash
+          newHash = res.transactionHash;
         } else {
-          newHash = 'error'
+          newHash = 'error';
         }
         finished = true;
-      })
+      });
 
 
     log.debug('start waiting send raw result');
     while (!finished) {
-      log.debug('wait send raw result', newHash)
+      log.debug('wait send raw result', newHash);
       if (!finished) {
-        await Misc.delay(10_000);
+        if (Misc.isRealNetwork()) {
+          await Misc.delay(10_000);
+        }
       }
     }
     log.debug('send raw result hash', newHash);

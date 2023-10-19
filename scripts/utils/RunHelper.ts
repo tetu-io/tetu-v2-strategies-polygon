@@ -16,8 +16,10 @@ export class RunHelper {
   public static async waitBlocks(provider: providers.Provider, blocks: number) {
     const start = await provider.getBlockNumber();
     while (true) {
-      console.log('wait 1sec');
-      await Misc.delay(1000);
+      if (Misc.isRealNetwork()) {
+        console.log('wait 1sec');
+        await Misc.delay(1000);
+      }
       const bn = await provider.getBlockNumber();
       if (bn >= start + blocks) {
         break;
@@ -40,7 +42,9 @@ export class RunHelper {
         break;
       }
       console.log('not yet complete', count, hash);
-      await Misc.delay(10_000);
+      if (Misc.isRealNetwork()) {
+        await Misc.delay(10_000);
+      }
       count++;
       if (count > SpeedUp.waitCycles() && speedUp) {
         const newHash = await SpeedUp.speedUp(hash, provider);
@@ -52,7 +56,9 @@ export class RunHelper {
     }
 
     // sometimes a node returns zero receipt even if just had normal
-    await Misc.delay(5000);
+    if (Misc.isRealNetwork()) {
+      await Misc.delay(5000);
+    }
 
     return hash;
   }
@@ -131,7 +137,9 @@ export class RunHelper {
       if (!silent) {
         log.info('not yet complete', tr.hash);
       }
-      await Misc.delay(10000);
+      if (Misc.isRealNetwork()) {
+        await Misc.delay(10000);
+      }
     }
     if (!silent) {
       log.info('transaction result', tr.hash, receipt?.status);
