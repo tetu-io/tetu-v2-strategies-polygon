@@ -13,11 +13,13 @@ export class MaticAddresses {
   public static TETU_LIQUIDATOR = "0xC737eaB847Ae6A92028862fE38b828db41314772".toLowerCase();
   public static TETU_LIQUIDATOR_UNIV3_SWAPPER = "0x7b505210a0714d2a889E41B59edc260Fa1367fFe".toLowerCase();
   public static TETU_LIQUIDATOR_ALGEBRA_SWAPPER = "0x1d2A0025e7782f640E34Ca5aCCB14e0Ebb96B2f8".toLowerCase();
+  public static TETU_LIQUIDATOR_KYBER_SWAPPER = "0xE1d65E844E41cE02e1d327336446eE6B6630526f".toLowerCase();
 
   // tokens
   public static WETH_TOKEN = "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619".toLowerCase();
-  public static ADDY_TOKEN = "0xc3FdbadC7c795EF1D6Ba111e06fF8F16A20Ea539".toLowerCase();
   public static USDC_TOKEN = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174".toLowerCase();
+  public static USDT_TOKEN = "0xc2132D05D31c914a87C6611C10748AEb04B58e8F".toLowerCase();
+  public static DAI_TOKEN = "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063".toLowerCase();
   public static WMATIC_TOKEN = "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270".toLowerCase();
   public static STMATIC_TOKEN = "0x3A58a54C066FdC0f2D55FC9C89F0415C92eBf3C4".toLowerCase();
   public static QUICK_TOKEN = "0xB5C064F955D8e7F38fE0460C556a72987494eE17".toLowerCase(); // QUICK (new)
@@ -31,9 +33,7 @@ export class MaticAddresses {
   public static GRT_TOKEN = "0x5fe2B58c013d7601147DcdD68C143A77499f5531".toLowerCase();
   public static FRAX_TOKEN = "0x104592a158490a9228070E0A8e5343B499e125D0".toLowerCase();
   public static FXS_TOKEN = "0x3e121107F6F22DA4911079845a470757aF4e1A1b".toLowerCase();
-  public static DAI_TOKEN = "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063".toLowerCase();
   public static CRV_TOKEN = "0x172370d5Cd63279eFa6d502DAB29171933a610AF".toLowerCase();
-  public static USDT_TOKEN = "0xc2132D05D31c914a87C6611C10748AEb04B58e8F".toLowerCase();
   public static LINK_TOKEN = "0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39".toLowerCase();
   public static AAVE_TOKEN = "0xD6DF932A45C0f255f85145f286eA0b292B21C90B".toLowerCase();
   public static WOOFY_TOKEN = "0xD0660cD418a64a1d44E9214ad8e459324D8157f1".toLowerCase();
@@ -88,6 +88,7 @@ export class MaticAddresses {
   public static oZEMIT_TOKEN = '0xA34E0eaCB7fbB0b0d45da89b083E0f87fcdf6157'.toLowerCase();
   public static MaticX_TOKEN = '0xfa68FB4628DFF1028CFEc22b4162FCcd0d45efb6'.toLowerCase();
   public static wstETH_TOKEN = '0x03b54A6e9a984069379fae1a4fC4dBAE93B3bCCD'.toLowerCase();
+  public static KNC_TOKEN = '0x1C954E8fe737F99f68Fa1CCda3e51ebDB291948C'.toLowerCase();
 
   // iron
   public static IRON_MINISHEFV2 = "0x1fD1259Fa8CdC60c6E8C86cfA592CA1b8403DFaD".toLowerCase();
@@ -308,6 +309,7 @@ export class MaticAddresses {
   public static DYSTOPIA_TETU_USDPlus = '0x5A272ad79cBd3C874879E3FEc5753C2127f77583'.toLowerCase();
 
   // UNISWAP V3
+  public static UNISWAPV3_QUOTER = "0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6".toLowerCase();
   // stable pools
   public static UNISWAPV3_USDC_DAI_100 = '0x5645dCB64c059aa11212707fbf4E7F984440a8Cf'.toLowerCase()
   public static UNISWAPV3_USDC_USDT_100 = '0xDaC8A8E6DBf8c690ec6815e0fF03491B2770255D'.toLowerCase()
@@ -328,11 +330,24 @@ export class MaticAddresses {
 
   // ALGEBRA
   public static ALGEBRA_USDC_USDT = '0x7b925e617aefd7fb3a93abe3a701135d7a1ba710'.toLowerCase()
+  public static ALGEBRA_USDC_DAI = '0xe7e0eb9f6bcccfe847fdf62a3628319a092f11a2'.toLowerCase()
   public static ALGEBRA_dQUICK_QUICK = '0x194257104FabFd9f48bD01bd71A719637B4bbfA9'.toLowerCase()
   public static ALGEBRA_USDC_QUICK = '0x022df0b3341B3A0157EEA97dD024A93f7496D631'.toLowerCase()
+  /** https://docs.quickswap.exchange/reference/smart-contracts/v3/04-quoter/#quoteexactoutputsingle */
+  public static ALGEBRA_QUOTER = "0xa15F0D7377B2A0C0c10db057f641beD21028FC89".toLowerCase();
+
+  // KYBER
+  public static KYBER_USDC_USDT = '0x879664ce5A919727b3Ed4035Cf12F7F740E8dF00'.toLowerCase()
+  public static KYBER_USDC_DAI = '0x02A3E4184b145eE64A6Df3c561A3C0c6e2f23DFa'.toLowerCase()
+  public static KYBER_WBTC_WETH = '0x4ebc4d2763e951197f07b6b8b3c2bdfbff7d6b5f'.toLowerCase()
+  public static KYBER_KNC_USDC = '0x4b440a7de0ab7041934d0c171849a76cc33234fa'.toLowerCase()
+  /** https://docs.kyberswap.com/liquidity-solutions/kyberswap-elastic/contracts/elastic-contract-addresses */
+  public static KYBER_ELASTIC_QUOTER_V2 = "0x4d47fd5a29904Dae0Ef51b1c450C9750F15D7856".toLowerCase();
 
   // Aggregators
   public static AGG_ONEINCH_V5 = '0x1111111254EEB25477B68fb85Ed929f73A960582'.toLowerCase()
+
+  public static AGG_OPENOCEAN = '0x6352a56caadC4F1E25CD6c75970Fa768A3304e64'.toLowerCase()
 
   public static BLUE_CHIPS = new Set<string>([
     MaticAddresses.USDC_TOKEN,

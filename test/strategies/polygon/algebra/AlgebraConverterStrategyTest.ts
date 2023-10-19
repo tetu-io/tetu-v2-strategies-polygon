@@ -1,6 +1,5 @@
 /* tslint:disable:no-trailing-whitespace */
 import {expect} from 'chai';
-import {config as dotEnvConfig} from "dotenv";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
@@ -8,7 +7,7 @@ import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {
   AlgebraConverterStrategy,
-  AlgebraConverterStrategy__factory,
+  AlgebraConverterStrategy__factory, AlgebraLib,
   IERC20,
   IERC20__factory, IStrategyV2,
   TetuVaultV2, VaultFactory__factory,
@@ -21,29 +20,17 @@ import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
+import {UniswapV3StrategyUtils} from "../../../baseUT/strategies/UniswapV3StrategyUtils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
-import {UniversalUtils} from "../../../UniversalUtils";
-
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
+import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
+import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
+import {BigNumber} from "ethers";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import {PackedData} from "../../../baseUT/utils/PackedData";
+import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 
 describe('AlgebraConverterStrategyTest', function() {
-  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
-    return;
-  }
 
   let snapshotBefore: string;
   let snapshot: string;
@@ -53,21 +40,12 @@ describe('AlgebraConverterStrategyTest', function() {
   let strategy: AlgebraConverterStrategy;
 
   before(async function() {
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: 43620959,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
+    snapshotBefore = await TimeUtils.snapshot();
+    // await HardhatUtils.switchToMostCurrentBlock(); // there are no swaps in this test, we don't need current block
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
-    snapshotBefore = await TimeUtils.snapshot();
 
     const core = Addresses.getCore();
     const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
@@ -105,7 +83,8 @@ describe('AlgebraConverterStrategyTest', function() {
             pool: MaticAddresses.ALGEBRA_USDC_USDT,
             startTime: 1663631794,
             endTime: 4104559500
-          }
+          },
+            [0, 0, Misc.MAX_UINT, 0],
         );
 
         return _strategy as unknown as IStrategyV2;
@@ -148,21 +127,26 @@ describe('AlgebraConverterStrategyTest', function() {
 
     // prevent 'TC-4 zero price' because real oracles have a limited price lifetime
     await PriceOracleImitatorUtils.uniswapV3(signer, MaticAddresses.UNISWAPV3_USDC_USDT_100, MaticAddresses.USDC_TOKEN)
+
+    await StrategyTestUtils.setThresholds(
+      strategy as unknown as IStrategyV2,
+      signer,
+      { rewardLiquidationThresholds: [
+          {
+            asset: MaticAddresses.dQUICK_TOKEN,
+            threshold: BigNumber.from('1000'),
+          },
+          {
+            asset: MaticAddresses.USDT_TOKEN,
+            threshold: BigNumber.from('1000'),
+          },
+        ] },
+    );
   })
 
   after(async function() {
+    await HardhatUtils.restoreBlockFromEnv();
     await TimeUtils.rollback(snapshotBefore);
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
   });
 
   beforeEach(async function() {
@@ -177,22 +161,43 @@ describe('AlgebraConverterStrategyTest', function() {
     it('Rebalance, hardwork', async() => {
       const s = strategy
 
-      console.log('deposit...');
-      await asset.approve(vault.address, Misc.MAX_UINT);
-      await TokenUtils.getToken(asset.address, signer.address, parseUnits('2000', 6));
-      await vault.deposit(parseUnits('1000', 6), signer.address);
+      console.log('deposit...')
+      await asset.approve(vault.address, Misc.MAX_UINT)
+      await TokenUtils.getToken(asset.address, signer.address, parseUnits('2000', 6))
+      await vault.deposit(parseUnits('1000', 6), signer.address)
 
-      expect(await s.needRebalance()).eq(false)
+      console.log('after 1 day')
+      await TimeUtils.advanceBlocksOnTs(86400) // 1 day
 
-      await UniswapV3StrategyUtils.movePriceUp(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('1100000', 6));
+      expect(await s.needRebalance()).eq(false);
 
+      const state = await PackedData.getDefaultState(strategy);
+
+      await PairBasedStrategyPrepareStateUtils.movePriceBySteps(
+          signer,
+          {
+            strategy: AlgebraConverterStrategy__factory.connect(strategy.address, signer),
+            swapper: MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
+            quoter: MaticAddresses.ALGEBRA_QUOTER,
+            lib: await DeployerUtils.deployContract(signer, "AlgebraLib") as AlgebraLib,
+            pool: MaticAddresses.ALGEBRA_USDC_USDT,
+            swapHelper: await MockHelper.createSwapperHelper(signer)
+          },
+          true,
+          state,
+          parseUnits('1100000', 6),
+          undefined,
+          5
+      );
+
+      console.log('Rebalance')
       expect(await s.needRebalance()).eq(true)
-      await s.rebalance()
+      await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
       expect(await s.needRebalance()).eq(false)
 
       console.log('Hardwork')
       expect(await s.isReadyToHardWork()).eq(true)
-      const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter());
+      const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter())
       const hwResult = await s.connect(splitterSigner).callStatic.doHardWork({gasLimit: 19_000_000})
       await s.connect(splitterSigner).doHardWork({gasLimit: 19_000_000})
       expect(hwResult.earned).gt(0)
@@ -202,22 +207,23 @@ describe('AlgebraConverterStrategyTest', function() {
       const s = strategy
 
       console.log('deposit 1...');
-      await asset.approve(vault.address, Misc.MAX_UINT);
-      await TokenUtils.getToken(asset.address, signer.address, parseUnits('2000', 6));
-      await vault.deposit(parseUnits('1000', 6), signer.address);
+      await asset.approve(vault.address, Misc.MAX_UINT)
+      await TokenUtils.getToken(asset.address, signer.address, parseUnits('2000', 6))
+      await vault.deposit(parseUnits('1000', 6), signer.address)
 
-      console.log('deposit 2...');
-      await vault.deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
+      console.log('deposit 2...')
+      await vault.deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000})
 
       console.log('after 1 day')
-      await TimeUtils.advanceBlocksOnTs(86400); // 1 day
+      await TimeUtils.advanceBlocksOnTs(86400) // 1 day
 
       console.log('Make pool volume')
-      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6));
+      const state = await PackedData.getDefaultState(strategy);
+      await UniversalUtils.movePoolPriceUp(signer, state, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6))
 
       console.log('Hardwork')
       expect(await s.isReadyToHardWork()).eq(true)
-      const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter());
+      const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter())
       const hwResult = await s.connect(splitterSigner).callStatic.doHardWork({gasLimit: 19_000_000})
       await s.connect(splitterSigner).doHardWork()
 
@@ -225,22 +231,64 @@ describe('AlgebraConverterStrategyTest', function() {
       console.log('APR', UniversalUtils.getApr(hwResult.earned, parseUnits('2000', 6), 0, 86400))
 
       console.log('after 1 day')
-      await TimeUtils.advanceBlocksOnTs(86400); // 1 day
+      await TimeUtils.advanceBlocksOnTs(86400) // 1 day
 
       console.log('Make pool volume')
-      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6));
+      await UniversalUtils.makePoolVolume(signer, state, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6))
 
       console.log('withdraw')
       await vault.withdraw(parseUnits('500', 6), signer.address, signer.address)
 
       console.log('after 1 day')
-      await TimeUtils.advanceBlocksOnTs(86400); // 1 day
+      await TimeUtils.advanceBlocksOnTs(86400) // 1 day
 
       console.log('Make pool volume')
-      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6));
+      await UniversalUtils.makePoolVolume(signer, state, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6));
 
       console.log('withdrawAll')
       await vault.withdrawAll()
+    })
+    it('Second deposit have rewards', async() => {
+      const s = strategy
+
+      console.log('deposit 1...')
+      await asset.approve(vault.address, Misc.MAX_UINT)
+      await TokenUtils.getToken(asset.address, signer.address, parseUnits('2000', 6))
+      await vault.deposit(parseUnits('1000', 6), signer.address)
+
+      console.log('after 1 day')
+      await TimeUtils.advanceBlocksOnTs(86400) // 1 day
+
+      console.log('Make pool volume')
+      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6))
+
+      console.log('Hardwork')
+      expect(await s.isReadyToHardWork()).eq(true)
+      const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter())
+      const hwResult = await s.connect(splitterSigner).callStatic.doHardWork({gasLimit: 19_000_000})
+      await s.connect(splitterSigner).doHardWork()
+
+      expect(hwResult.earned).gt(0)
+      console.log('Eearned from 1000 USDC deposit', hwResult.earned.toString())
+      console.log('APR', UniversalUtils.getApr(hwResult.earned, parseUnits('1000', 6), 0, 86400))
+
+      console.log('deposit 2...')
+      await vault.deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000})
+
+      console.log('after 1 day')
+      await TimeUtils.advanceBlocksOnTs(86400) // 1 day
+
+      console.log('Make pool volume')
+      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6))
+
+      console.log('Hardwork')
+      expect(await s.isReadyToHardWork()).eq(true)
+      const hwResult2 = await s.connect(splitterSigner).callStatic.doHardWork({gasLimit: 19_000_000})
+      await s.connect(splitterSigner).doHardWork()
+
+      expect(hwResult2.earned).gt(hwResult.earned.mul(2).sub(hwResult.earned.div(10)))
+      console.log('Eearned from 2000 USDC deposit', hwResult2.earned.toString())
+      console.log('APR', UniversalUtils.getApr(hwResult2.earned, parseUnits('2000', 6), 0, 86400))
     })
   })
 })

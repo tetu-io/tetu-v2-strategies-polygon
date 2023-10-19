@@ -9,7 +9,7 @@
   "scripts": {
     "build": "npm run clean && npm run compile",
     "clean": "npx hardhat clean",
-    "compile": "npx hardhat compile",
+    "compile": "npx cross-env NODE_OPTIONS=\"--max_old_space_size=8192\" hardhat compile --max-memory 4096",
     "test": "npm run build && npx hardhat test",
     "coverage": "npx cross-env NODE_OPTIONS=\"--max_old_space_size=8192\" hardhat coverage --temp artifacts-coverage --max-memory 4096",
     "slither": "npm run build && slither .",
@@ -17,10 +17,12 @@
     "lint-fix": "tslint --fix -p tsconfig.json",
     "update-block": "ts-node scripts/utils/UpdateBlock.ts",
     "deploy-prod": "hardhat deploy --network matic --write true",
-    "verify-all": "hardhat etherscan-verify --network matic",
+    "verify-all": "hardhat run scripts/verify.ts --network matic && hardhat etherscan-verify --network matic",
     "deploy-local": "hardhat deploy --write true --reset",
     "solhint": "solhint \"contracts/**/*.sol\"",
-    "sporalyzer": "node sporalyzer.js --outputType listing --contract \"contracts/strategies/uniswap/UniswapV3ConverterStrategy.sol:UniswapV3ConverterStrategy\""
+    "sporalyzer": "node sporalyzer.js --outputType listing --contract \"contracts/strategies/uniswap/UniswapV3ConverterStrategy.sol:UniswapV3ConverterStrategy\"",
+    "rebalance:matic": "npx cross-env NODE_OPTIONS=\"--max_old_space_size=4096\" hardhat run scripts/rebalance.ts --network matic --max-memory 4096",
+    "set-settings:matic": "hardhat run scripts/set-settings.ts --network matic"
   },
   "keywords": [
     "solidity",
@@ -32,7 +34,7 @@
     "tetu"
   ],
   "author": "TETU team <admin@tetu.io>",
-  "license": "MIT",
+  "license": "BUSL-1.1",
   "homepage": "https://tetu.io/",
   "dependencies": {
     "@gelatonetwork/web3-functions-sdk": "^2.0.5",
@@ -45,14 +47,16 @@
     "@openzeppelin/contracts": "^4.8.2",
     "@openzeppelin/contracts-upgradeable": "^4.8.2",
     "@openzeppelin/hardhat-upgrades": "^1.22.1",
-    "@tetu_io/tetu-contracts-v2": "2.0.11",
-    "@tetu_io/tetu-converter": "1.1.15",
+    "@tetu_io/tetu-contracts-v2": "2.1.3",
+    "@tetu_io/tetu-converter": "1.2.1",
     "@tetu_io/tetu-liquidator": "1.0.1",
     "@typechain/ethers-v5": "^10.2.0",
     "@typechain/hardhat": "^6.1.6",
     "@types/chai": "^4.3.4",
     "@types/chai-as-promised": "^7.1.5",
     "@types/chai-string": "^1.4.2",
+    "@types/debug": "^4.1.8",
+    "@types/lodash": "^4.14.197",
     "@types/mocha": "^10.0.1",
     "@types/node": "^18.15.3",
     "@types/react": "^18.0.28",
@@ -60,27 +64,30 @@
     "axios": "^1.3.4",
     "chai": "^4.3.7",
     "chai-as-promised": "^7.1.1",
+    "cross-env": "^7.0.3",
     "csv-stringify": "^6.3.0",
     "dotenv": "^16.0.3",
     "ethereumjs-tx": "^2.1.2",
     "ethers": "5.7.2",
     "graphql": "^16.6.0",
-    "hardhat": "^2.13.0",
+    "hardhat": "2.14.1",
     "hardhat-abi-exporter": "^2.10.1",
+    "hardhat-change-network": "^0.0.7",
     "hardhat-contract-sizer": "^2.8.0",
     "hardhat-deploy": "^0.11.25",
     "hardhat-deploy-ethers": "^0.3.0-beta.13",
     "hardhat-gas-reporter": "^1.0.9",
-    "hardhat-tracer": "^2.1.2",
     "isomorphic-unfetch": "^4.0.2",
     "jsonpath-plus": "^7.2.0",
     "ky": "^0.33.3",
+    "lodash": "^4.17.21",
     "mocha": "^10.2.0",
     "pg": "^8.10.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "reflect-metadata": "^0.1.13",
-    "solidity-coverage": "^0.8.2",
+    "solidity-coverage": "^0.8.4",
+    "telegraf": "^4.12.2",
     "ts-generator": "^0.1.1",
     "ts-node": "^10.9.1",
     "tslint": "^6.1.3",
@@ -93,6 +100,6 @@
     "yargs": "^17.7.1"
   },
   "engines": {
-    "node": "^18.0.0"
+    "node": "^18.x.x"
   }
 }

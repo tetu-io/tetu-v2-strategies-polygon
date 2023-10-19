@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.17;
 
 /// @title Abstract base Depositor contract.
@@ -45,7 +45,10 @@ abstract contract DepositorBase {
   /// @dev If pool supports emergency withdraw need to call it for emergencyExit()
   /// @return amountsOut The order of amounts is the same as in {_depositorPoolAssets}
   function _depositorEmergencyExit() internal virtual returns (uint[] memory amountsOut) {
-    return _depositorExit(_depositorLiquidity());
+    uint liquidity = _depositorLiquidity();
+    return liquidity == 0
+      ? new uint[](_depositorPoolAssets().length)
+      : _depositorExit(liquidity);
   }
 
   /// @notice Claim all possible rewards.

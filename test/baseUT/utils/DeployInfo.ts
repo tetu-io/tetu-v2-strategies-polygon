@@ -1,5 +1,5 @@
-import { ICoreContractsWrapper } from '../../CoreContractsWrapper';
-import { IToolsContractsWrapper } from '../../ToolsContractsWrapper';
+import { ICoreContractsWrapper } from '../universalTestUtils/CoreContractsWrapper';
+import { IToolsContractsWrapper } from '../universalTestUtils/ToolsContractsWrapper';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { ISplitter, IStrategyV2, TetuVaultV2 } from '../../../typechain';
 

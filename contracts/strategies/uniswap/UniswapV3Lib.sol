@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.17;
 
 import "../../integrations/uniswap/IUniswapV3Pool.sol";
@@ -238,6 +238,7 @@ library UniswapV3Lib {
   }
 
   /// @notice Calculates price in pool
+  /// @return price with decimals of paired token
   function getPrice(address pool_, address tokenIn) public view returns (uint) {
     IUniswapV3Pool pool = IUniswapV3Pool(pool_);
     address token0 = pool.token0();

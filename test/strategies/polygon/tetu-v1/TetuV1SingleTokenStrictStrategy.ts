@@ -1,7 +1,6 @@
 import { loadFixture, mine } from '@nomicfoundation/hardhat-network-helpers';
 import chai, { expect } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
-import { config as dotEnvConfig } from 'dotenv';
 import { ERC4626Strict, TetuV1SingleTokenStrictStrategy } from '../../../../typechain';
 import { ethers } from 'hardhat';
 import { BigNumber } from 'ethers';
@@ -10,21 +9,6 @@ import ERC4626LinearPoolFactoryABI from '../../../../scripts/abis/ERC4626LinearP
 import BalancerVaultABI from '../../../../scripts/abis/BalancerVault.json';
 import LinearPoolABI from '../../../../scripts/abis/LinearPool.json';
 import LinearPoolRebalancerABI from '../../../../scripts/abis/LinearPoolRebalancer.json';
-
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
 
 chai.use(chaiAsPromised);
 
@@ -50,9 +34,6 @@ async function simulateRewards(strategy: TetuV1SingleTokenStrictStrategy, reward
 }
 
 describe.skip('TetuV1 Single Token Strict Strategy tests', async() => {
-  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
-    return;
-  }
 
   async function deployContracts() {
 

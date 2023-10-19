@@ -20,7 +20,8 @@ export class TokenUtils {
     [MaticAddresses.WBTC_TOKEN, '0x5c2ed810328349100a66b82b78a1791b101c9d61'.toLowerCase()], // aave v2
     // [MaticAddresses.WBTC_TOKEN, '0xba12222222228d8ba445958a75a0704d566bf2c8'.toLowerCase()], // bal
     // [MaticAddresses.USDC_TOKEN, '0xBA12222222228d8Ba445958a75a0704d566BF2C8'.toLowerCase()], // bal
-    [MaticAddresses.USDC_TOKEN, '0x1a13f4ca1d028320a707d99520abfefca3998b7f'.toLowerCase()], // aave
+    // [MaticAddresses.USDC_TOKEN, '0x1a13f4ca1d028320a707d99520abfefca3998b7f'.toLowerCase()], // aave
+    [MaticAddresses.USDC_TOKEN, '0x9c2bd617b77961ee2c5e3038dfb0c822cb75d82a'.toLowerCase()], // not contract
     [MaticAddresses.USDT_TOKEN, '0xF977814e90dA44bFA03b6295A0616a897441aceC'.toLowerCase()], // Binance: Hot Wallet
     [MaticAddresses.QUICK_TOKEN, '0xdB74C5D4F154BBD0B8e0a28195C68ab2721327e5'.toLowerCase()], // dquick
     [MaticAddresses.FRAX_TOKEN, '0x45c32fa6df82ead1e2ef74d17b76547eddfaff89'.toLowerCase()], // frax
@@ -94,14 +95,12 @@ export class TokenUtils {
     return IERC20__factory.connect(tokenAddress, signer).allowance(signer.address, spender);
   }
 
-  public static async transfer(tokenAddress: string, signer: SignerWithAddress, destination: string, amount: string) {
-    console.log('transfer', await TokenUtils.tokenSymbol(tokenAddress), amount);
-    return IERC20__factory.connect(tokenAddress, signer).transfer(destination, BigNumber.from(amount))
-  }
-
-  public static async wrapNetworkToken(signer: SignerWithAddress, amount: string) {
-    const token = IWmatic__factory.connect(await DeployerUtilsLocal.getNetworkTokenAddress(), signer);
-    return token.deposit({value: parseUnits(amount), from: signer.address});
+  public static async transfer(tokenAddress: string, signer: SignerWithAddress, destination: string, amount: string, silent?: boolean) {
+    if (!silent) {
+      console.log('TokenUtils.transfer', await TokenUtils.tokenSymbol(tokenAddress), amount);
+      console.log("TokenUtils.balance", await IERC20__factory.connect(tokenAddress, signer).balanceOf(signer.address));
+    }
+    return IERC20__factory.connect(tokenAddress, signer).transfer(destination, BigNumber.from(amount), {gasLimit: 19_000_000})
   }
 
   public static async decimals(tokenAddress: string): Promise<number> {
@@ -141,9 +140,11 @@ export class TokenUtils {
     return IERC721Enumerable__factory.connect(tokenAddress, ethers.provider).tokenOfOwnerByIndex(account, index);
   }*/
 
-  public static async getToken(token: string, to: string, amount?: BigNumber) {
+  public static async getToken(token: string, to: string, amount?: BigNumber, silent?: boolean) {
     const start = Date.now();
-    console.log('transfer token from biggest holder', token, amount?.toString());
+    if (!silent) {
+      console.log('transfer token from biggest holder', token, amount?.toString());
+    }
 
     if (token.toLowerCase() === await DeployerUtilsLocal.getNetworkTokenAddress()) {
       await IWmatic__factory.connect(token, await DeployerUtilsLocal.impersonate(to)).deposit({value: amount});
@@ -154,15 +155,19 @@ export class TokenUtils {
     if (!holder) {
       throw new Error('Please add holder for ' + token);
     }
-    const signer = await DeployerUtilsLocal.impersonate(holder);
+    const signer = await DeployerUtilsLocal.impersonate(holder, silent);
     const balance = (await TokenUtils.balanceOf(token, holder)).div(100);
-    console.log('holder balance', balance.toString());
-    if (amount) {
-      await TokenUtils.transfer(token, signer, to, amount.toString());
-    } else {
-      await TokenUtils.transfer(token, signer, to, balance.toString());
+    if (!silent) {
+      console.log('holder balance', balance.toString());
     }
-    TokenUtils.printDuration('getToken completed', start);
+    if (amount) {
+      await TokenUtils.transfer(token, signer, to, amount.toString(), silent);
+    } else {
+      await TokenUtils.transfer(token, signer, to, balance.toString(), silent);
+    }
+    if (!silent) {
+      TokenUtils.printDuration('getToken completed', start);
+    }
     return balance;
   }
 

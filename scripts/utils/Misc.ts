@@ -1,19 +1,21 @@
-import hre, {ethers} from "hardhat";
-import {Logger} from "tslog";
-import Common from "ethereumjs-common";
-import logSettings from "../../log_settings";
-import {DeployerUtils} from "./DeployerUtils";
-import {DeployerUtilsLocal} from "./DeployerUtilsLocal";
+import hre, { ethers } from 'hardhat';
+import { Logger } from 'tslog';
+import Common from 'ethereumjs-common';
+import logSettings from '../../log_settings';
+import { DeployerUtils } from './DeployerUtils';
+import { DeployerUtilsLocal } from './DeployerUtilsLocal';
 import {
   BorrowManager__factory,
-  IConverterController__factory, IPlatformAdapter,
-  IPlatformAdapter__factory, ITetuConverter__factory,
-  Multicall
-} from "../../typechain";
-import {BigNumber} from "ethers";
-import {MaticAddresses} from "../addresses/MaticAddresses";
-import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {LendingPlatformKinds} from "../../test/baseUT/converter/ConverterConstants";
+  IConverterController__factory,
+  IPlatformAdapter,
+  IPlatformAdapter__factory,
+  ITetuConverter__factory,
+  Multicall,
+} from '../../typechain';
+import { BigNumber } from 'ethers';
+import { MaticAddresses } from '../addresses/MaticAddresses';
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { LendingPlatformKinds } from '../../test/baseUT/converter/ConverterConstants';
 
 const log: Logger<undefined> = new Logger(logSettings);
 
@@ -21,18 +23,18 @@ const MATIC_CHAIN = Common.forCustomChain(
   'mainnet', {
     name: 'matic',
     networkId: 137,
-    chainId: 137
+    chainId: 137,
   },
-  'petersburg'
+  'petersburg',
 );
 
 const FANTOM_CHAIN = Common.forCustomChain(
   'mainnet', {
     name: 'fantom',
     networkId: 250,
-    chainId: 250
+    chainId: 250,
   },
-  'petersburg'
+  'petersburg',
 );
 
 export class Misc {
@@ -62,15 +64,30 @@ export class Misc {
     return ts.toNumber();
   }
 
+  public static getChainId() {
+    return hre.network.config.chainId ?? 0;
+  }
+
+  public static getChainName() {
+    return hre.network.name;
+  }
+
+  public static isRealNetwork() {
+    return hre.network.name !== 'hardhat'
+      && hre.network.name !== 'anvil'
+      && hre.network.name !== 'foundry';
+  }
+
+
   public static async getChainConfig() {
-    const net = await ethers.provider.getNetwork();
-    switch (net.chainId) {
+    const chainId = Misc.getChainId();
+    switch (chainId) {
       case 137:
         return MATIC_CHAIN;
       case 250:
         return FANTOM_CHAIN;
       default:
-        throw new Error('Unknown net ' + net.chainId)
+        throw new Error('Unknown net ' + chainId);
     }
   }
 
@@ -78,20 +95,16 @@ export class Misc {
 
   public static async impersonate(address: string) {
     await hre.network.provider.request({
-      method: "hardhat_impersonateAccount",
+      method: 'hardhat_impersonateAccount',
       params: [address],
     });
 
     await hre.network.provider.request({
-      method: "hardhat_setBalance",
-      params: [address, "0x1431E0FAE6D7217CAA0000000"],
+      method: 'hardhat_setBalance',
+      params: [address, '0x1431E0FAE6D7217CAA0000000'],
     });
     console.log('address impersonated', address);
     return ethers.getSigner(address);
-  }
-
-  public static async isNetwork(id: number) {
-    return (await ethers.provider.getNetwork()).chainId === id;
   }
 
   public static async getStorageAt(address: string, index: string) {
@@ -99,8 +112,8 @@ export class Misc {
   }
 
   public static async setStorageAt(address: string, index: string, value: string) {
-    await ethers.provider.send("hardhat_setStorageAt", [address, index, value]);
-    await ethers.provider.send("evm_mine", []); // Just mines to the next block
+    await ethers.provider.send('hardhat_setStorageAt', [address, index, value]);
+    await ethers.provider.send('evm_mine', []); // Just mines to the next block
   }
 
   // ****************** WAIT ******************
@@ -110,13 +123,15 @@ export class Misc {
   }
 
   public static async wait(blocks: number) {
-    if (hre.network.name === 'hardhat') {
+    if (!Misc.isRealNetwork()) {
       return;
     }
     const start = ethers.provider.blockNumber;
     while (true) {
-      log.info('wait 10sec');
-      await Misc.delay(10000);
+      if (Misc.isRealNetwork()) {
+        log.info('wait 10sec');
+        await Misc.delay(10000);
+      }
       if (ethers.provider.blockNumber >= start + blocks) {
         break;
       }
@@ -150,13 +165,20 @@ export async function getAaveThreePlatformAdapter(signer: SignerWithAddress): Pr
   return (await getPlatformAdapter(signer, LendingPlatformKinds.AAVE3_3)).address;
 }
 
-async function getPlatformAdapter(signer: SignerWithAddress, lendingPlatformKind: LendingPlatformKinds): Promise<IPlatformAdapter> {
+export async function getCompoundThreePlatformAdapter(signer: SignerWithAddress): Promise<string> {
+  return (await getPlatformAdapter(signer, LendingPlatformKinds.COMPOUND3_5)).address;
+}
+
+async function getPlatformAdapter(
+  signer: SignerWithAddress,
+  lendingPlatformKind: LendingPlatformKinds,
+): Promise<IPlatformAdapter> {
   const borrowManager = await BorrowManager__factory.connect(
     await IConverterController__factory.connect(
       await ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer).controller(),
-      signer
+      signer,
     ).borrowManager(),
-    signer
+    signer,
   );
   const len = (await borrowManager.platformAdaptersLength()).toNumber();
   for (let i = 0; i < len; i++) {

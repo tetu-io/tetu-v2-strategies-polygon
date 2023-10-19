@@ -31,8 +31,8 @@ export async function txParams(hre: HardhatRuntimeEnvironment, provider: provide
     };
   } else if (hre.network.config.chainId === 137) {
     return {
-      maxPriorityFeePerGas: parseUnits('31', 9),
-      maxFeePerGas: (gasPrice * 1.5).toFixed(0),
+      maxPriorityFeePerGas: parseUnits('50', 9),
+      maxFeePerGas: (gasPrice * 3).toFixed(0),
     };
   } else if (hre.network.config.chainId === 1) {
     return {
@@ -45,7 +45,11 @@ export async function txParams(hre: HardhatRuntimeEnvironment, provider: provide
   };
 }
 
-export async function getDeployedContractByName(name: string) {
+export async function txParams2() {
+  return txParams(hreLocal, ethers.provider);
+}
+
+export async function getDeployedContractByName(name: string): Promise<string> {
   const { deployments } = hreLocal;
   const contract = await deployments.get(name);
   if (!contract) {
@@ -84,16 +88,17 @@ export async function hardhatDeploy(
 
   const newAdr = await deployments.get(deploymentName || contractName);
 
-  if (!oldAdr || oldAdr !== newAdr.address) {
-    if (verify && hre.network.name !== 'hardhat') {
-      await wait(10);
-      if (args) {
-        await verifyWithArgs(newAdr.address, args);
-      } else {
-        await verifyWithoutArgs(newAdr.address);
-      }
-    }
-  }
+  // verify manually later - much faster
+  // if (!oldAdr || oldAdr !== newAdr.address) {
+  //   if (verify && hre.network.name !== 'hardhat') {
+  //     await wait(10);
+  //     if (args) {
+  //       await verifyWithArgs(newAdr.address, args);
+  //     } else {
+  //       await verifyWithoutArgs(newAdr.address);
+  //     }
+  //   }
+  // }
 }
 
 
@@ -132,3 +137,9 @@ async function verifyWithoutArgs(address: string) {
     console.error('error verify ' + e);
   }
 }
+
+
+// Algebra USDC/USDT NSR 0x7bbCDcEe68c3DB2Dce5C9b132E426Ef778b48533
+// UniV3 USDC/USDT-100 NSR 0x6565e8136CD415F053C81Ff3656E72574F726a5E
+// Kyber USDC/USDT NSR 0x4B8bD2623d7480850E406B9f2960305f44c7aDeb
+// Kyber USDC/DAI NSR 0x8EC9134046740F83BDED78d6DDcAdAEC42fC61b0

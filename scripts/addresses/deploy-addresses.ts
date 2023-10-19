@@ -114,4 +114,16 @@ export const deployAddresses = {
     "hardhat": MaticAddresses.dQUICK_TOKEN,
     "matic": MaticAddresses.dQUICK_TOKEN
   },
+  KYBER_USDC_USDT: {
+    "hardhat": MaticAddresses.KYBER_USDC_USDT,
+    "matic": MaticAddresses.KYBER_USDC_USDT
+  },
+  KYBER_USDC_DAI: {
+    "hardhat": MaticAddresses.KYBER_USDC_DAI,
+    "matic": MaticAddresses.KYBER_USDC_DAI
+  },
+  KNC_ADDRESS: {
+    "hardhat": MaticAddresses.KNC_TOKEN,
+    "matic": MaticAddresses.KNC_TOKEN
+  },
 }

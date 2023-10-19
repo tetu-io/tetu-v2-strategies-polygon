@@ -9,10 +9,12 @@ const ZERO_PRICE_ERROR = 2;
 
 export async function setupMockedLiquidation(
   liquidator: MockTetuLiquidatorSingleCall,
-  liquidation: ILiquidationParams
+  liquidation: ILiquidationParams,
+  pool0?: string,
+  swapper0?: string
 ) {
-  const pool = ethers.Wallet.createRandom().address;
-  const swapper = ethers.Wallet.createRandom().address;
+  const pool = pool0 ?? ethers.Wallet.createRandom().address;
+  const swapper = swapper0 ?? ethers.Wallet.createRandom().address;
   await liquidator.setBuildRoute(
     liquidation.tokenIn.address,
     liquidation.tokenOut.address,

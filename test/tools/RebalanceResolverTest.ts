@@ -1,15 +1,7 @@
 import chai from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import {SignerWithAddress} from '@nomiclabs/hardhat-ethers/signers';
-import {
-  ControllerV2,
-  IERC20,
-  IERC20__factory, IStrategyV2, RebalanceResolver, RebalanceResolver__factory,
-  TetuVaultV2,
-  UniswapV3ConverterStrategy,
-  UniswapV3ConverterStrategy__factory
-} from "../../typechain";
-import {config as dotEnvConfig} from "dotenv";
+import {ControllerV2, IERC20, IERC20__factory, IStrategyV2, RebalanceResolver, RebalanceResolver__factory, TetuVaultV2, UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory} from "../../typechain";
 import {ethers} from "hardhat";
 import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
 import {TimeUtils} from "../../scripts/utils/TimeUtils";
@@ -21,27 +13,13 @@ import {MaticAddresses} from "../../scripts/addresses/MaticAddresses";
 import {TokenUtils} from "../../scripts/utils/TokenUtils";
 import {parseUnits} from "ethers/lib/utils";
 import {ConverterUtils} from "../baseUT/utils/ConverterUtils";
-import {UniswapV3StrategyUtils} from "../UniswapV3StrategyUtils";
+import {UniswapV3StrategyUtils} from "../baseUT/strategies/UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../baseUT/utils/UniversalTestUtils";
 
 const {expect} = chai;
 chai.use(chaiAsPromised);
 
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
-
 describe('RebalanceResolver tests', function () {
-  if (argv.hardhatChainId !== 137) {
-    return;
-  }
 
   let signer: SignerWithAddress;
   let controller: ControllerV2;
@@ -73,8 +51,8 @@ describe('RebalanceResolver tests', function () {
       const poolAddress = MaticAddresses.UNISWAPV3_USDC_WETH_500;
       // +-10% price (1 tick == 0.01% price change)
       const range = 1000;
-      // +-1% price - rebalance
-      const rebalanceRange = 100;
+      // +-0.4% price - rebalance
+      const rebalanceRange = 40;
 
       await _strategy.init(
         core.controller,
@@ -83,6 +61,7 @@ describe('RebalanceResolver tests', function () {
         poolAddress,
         range,
         rebalanceRange,
+        [0, 0, Misc.MAX_UINT, 0],
       );
 
       return _strategy as unknown as IStrategyV2;

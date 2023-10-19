@@ -7,10 +7,11 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   await hardhatDeploy(hre, 'AlgebraConverterStrategyLogicLib', true, {
     AlgebraLib: (await deployments.get('AlgebraLib')).address,
     AlgebraDebtLib: (await deployments.get('AlgebraDebtLib')).address,
-    ConverterStrategyBaseLib: (await deployments.get('ConverterStrategyBaseLib')).address,
-    // ConverterStrategyBaseLib2: (await deployments.get('ConverterStrategyBaseLib2')).address,
+    ConverterStrategyBaseLib2: (await deployments.get('ConverterStrategyBaseLib2')).address,
+    PairBasedStrategyLogicLib: (await deployments.get('PairBasedStrategyLogicLib')).address,
+    PairBasedStrategyLib: (await deployments.get('PairBasedStrategyLib')).address,
   });
 };
 export default func;
 func.tags = ['AlgebraConverterStrategyLogicLib'];
-func.dependencies = ['AlgebraLib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'AlgebraDebtLib'];
+func.dependencies = ['AlgebraLib', 'AlgebraDebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib'];

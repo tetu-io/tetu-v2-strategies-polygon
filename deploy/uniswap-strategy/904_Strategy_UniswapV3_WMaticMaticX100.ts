@@ -6,6 +6,7 @@ import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/add
 import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
 import { isContractExist, txParams } from '../../deploy_constants/deploy-helpers';
 import { RunHelper } from '../../scripts/utils/RunHelper';
+import {Misc} from "../../scripts/utils/Misc";
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts } = hre;
@@ -47,7 +48,9 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     CONVERTER_ADDRESS,
     UNISWAPV3_WMATIC_MATICX_100,
     0,
-    0, {
+    0,
+    [0, 0, Misc.MAX_UINT, 0],
+    {
       ...params,
     },
   ));
@@ -55,3 +58,4 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
 export default func;
 func.tags = ['Strategy_UniswapV3ConverterStrategy_WMaticMaticX100'];
 func.dependencies = ['UniswapV3ConverterStrategy'];
+func.skip = async () => true

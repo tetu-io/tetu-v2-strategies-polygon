@@ -1,7 +1,7 @@
 /* tslint:disable:no-trailing-whitespace */
 import {UniswapV3Utils} from "../utils/UniswapV3Utils";
 import {ethers} from "hardhat";
-import {IStrategyParams, MutateDirection} from "./types";
+import {IRebalanceDebtSwapPoolParams, IStrategyParams, MutateDirection} from "./types";
 import {IERC20Metadata__factory} from "../../typechain";
 import {formatUnits, getAddress, parseUnits} from "ethers/lib/utils";
 import {deployBacktestSystem} from "./deployBacktestSystem";
@@ -10,6 +10,9 @@ import {AppDataSource} from "./db/data-source";
 import {Result} from "./entity/Result";
 import {Task} from "./entity/Task";
 import {Repository} from "typeorm";
+import { Misc } from '../utils/Misc';
+import { reset } from '@nomicfoundation/hardhat-network-helpers';
+import { EnvSetup } from '../utils/EnvSetup';
 
 async function isTaskDone(task: Task, resultRepository: Repository<Result>) {
   // check results in progress
@@ -69,12 +72,12 @@ function bornGen0(task: Task, tickSpacing: number): IStrategyParams {
 }
 
 async function main() {
-  const chainId = (await ethers.provider.getNetwork()).chainId
+  const chainId = Misc.getChainId()
   if (chainId !== 31337) {
     console.error(`Incorrect hardhat chainId ${chainId}. Need 31337.`)
     process.exit(-1)
   }
-  const rpc = process.env.TETU_MATIC_RPC_URL
+  const rpc = EnvSetup.getEnv().maticRpcUrl
   const provider = new ethers.providers.JsonRpcProvider(rpc)
   const providerChainId = (await provider.getNetwork()).chainId
   if (providerChainId !== 137) {
@@ -268,6 +271,12 @@ async function main() {
 
   const liquiditySnapshot = await UniswapV3Utils.getPoolLiquiditySnapshot(getAddress(task.pool), task.startBlock, task.config.liquiditySnapshotSurroundingTickSpacings)
   const signer = (await ethers.getSigners())[0];
+  const rebalanceDebtSwapPoolParams: IRebalanceDebtSwapPoolParams = {
+    tickLower: -60,
+    tickUpper: 60,
+    amount0Desired: parseUnits('500', 6),
+    amount1Desired: parseUnits('500', 6),
+  }
   const contracts = await deployBacktestSystem(
     signer,
     liquiditySnapshot.currentSqrtPriceX96,
@@ -276,9 +285,11 @@ async function main() {
     poolData.token1,
     poolData.fee,
     strategyParams.tickRange,
-    strategyParams.rebalanceTickRange
+    strategyParams.rebalanceTickRange,
+      rebalanceDebtSwapPoolParams
   )
 
+  // todo fix
   const results = await strategyBacktest(
     signer,
     contracts.vault,

@@ -1,9 +1,9 @@
 import { ethers } from 'hardhat';
-import { IToolsContractsWrapper } from '../../ToolsContractsWrapper';
+import { IToolsContractsWrapper } from '../../baseUT/universalTestUtils/ToolsContractsWrapper';
 import { StrategyTestUtils } from '../../baseUT/utils/StrategyTestUtils';
 import { IERC20__factory, IForwarder, IStrategyV2, ITetuLiquidator, TetuVaultV2 } from '../../../typechain';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { ICoreContractsWrapper } from '../../CoreContractsWrapper';
+import { ICoreContractsWrapper } from '../../baseUT/universalTestUtils/CoreContractsWrapper';
 import { DoHardWorkLoopBase, IDoHardWorkLoopInputParams } from '../../baseUT/utils/DoHardWorkLoopBase';
 import { DeployInfo } from '../../baseUT/utils/DeployInfo';
 import { SpecificStrategyTest } from './SpecificStrategyTest';

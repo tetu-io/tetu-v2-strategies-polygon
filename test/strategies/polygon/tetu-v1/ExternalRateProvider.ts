@@ -1,25 +1,9 @@
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers';
 import chai, { expect } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
-import { config as dotEnvConfig } from 'dotenv';
 import { ExternalRateProvider } from '../../../../typechain'
 import { ethers } from 'hardhat';
 import { BigNumber } from 'ethers';
-
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
 
 chai.use(chaiAsPromised);
 
@@ -28,9 +12,6 @@ const T_ST_MATIC_ADDRESS = '0xF813a454C975ad418e8dB18764a2191D182478F4'
 const ST_MATIC_RATE_PROVIDER_ADDRESS = '0xdEd6C522d803E35f65318a9a4d7333a22d582199'
 
 describe('ExternalRateProvider tests', async() => {
-  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
-    return;
-  }
 
   async function deployContracts() {
     const ExternalRateProviderFactory = await ethers.getContractFactory('ExternalRateProvider');

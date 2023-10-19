@@ -17,3 +17,4 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
 export default func;
 func.tags = ['RebalanceResolver_UniswapV3_wstETHWETH100'];
 func.dependencies = ['Strategy_UniswapV3ConverterStrategy_wstETHWETH100'];
+func.skip = async () => true

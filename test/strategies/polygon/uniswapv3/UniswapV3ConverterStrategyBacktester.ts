@@ -2,39 +2,39 @@
 import { ethers } from 'hardhat';
 import { TimeUtils } from '../../../../scripts/utils/TimeUtils';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { getAddress } from 'ethers/lib/utils';
+import {getAddress, parseUnits} from 'ethers/lib/utils';
 import { IPoolLiquiditySnapshot, UniswapV3Utils } from '../../../../scripts/utils/UniswapV3Utils';
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
-import { config as dotEnvConfig } from 'dotenv';
+import { deployBacktestSystem } from '../../../../scripts/uniswapV3Backtester/deployBacktestSystem';
 import {
-  deployBacktestSystem,
-} from "../../../../scripts/uniswapV3Backtester/deployBacktestSystem";
-import {IBacktestResult, IContracts} from "../../../../scripts/uniswapV3Backtester/types";
-import {showBacktestResult, strategyBacktest} from "../../../../scripts/uniswapV3Backtester/strategyBacktest";
+  IBacktestResult,
+  IContracts,
+  IRebalanceDebtSwapPoolParams,
+} from '../../../../scripts/uniswapV3Backtester/types';
+import { showBacktestResult, strategyBacktest } from '../../../../scripts/uniswapV3Backtester/strategyBacktest';
+import { EnvSetup } from '../../../../scripts/utils/EnvSetup';
 
-dotEnvConfig();
+// How to
+// anvil --prune-history
+// hardhat test test/strategies/polygon/uniswapv3/UniswapV3ConverterStrategyBacktester.ts --network foundry
+
 // tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
+const hre = require("hardhat");
 
 describe('UmiswapV3 converter strategy backtester', function() {
   // ==== backtest config ====
-  const backtestStartBlock = 43400000;
-  const backtestEndBlock = 43450000;
-  const investAmountUnits: string = '10000' // 1k USDC, 1k WMATIC etc
+  const backtestStartBlock = 46760000; // Aug-26-2023 02:31:23 AM +UTC
+  // const backtestEndBlock = 46900000; // Aug-29-2023 02:49:50 PM +UTC - fuse on hardhwork
+  const backtestEndBlock = 46880000; // Aug-27-2023 02:36:58 PM +UTC
+  const investAmountUnits: string = '100'
   const txLimit = 0; // 0 - unlimited
-  const disableBurns = false; // backtest is 5x slower with enabled burns for volatile pools
+  const disableBurns = false;
   const disableMints = false;
+  const rebalanceDebt = true;
+  const allowedLockedPercent = 25;
+  const forceRebalanceDebtLockedPercent = 70;
+  const rebalanceDebtDelay = 7200;
+  const fuseThresholds = ['0.999', '0.9991', '1.001', '1.0009',]
 
   /*const params = {
     vaultAsset: MaticAddresses.WMATIC_TOKEN,
@@ -46,7 +46,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
     tickRange: 0,
     rebalanceTickRange: 0,
   }*/
-  /*const params = {
+  const params = {
     vaultAsset: MaticAddresses.USDC_TOKEN,
     pool: MaticAddresses.UNISWAPV3_USDC_USDT_100, // USDC_USDT_0.01%
     token0: MaticAddresses.USDC_TOKEN,
@@ -55,8 +55,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
     liquiditySnapshotSurroundingTickSpacings: 200, // 200*1*0.01% == +-2% price
     tickRange: 0, // 1 tick
     rebalanceTickRange: 0, // 1 tick
-  }*/
-  const params = {
+  }
+  /*const params = {
     vaultAsset: MaticAddresses.USDC_TOKEN,
     pool: MaticAddresses.UNISWAPV3_USDC_DAI_100, // USDC_DAI_0.01%
     token0: MaticAddresses.USDC_TOKEN,
@@ -65,7 +65,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
     liquiditySnapshotSurroundingTickSpacings: 50, // 50*1*0.01% == +-0.5% price
     tickRange: 0, // 1 tick
     rebalanceTickRange: 0, // 1 tick
-  }
+  }*/
     // USDC vault
   /*{
     vaultAsset: MaticAddresses.USDC_TOKEN,
@@ -170,6 +170,13 @@ describe('UmiswapV3 converter strategy backtester', function() {
     tickRange: 0, // 1 tick spacing
     rebalanceTickRange: 0, // 1 tick spacing
   },*/
+
+  const rebalanceDebtSwapPoolParams: IRebalanceDebtSwapPoolParams = {
+    tickLower: -60,
+    tickUpper: 60,
+    amount0Desired: parseUnits('500', 6),
+    amount1Desired: parseUnits('500', 6),
+  }
   // =========================
 
   let contracts: IContracts
@@ -185,12 +192,13 @@ describe('UmiswapV3 converter strategy backtester', function() {
   
   let backtestResult: IBacktestResult;
 
-  if (argv.disableStrategyTests) {
+  if (EnvSetup.getEnv().disableBacktesting) {
     return;
   }
 
-  if (argv.hardhatChainId !== 31337) {
-    console.log('Backtester can only work in the local hardhat network (31337 chainId)');
+  const chainId = hre.network.config.chainId
+  if (chainId !== 31337) {
+    console.log('Backtester can only work in the local hardhat or foundry network (31337 chainId)');
     return;
   }
 
@@ -212,8 +220,19 @@ describe('UmiswapV3 converter strategy backtester', function() {
       getAddress(params.token1),
       params.poolFee,
       params.tickRange,
-      params.rebalanceTickRange
+      params.rebalanceTickRange,
+      rebalanceDebtSwapPoolParams
     )
+
+    await contracts.strategy.setFuseThresholds([
+      parseUnits(fuseThresholds[0]),
+      parseUnits(fuseThresholds[1]),
+      parseUnits(fuseThresholds[2]),
+      parseUnits(fuseThresholds[3]),
+    ])
+    // console.log('Fuse thresholds', fuseThresholds.map(a => parseUnits(a).toString()))
+
+    // await contracts.uniswapV3Calee.toggleNoRevert()
   });
 
   after(async function() {
@@ -221,9 +240,9 @@ describe('UmiswapV3 converter strategy backtester', function() {
     if (backtestResult) {
       console.log('');
       console.log('');
-      console.log(`=== Uniswap V3 delta-neutral strategy backtester ===`);
+      console.log(`=== Uniswap V3 NSR strategy backtester ===`);
       console.log('');
-      showBacktestResult(backtestResult);
+      showBacktestResult(backtestResult, fuseThresholds, backtestStartBlock, backtestEndBlock, rebalanceDebtSwapPoolParams);
     }
   });
 
@@ -250,6 +269,12 @@ describe('UmiswapV3 converter strategy backtester', function() {
       txLimit,
       disableBurns,
       disableMints,
+      rebalanceDebt,
+      contracts.reader,
+      allowedLockedPercent,
+      forceRebalanceDebtLockedPercent,
+      rebalanceDebtDelay,
+      contracts.rebalanceDebtSwapPool,
     )
   })
 });

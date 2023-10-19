@@ -1,14 +1,25 @@
 import {
-  Aave3AggregatorInterfaceMock, BalancerBoostedDepositorFacade,
+  Aave3AggregatorInterfaceMock,
+  BalancerBoostedDepositorFacade,
   BalancerLogicLibFacade,
-  ConverterStrategyBaseLibFacade, MockController,
+  BorrowLibFacade,
+  ConverterStrategyBaseLibFacade, ConverterStrategyBaseLibFacade2, IterationPlanLibFacade,
+  MockController,
   MockConverterStrategy,
   MockConverterStrategy__factory,
-  MockForwarder, MockSplitterVault,
+  MockForwarder,
+  MockSplitterVault,
   MockTetuConverter,
   MockTetuConverterController,
-  MockTetuLiquidatorSingleCall, MockVaultInsurance,
-  PriceOracleMock, UniswapV3LibFacade,
+  MockTetuLiquidatorSingleCall,
+  MockVaultInsurance,
+  PriceOracleMock,
+  PairBasedStrategyLibFacade,
+  PairBasedStrategyReaderAccessMock,
+  UniswapV3LibFacade,
+  PairBasedStrategyReader,
+  UniswapV3ConverterStrategyLogicLibFacade,
+  MockUniswapV3Pool, PairBasedStrategyLogicLibFacade, AppLibFacade, SwapHelper, MockAggregator, MockSwapper,
 } from '../../../typechain';
 import { DeployerUtils } from '../../../scripts/utils/DeployerUtils';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
@@ -72,6 +83,20 @@ export class MockHelper {
     )) as ConverterStrategyBaseLibFacade;
   }
 
+  public static async createAppLibFacade(signer: SignerWithAddress): Promise<AppLibFacade> {
+    return (await DeployerUtils.deployContract(
+        signer,
+        'AppLibFacade',
+    )) as AppLibFacade;
+  }
+
+  public static async createConverterStrategyBaseLibFacade2(signer: SignerWithAddress): Promise<ConverterStrategyBaseLibFacade2> {
+    return (await DeployerUtils.deployContract(
+      signer,
+      'ConverterStrategyBaseLibFacade2',
+    )) as ConverterStrategyBaseLibFacade2;
+  }
+
   public static async createBalancerBoostedDepositorFacade(
     signer: SignerWithAddress,
     pool: string = MaticAddresses.BALANCER_POOL_T_USD,
@@ -117,5 +142,54 @@ export class MockHelper {
       signer,
       'UniswapV3LibFacade',
     )) as UniswapV3LibFacade;
+  }
+
+  public static async createBorrowLibFacade(signer: SignerWithAddress): Promise<BorrowLibFacade> {
+    return (await DeployerUtils.deployContract(signer, 'BorrowLibFacade')) as BorrowLibFacade;
+  }
+
+  public static async createIterationPlanLibFacade(signer: SignerWithAddress): Promise<IterationPlanLibFacade> {
+    return (await DeployerUtils.deployContract(signer, 'IterationPlanLibFacade')) as IterationPlanLibFacade;
+  }
+
+
+  public static async createPairBasedStrategyReaderAccessMock(signer: SignerWithAddress): Promise<PairBasedStrategyReaderAccessMock> {
+    return (await DeployerUtils.deployContract(signer, 'PairBasedStrategyReaderAccessMock')) as PairBasedStrategyReaderAccessMock;
+  }
+
+  public static async createPairBasedStrategyReader(signer: SignerWithAddress): Promise<PairBasedStrategyReader> {
+    return (await DeployerUtils.deployContract(signer, 'PairBasedStrategyReader')) as PairBasedStrategyReader;
+  }
+
+  public static async createPairBasedStrategyLibFacade(signer: SignerWithAddress): Promise<PairBasedStrategyLibFacade> {
+    return (await DeployerUtils.deployContract(signer, 'PairBasedStrategyLibFacade')) as PairBasedStrategyLibFacade;
+  }
+
+  public static async createPairBasedStrategyLogicLibFacade(signer: SignerWithAddress): Promise<PairBasedStrategyLogicLibFacade> {
+    return (await DeployerUtils.deployContract(signer, 'PairBasedStrategyLogicLibFacade')) as PairBasedStrategyLogicLibFacade;
+  }
+
+  public static async createUniswapV3ConverterStrategyLogicLibFacade(signer: SignerWithAddress): Promise<UniswapV3ConverterStrategyLogicLibFacade> {
+    return (await DeployerUtils.deployContract(signer, 'UniswapV3ConverterStrategyLogicLibFacade')) as UniswapV3ConverterStrategyLogicLibFacade;
+  }
+
+  // public static async createUniswapV3DebtLibFacade(signer: SignerWithAddress): Promise<UniswapV3DebtLibFacade> {
+  //   return (await DeployerUtils.deployContract(signer, 'UniswapV3DebtLibFacade')) as UniswapV3DebtLibFacade;
+  // }
+
+  public static async createMockUniswapV3Pool(signer: SignerWithAddress): Promise<MockUniswapV3Pool> {
+    return (await DeployerUtils.deployContract(signer, 'MockUniswapV3Pool')) as MockUniswapV3Pool;
+  }
+
+  public static async createSwapperHelper(signer: SignerWithAddress): Promise<SwapHelper> {
+    return (await DeployerUtils.deployContract(signer, 'SwapHelper')) as SwapHelper;
+  }
+
+  public static async createMockAggregator(signer: SignerWithAddress, priceOracle: string): Promise<MockAggregator> {
+    return (await DeployerUtils.deployContract(signer, 'MockAggregator', priceOracle)) as MockAggregator;
+  }
+
+  public static async createMockSwapper(signer: SignerWithAddress, priceOracle: string, token0: string, token1: string): Promise<MockSwapper> {
+    return (await DeployerUtils.deployContract(signer, 'MockSwapper', priceOracle, token0, token1)) as MockSwapper;
   }
 }

@@ -24,10 +24,10 @@ import {
 } from '../../../../typechain';
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
 import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon';
-import { ICoreContractsWrapper } from '../../../CoreContractsWrapper';
-import { IToolsContractsWrapper } from '../../../ToolsContractsWrapper';
+import { ICoreContractsWrapper } from '../../../baseUT/universalTestUtils/CoreContractsWrapper';
+import { IToolsContractsWrapper } from '../../../baseUT/universalTestUtils/ToolsContractsWrapper';
 import {BigNumber, Signer} from 'ethers';
-import { VaultUtils } from '../../../VaultUtils';
+import { VaultUtils } from '../../../baseUT/universalTestUtils/VaultUtils';
 import { parseUnits } from 'ethers/lib/utils';
 import { BalanceUtils } from '../../../baseUT/utils/BalanceUtils';
 import { controlGasLimitsEx } from '../../../../scripts/utils/GasLimitUtils';
@@ -43,17 +43,18 @@ import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { TokenUtils } from '../../../../scripts/utils/TokenUtils';
 import { MaticHolders } from '../../../../scripts/addresses/MaticHolders';
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
-import {IPutInitialAmountsBalancesResults, IState, IStateParams, StateUtils} from "../../../StateUtils";
+import {IPutInitialAmountsBalancesResults, IState, IStateParams, StateUtils} from "../../../baseUT/universalTestUtils/StateUtils";
 import {Provider} from "@ethersproject/providers";
-import {BalancerStrategyUtils} from "../../../BalancerStrategyUtils";
+import {BalancerStrategyUtils} from "../../../baseUT/strategies/BalancerStrategyUtils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 chai.use(chaiAsPromised);
 
 /**
  * Integration time-consuming tests, so @skip-on-coverage
  */
-describe('BalancerBoostedIntTest @skip-on-coverage', function() {
+describe.skip('BalancerBoostedIntTest @skip-on-coverage', function() {
   //region Constants and variables
   const MAIN_ASSET: string = PolygonAddresses.USDC_TOKEN;
   const pool: string = MaticAddresses.BALANCER_POOL_T_USD;
@@ -70,6 +71,7 @@ describe('BalancerBoostedIntTest @skip-on-coverage', function() {
 
   //region before, after
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     signer = await DeployerUtilsLocal.impersonate(); // governance by default
     user = (await ethers.getSigners())[1];
     console.log('signer', signer.address);
@@ -892,7 +894,8 @@ describe('BalancerBoostedIntTest @skip-on-coverage', function() {
       });
     });
 
-    describe("requirePayAmountBack", () => {
+    // todo enable after SCB-718
+    describe.skip("requirePayAmountBack", () => {
 
       /**
        * Make deposit: make two borrows

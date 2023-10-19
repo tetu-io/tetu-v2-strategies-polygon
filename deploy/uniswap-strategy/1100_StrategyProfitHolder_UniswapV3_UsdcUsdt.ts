@@ -7,14 +7,14 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const { deployments } = hre;
   const strategyAddress = (await deployments.get('Strategy_UniswapV3ConverterStrategy_UsdcUsdt')).address
   const strategy = await ethers.getContractAt('UniswapV3ConverterStrategy', strategyAddress)
-  const state = await strategy.getState()
+  const state = await strategy.getDefaultState()
   await hardhatDeploy(
     hre,
     'StrategyProfitHolder',
     true,
     undefined,
     'StrategyProfitHolder_UniswapV3_UsdcUsdt',
-    [strategyAddress, [state.tokenA, state.tokenB]],
+      [strategyAddress, [state[0][0], state[0][1]]],
     true
   )
 };
