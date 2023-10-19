@@ -41,6 +41,10 @@ export class EnvSetup {
           type: 'string',
         },
 
+          baseRpcUrl: {
+              type: 'string',
+          },
+
         /////// BLOCKS
 
         maticForkBlock: {

@@ -8,8 +8,6 @@ import {Misc} from "./Misc";
 import { EnvSetup } from './EnvSetup';
 
 export class UniswapV3Utils {
-  static SUBGRAPH = 'https://api.thegraph.com/subgraphs/name/ianlapham/uniswap-v3-polygon'
-
   public static async getPoolPrice(poolAddr: string): Promise<BigNumber> {
     const rpc = EnvSetup.getEnv().maticRpcUrl
     const provider = new ethers.providers.JsonRpcProvider(rpc)
@@ -35,7 +33,13 @@ export class UniswapV3Utils {
     }
   }
 
-  public static async getPoolTransactions(poolAddr: string, startBlock: number, endBlock: number) {
+  public static async getPoolTransactions(
+      rpc: string,
+      subgraph: string,
+      poolAddr: string,
+      startBlock: number,
+      endBlock: number
+  ) {
     console.log(`Get Uniswap V3 pool transactions for ${poolAddr} for blocks ${startBlock} - ${endBlock}`)
 
     const cacheDir = 'tmp';
@@ -48,7 +52,6 @@ export class UniswapV3Utils {
       r = JSON.parse(fsContent.toString())
       console.log(`Got from cache (${r.length} txs).`)
     } else {
-      const rpc = EnvSetup.getEnv().maticRpcUrl
       const provider = new ethers.providers.JsonRpcProvider(rpc)
       const startTimestamp = (await provider.getBlock(startBlock)).timestamp;
       const endTimestamp = (await provider.getBlock(endBlock)).timestamp;
@@ -58,7 +61,7 @@ export class UniswapV3Utils {
       let got = 0
 
       const client = createClient({
-        url: this.SUBGRAPH,
+        url: subgraph,
       })
       let lastTimestamp = startTimestamp
       let query
@@ -67,8 +70,8 @@ export class UniswapV3Utils {
         query = this.getMintsQuery(poolAddr, lastTimestamp, endTimestamp)
         const data = await client.query(query, {}).toPromise()
         if (!data?.data?.mints) {
-          console.log('Error fetching from subgraph')
-          break;
+          // console.log(data)
+          throw new Error('Error fetching from subgraph')
         }
 
         for (const mint of data.data.mints) {
@@ -201,7 +204,7 @@ export class UniswapV3Utils {
     return r
   }
 
-  public static async getPoolLiquiditySnapshot(poolAddr: string, block: number, numSurroundingTicks: number): Promise<IPoolLiquiditySnapshot> {
+  public static async getPoolLiquiditySnapshot(rpc: string, poolAddr: string, block: number, numSurroundingTicks: number): Promise<IPoolLiquiditySnapshot> {
     console.log(`Get Uniswap V3 pool liquidity snapshot for ${poolAddr} at block ${block}, numSurroundingTicks: ${numSurroundingTicks}..`)
 
     let r: IPoolLiquiditySnapshot = {
@@ -220,7 +223,6 @@ export class UniswapV3Utils {
       r = JSON.parse(fsContent.toString())
       console.log(`Got from cache.`)
     } else {
-      const rpc = EnvSetup.getEnv().maticRpcUrl
       const provider = new ethers.providers.JsonRpcProvider(rpc)
       const pool = UniswapV3Pool__factory.connect(poolAddr, provider)
       const tickSpacing = this.getTickSpacing(await pool.fee())
