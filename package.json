@@ -34,7 +34,7 @@
     "tetu"
   ],
   "author": "TETU team <admin@tetu.io>",
-  "license": "MIT",
+  "license": "BUSL-1.1",
   "homepage": "https://tetu.io/",
   "dependencies": {
     "@gelatonetwork/web3-functions-sdk": "^2.0.5",

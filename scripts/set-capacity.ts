@@ -5,10 +5,10 @@ import { RunHelper } from './utils/RunHelper';
 import { txParams2 } from '../deploy_constants/deploy-helpers';
 
 const STRATS = new Map<string, number>([
-  ['0xA8105284aA9C9A20A2081EEE1ceeF03d9719A5AD', 500_000], // Strategy_AlgebraConverterStrategy_UsdcUsdt 3.0.0
-  ['0xd0Dff2a31516fEDb80824C9B9E2DDcbfeF2C41e2', 200_000], // Strategy_KyberConverterStrategy_UsdcDai 3.0.0
-  ['0x792Bcc2f14FdCB9FAf7E12223a564e7459eA4201', 200_000], // Strategy_KyberConverterStrategy_UsdcUsdt 3.0.0
-  ['0xCdc5560AB926Dca3d4989bF814469Af3f989Ab2C', 200_000], // Strategy_UniswapV3ConverterStrategy_UsdcUsdt 3.0.0
+  ['0xA8105284aA9C9A20A2081EEE1ceeF03d9719A5AD', 100_000], // Strategy_AlgebraConverterStrategy_UsdcUsdt 3.0.0
+  ['0xd0Dff2a31516fEDb80824C9B9E2DDcbfeF2C41e2', 100_000], // Strategy_KyberConverterStrategy_UsdcDai 3.0.0
+  ['0x792Bcc2f14FdCB9FAf7E12223a564e7459eA4201', 300_000], // Strategy_KyberConverterStrategy_UsdcUsdt 3.0.0
+  ['0xCdc5560AB926Dca3d4989bF814469Af3f989Ab2C', 300_000], // Strategy_UniswapV3ConverterStrategy_UsdcUsdt 3.0.0
 ]);
 
 async function main() {
