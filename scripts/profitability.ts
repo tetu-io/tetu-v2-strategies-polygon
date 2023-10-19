@@ -3,23 +3,71 @@ import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {getApr} from "./uniswapV3Backtester/strategyBacktest";
 import {writeFileSyncRestoreFolder} from "../test/baseUT/utils/FileUtils";
 import fs, {writeFileSync} from "fs";
+import {MaticAddresses} from "./addresses/MaticAddresses";
+import {EnvSetup} from "./utils/EnvSetup";
+import {ethers} from "hardhat";
+import {
+    IPairBasedDefaultStateProvider__factory,
+    ITetuConverter__factory, ITetuLiquidator__factory,
+} from "../typechain";
+import {JsonRpcProvider} from "@ethersproject/providers/src.ts/json-rpc-provider";
+import {BigNumber} from "ethers";
 
 const whitelistedVaultsForInvesting = ['tUSDC',]
-const SUBGRAPH = 'https://api.thegraph.com/subgraphs/name/a17/tetu-v2'
+const SUBGRAPH = 'https://api.thegraph.com/subgraphs/name/a17/tetu-v2?version=pending'
+const CONVERTER = MaticAddresses.TETU_CONVERTER
+
+interface IDebtState {
+    tokenACollateral: string
+    tokenADebt: string
+    tokenBCollateral: string
+    tokenBDebt: string
+}
+
+async function getDebtState(
+    strategyAddress: string,
+    tokenA: string,
+    tokenB: string,
+    block: number,
+    provider: JsonRpcProvider
+): Promise<IDebtState> {
+    const d: IDebtState = {
+        tokenACollateral: '0',
+        tokenADebt: '0',
+        tokenBCollateral: '0',
+        tokenBDebt: '0',
+    }
+
+    const converter = ITetuConverter__factory.connect(CONVERTER, provider)
+
+    const rAB = await converter.getDebtAmountStored(strategyAddress, tokenA, tokenB, false, {blockTag: block})
+    const rBA = await converter.getDebtAmountStored(strategyAddress, tokenB, tokenA, false, {blockTag: block})
+    d.tokenBDebt = rAB[0]
+    d.tokenACollateral = rAB[1]
+    d.tokenADebt = rBA[0]
+    d.tokenBCollateral = rBA[1]
+    return d
+}
 
 async function main() {
     console.log('Tetu V2 strategies profitability');
+
+    const rpc = EnvSetup.getEnv().maticRpcUrl
+    const provider = new ethers.providers.JsonRpcProvider(rpc)
+    const liquidator = ITetuLiquidator__factory.connect(MaticAddresses.TETU_LIQUIDATOR, provider)
 
     const pathOut = "./tmp/profitability.csv";
     const headers = [
         'Strategy',
         'Date',
         'Real APR',
+        'TVL',
         'Claimed fees',
         'Claimed rewards',
-        'Profit to cover',
-        'Loss covered by insurance',
-        'Loss covered by rewards',
+        'FixPrice profit',
+        'FixPrice Loss (covered by insurance)',
+        'Debt cost',
+        'Swap Loss (covered by rewards)',
     ]
     let rows: string[][] = []
 
@@ -39,6 +87,12 @@ async function main() {
             for (const strategy of vaultEntity.splitter.strategies) {
                 console.log(`Strategy ${strategy.specificName} [${strategy.version}]`)
 
+                const defaultState = await IPairBasedDefaultStateProvider__factory.connect(strategy.id, provider).getDefaultState()
+                const tokenA = defaultState.addr[0]
+                const tokenB = defaultState.addr[1]
+
+                let debtState: IDebtState | undefined = undefined
+
                 const dayHistories: {
                     day: string
                     realApr: number
@@ -47,6 +101,7 @@ async function main() {
                     profitCovered: string
                     lossCoveredFromInsurance: string
                     lossCoveredFromRewards: string
+                    debtCost: string
                     lastHistory: {
                         time: number
                         tvl: string
@@ -70,6 +125,7 @@ async function main() {
                         dayIndexStr = dayStr
                     }
 
+
                     if (dayHistories[dayIndex] === undefined) {
                         dayHistories.push({
                             day: dayStr,
@@ -79,7 +135,8 @@ async function main() {
                             rewardsClaimed: '0',
                             profitCovered: '0',
                             lossCoveredFromInsurance: '0',
-                            lossCoveredFromRewards: '0'
+                            lossCoveredFromRewards: '0',
+                            debtCost: '0',
                         })
 
                         if (dayIndex > 0) {
@@ -177,33 +234,67 @@ async function main() {
 
                         dayHistories[dayIndex].lastHistory = history
                     }
+
+                    if (debtState === undefined) {
+                        debtState = await getDebtState(strategy.id, tokenA, tokenB, history.block + 1, provider)
+                    } else {
+                        const newDebtState = await getDebtState(strategy.id, tokenA, tokenB, history.block - 1, provider)
+
+                        let debtCost = '0'
+                        if (BigNumber.from(debtState.tokenACollateral).gt(0)) {
+                            const supplyProfit = BigNumber.from(newDebtState.tokenACollateral).sub(BigNumber.from(debtState.tokenACollateral))
+                            const debtLoss = await liquidator.getPrice(tokenB, tokenA, BigNumber.from(newDebtState.tokenBDebt).sub(BigNumber.from(debtState.tokenBDebt)), {blockTag: history.block - 1})
+                            debtCost = formatUnits(
+                                debtLoss.sub(supplyProfit),
+                                vaultEntity.decimals
+                            )
+                        }
+                        if (BigNumber.from(debtState.tokenBCollateral).gt(0)) {
+                            const supplyProfit = await liquidator.getPrice(tokenB, tokenA, BigNumber.from(newDebtState.tokenBCollateral).sub(BigNumber.from(debtState.tokenBCollateral)),  {blockTag: history.block - 1})
+                            const debtLoss = BigNumber.from(newDebtState.tokenADebt).sub(BigNumber.from(debtState.tokenADebt))
+                            debtCost = formatUnits(
+                                debtLoss.sub(supplyProfit),
+                                vaultEntity.decimals
+                            )
+                        }
+
+                        dayHistories[dayIndex].debtCost = formatUnits(
+                            parseUnits(dayHistories[dayIndex].debtCost, vaultEntity.decimals).add(
+                                parseUnits(debtCost, vaultEntity.decimals)
+                            ),
+                            vaultEntity.decimals
+                        )
+
+                        debtState = await getDebtState(strategy.id, tokenA, tokenB, history.block + 1, provider)
+                    }
+
                 }
 
                 rows.push(...dayHistories.map(day => [
                     `${strategy.specificName} [${strategy.version}]`,
                     day.day,
                     '' + day.realApr,
+                    day.lastHistory.tvl,
                     day.feesClaimed,
                     day.rewardsClaimed,
                     day.profitCovered,
                     day.lossCoveredFromInsurance,
+                    day.debtCost,
                     day.lossCoveredFromRewards,
                 ]))
 
                 for (const day of dayHistories) {
-                    console.log(`  ${day.day}. Real APR: ${day.realApr}%. Fees: ${day.feesClaimed}. Rewards: ${day.rewardsClaimed}. Profit to cover: ${day.profitCovered}. Loss insurance: ${day.lossCoveredFromInsurance}. Loss rewards: ${day.lossCoveredFromRewards}.`)
+                    console.log(`  ${day.day}. Real APR: ${day.realApr}%. Fees: ${day.feesClaimed}. Rewards: ${day.rewardsClaimed}. Profit to cover: ${day.profitCovered}. Loss insurance: ${day.lossCoveredFromInsurance}. Loss rewards: ${day.lossCoveredFromRewards}. Debt cost: ${day.debtCost}.`)
                 }
-
-                // console.log(dayHistories)
             }
             console.log('')
         }
     }
 
     fs.rmSync(pathOut, {force: true,})
-    writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', { encoding: 'utf8', flag: 'a' })
+    writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', {encoding: 'utf8', flag: 'a'})
     for (const row of rows) {
-        writeFileSync(pathOut, row.join(';') + '\n', { encoding: 'utf8', flag: 'a' })
+        writeFileSync(pathOut, row.join(';') + '\n', {encoding: 'utf8', flag: 'a'})
     }
 }
 
@@ -214,11 +305,13 @@ function getStrategiesData() {
         decimals
         splitter {
           strategies(where: {paused: false}) {
+            id
             name
             version
             specificName
             history(first: 100, orderBy: id, orderDirection: desc) {
               time
+              block
               tvl
               feesClaimed
               rewardsClaimed
@@ -236,4 +329,3 @@ main().catch((error) => {
     console.error(error);
     process.exitCode = 1;
 });
-
