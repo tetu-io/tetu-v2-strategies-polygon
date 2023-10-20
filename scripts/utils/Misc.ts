@@ -16,8 +16,6 @@ import { BigNumber } from 'ethers';
 import { MaticAddresses } from '../addresses/MaticAddresses';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { LendingPlatformKinds } from '../../test/baseUT/converter/ConverterConstants';
-import { reset } from '@nomicfoundation/hardhat-network-helpers';
-import { config as dotEnvConfig } from 'dotenv';
 
 const log: Logger<undefined> = new Logger(logSettings);
 
@@ -74,6 +72,13 @@ export class Misc {
     return hre.network.name;
   }
 
+  public static isRealNetwork() {
+    return hre.network.name !== 'hardhat'
+      && hre.network.name !== 'anvil'
+      && hre.network.name !== 'foundry';
+  }
+
+
   public static async getChainConfig() {
     const chainId = Misc.getChainId();
     switch (chainId) {
@@ -118,13 +123,15 @@ export class Misc {
   }
 
   public static async wait(blocks: number) {
-    if (hre.network.name === 'hardhat') {
+    if (!Misc.isRealNetwork()) {
       return;
     }
     const start = ethers.provider.blockNumber;
     while (true) {
-      log.info('wait 10sec');
-      await Misc.delay(10000);
+      if (Misc.isRealNetwork()) {
+        log.info('wait 10sec');
+        await Misc.delay(10000);
+      }
       if (ethers.provider.blockNumber >= start + blocks) {
         break;
       }
