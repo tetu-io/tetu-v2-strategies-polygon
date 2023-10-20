@@ -31,7 +31,7 @@ import { formatUnits } from 'ethers/lib/utils';
 const MAX_ERROR_LENGTH = 1000;
 const DELAY_BETWEEN_NSRS = 60;
 const DELAY_AFTER_NSR = 10;
-const DELAY_NEED_NSR_CONFIRM = 300;
+const DELAY_NEED_NSR_CONFIRM = 1800;
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
