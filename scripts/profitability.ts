@@ -77,7 +77,9 @@ async function main() {
     url: SUBGRAPH,
   });
 
-  const data = await client.query(getStrategiesData(), {}).toPromise();
+  const DAY = 60 * 60 * 24;
+  const data = await client.query(getStrategiesData((Math.round(Date.now() / 1000 / DAY) * DAY) - DAY *
+    3), {}).toPromise();
   if (!data?.data?.vaultEntities) {
     console.log('Error fetching from subgraph');
     return;
@@ -97,6 +99,7 @@ async function main() {
         let debtState: IDebtState | undefined = undefined;
 
         const dayHistories: {
+          time: number
           day: string
           realApr: number
           feesClaimed: string
@@ -120,7 +123,7 @@ async function main() {
         let dayIndexStr = '';
         for (let i = strategy.history.length - 1; i >= 0; i--) {
           const history = strategy.history[i];
-          const dayStr = (new Date(history.time * 1000)).toLocaleDateString('en-US');
+          const dayStr = (new Date(history.time * 1000)).toLocaleDateString('ru-RU');
           process.stdout.write(`\r${strategy.specificName} ${dayStr}  ${strategy.history.length -
           i} / ${strategy.history.length}`);
           if (!dayIndexStr) {
@@ -133,6 +136,7 @@ async function main() {
 
           if (dayHistories[dayIndex] === undefined) {
             dayHistories.push({
+              time: history.time,
               day: dayStr,
               realApr: 0,
               lastHistory: history,
@@ -286,7 +290,7 @@ async function main() {
 
         }
 
-        rows.push(...dayHistories.map(day => [
+        rows.push(...dayHistories.sort(d => d.time).map(day => [
           `${strategy.specificName} [${strategy.version}]`,
           day.day,
           '' + day.realApr,
@@ -318,7 +322,7 @@ async function main() {
   }
 }
 
-function getStrategiesData() {
+function getStrategiesData(fromTime: number) {
   return `query {
       vaultEntities {
         symbol
@@ -329,7 +333,7 @@ function getStrategiesData() {
             name
             version
             specificName
-            history(first: 1000, orderBy: id, orderDirection: desc) {
+            history(first: 1000, orderBy: id, orderDirection: desc, where: {time_gte: ${fromTime.toFixed(0)}}) {
               time
               block
               tvl

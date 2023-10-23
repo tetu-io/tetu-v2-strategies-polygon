@@ -31,6 +31,10 @@ import { formatUnits } from 'ethers/lib/utils';
 const MAX_ERROR_LENGTH = 1000;
 const DELAY_BETWEEN_NSRS = 60;
 const DELAY_AFTER_NSR = 10;
+// delay for NSR call
+// if we will call it too often and too quick we will lose on short price falls in a pool
+// this delay should be ~average time for arbitragers rebalance the pool across networks
+// prev value 300(5min) leaded to probably higher loss, move back to this value if 30min works bad
 const DELAY_NEED_NSR_CONFIRM = 1800;
 
 dotEnvConfig();
