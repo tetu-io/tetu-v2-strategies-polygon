@@ -6,6 +6,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../ConverterStrategyBaseLib.sol";
 import "../../interfaces/IPoolProportionsProvider.sol";
 import "../../libs/BorrowLib.sol";
+import "hardhat/console.sol";
 
 /// @notice Library for the UniV3-like strategies with two tokens in the pool
 /// @dev The library contains quoteWithdrawStep/withdrawStep-related logic
@@ -373,6 +374,8 @@ library PairBasedStrategyLib {
   function _withdrawStep(IterationPlanLib.SwapRepayPlanParams memory p, SwapByAggParams memory aggParams) internal returns (
     bool completed
   ) {
+    console.log("balance[0]", IERC20(p.tokens[0]).balanceOf(address(this)));
+    console.log("balance[1]", IERC20(p.tokens[1]).balanceOf(address(this)));
     (uint idxToSwap1, uint amountToSwap, uint idxToRepay1) = IterationPlanLib.buildIterationPlan(
       [address(p.converter), address(p.liquidator)],
       p.tokens,
@@ -399,20 +402,29 @@ library PairBasedStrategyLib {
 
     if (idxToSwap1 != 0 && actions[IDX_SWAP_1]) {
       (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
+      console.log("SWAP.amountToSwap", amountToSwap);
+      console.log("balance[0]", IERC20(p.tokens[0]).balanceOf(address(this)));
+      console.log("balance[1]", IERC20(p.tokens[1]).balanceOf(address(this)));
     }
 
     if (idxToRepay1 != 0 && actions[IDX_REPAY_1]) {
+      console.log("_repayDebt", IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this)));
       ConverterStrategyBaseLib._repayDebt(
         p.converter,
         p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET],
         p.tokens[idxToRepay1 - 1],
         IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this))
       );
+      console.log("balance[0]", IERC20(p.tokens[0]).balanceOf(address(this)));
+      console.log("balance[1]", IERC20(p.tokens[1]).balanceOf(address(this)));
     }
 
     if (idxToSwap1 != 0) {
       if (actions[IDX_SWAP_2]) {
         (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
+        console.log("swap2", amountToSwap);
+        console.log("balance[0]", IERC20(p.tokens[0]).balanceOf(address(this)));
+        console.log("balance[1]", IERC20(p.tokens[1]).balanceOf(address(this)));
 
         if (actions[IDX_REPAY_2] && idxToRepay1 != 0) {
           // see calculations inside estimateSwapAmountForRepaySwapRepay
@@ -424,12 +436,19 @@ library PairBasedStrategyLib {
             idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET,
             idxToRepay1 - 1
           );
+          console.log("amountToRepay2", amountToRepay2);
 
           if (borrowInsteadRepay) {
+            console.log("_borrowToProportions");
             _borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, true);
+            console.log("balance[0]", IERC20(p.tokens[0]).balanceOf(address(this)));
+            console.log("balance[1]", IERC20(p.tokens[1]).balanceOf(address(this)));
 
           } else if (amountToRepay2 > p.liquidationThresholds[idxToRepay1 - 1]) {
+            console.log("_secondRepay.amountToRepay2", amountToRepay2);
             _secondRepay(p, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, idxToRepay1 - 1, amountToRepay2, type(uint).max);
+            console.log("balance[0]", IERC20(p.tokens[0]).balanceOf(address(this)));
+            console.log("balance[1]", IERC20(p.tokens[1]).balanceOf(address(this)));
           }
         }
       } else {
@@ -440,7 +459,10 @@ library PairBasedStrategyLib {
           && p.usePoolProportions  // we use proportions from the pool
           && p.propNotUnderlying18 != 0 && p.propNotUnderlying18 != 1e18 // BorrowLib doesn't allow prop=0
         ) {
+          console.log("fix leftovers");
           _fixLeftoversProportions(p);
+          console.log("balance[0]", IERC20(p.tokens[0]).balanceOf(address(this)));
+          console.log("balance[1]", IERC20(p.tokens[1]).balanceOf(address(this)));
         }
       }
     }

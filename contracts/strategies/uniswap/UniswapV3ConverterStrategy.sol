@@ -9,6 +9,7 @@ import "../../interfaces/IRebalancingV2Strategy.sol";
 import "./Uni3StrategyErrors.sol";
 import "../pair/PairBasedStrategyLib.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
+import "hardhat/console.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
@@ -161,6 +162,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     uint[] memory amountsOut = (totalLiquidity == 0)
       ? new uint[](2)
       : _depositorQuoteExit(totalLiquidity);
+    console.log("amountsOut[0]", amountsOut[0]);
+    console.log("amountsOut[1]", amountsOut[1]);
 
     return PairBasedStrategyLogicLib.quoteWithdrawByAgg(
       state.pair,
