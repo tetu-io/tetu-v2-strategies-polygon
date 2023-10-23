@@ -2,11 +2,11 @@ import { ethers } from 'hardhat';
 import { IERC20__factory, IERC20Metadata__factory, IWmatic__factory } from '../../typechain';
 import { BigNumber } from 'ethers';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { MaticAddresses } from '../addresses/MaticAddresses';
+// import { MaticAddresses } from '../addresses/MaticAddresses';
 import chai from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import { DeployerUtilsLocal } from './DeployerUtilsLocal';
-import { parseUnits } from 'ethers/lib/utils';
+import {deal} from "hardhat-deal";
 
 const {expect} = chai;
 chai.use(chaiAsPromised);
@@ -14,7 +14,7 @@ chai.use(chaiAsPromised);
 export class TokenUtils {
 
   // use the most neutral place, some contracts (like swap pairs) can be used in tests and direct transfer ruin internal logic
-  public static TOKEN_HOLDERS = new Map<string, string>([
+  /*public static TOKEN_HOLDERS = new Map<string, string>([
     [MaticAddresses.WMATIC_TOKEN, '0x8df3aad3a84da6b69a4da8aec3ea40d9091b2ac4'.toLowerCase()], // aave
     [MaticAddresses.WETH_TOKEN, '0x28424507fefb6f7f8e9d3860f56504e4e5f5f390'.toLowerCase()], // aave
     [MaticAddresses.WBTC_TOKEN, '0x5c2ed810328349100a66b82b78a1791b101c9d61'.toLowerCase()], // aave v2
@@ -70,7 +70,7 @@ export class TokenUtils {
     [MaticAddresses.USDPlus_TOKEN, '0x421a018cc5839c4c0300afb21c725776dc389b1a'.toLowerCase()], // dyst gauge
     [MaticAddresses.oZEMIT_TOKEN, '0x0fbe132a5eb95f287740a7b0affbfc8d14354548'.toLowerCase()],
     [MaticAddresses.MaticX_TOKEN, '0xba12222222228d8ba445958a75a0704d566bf2c8'.toLowerCase()],
-  ]);
+  ]);*/
 
   public static async balanceOf(tokenAddress: string, account: string): Promise<BigNumber> {
     return IERC20__factory.connect(tokenAddress, ethers.provider).balanceOf(account);
@@ -141,9 +141,11 @@ export class TokenUtils {
   }*/
 
   public static async getToken(token: string, to: string, amount?: BigNumber, silent?: boolean) {
+    await deal(token, to, amount || 0)
+
     const start = Date.now();
     if (!silent) {
-      console.log('transfer token from biggest holder', token, amount?.toString());
+      console.log('deal token', token, amount?.toString());
     }
 
     if (token.toLowerCase() === await DeployerUtilsLocal.getNetworkTokenAddress()) {
@@ -151,7 +153,7 @@ export class TokenUtils {
       return amount;
     }
 
-    const holder = TokenUtils.TOKEN_HOLDERS.get(token.toLowerCase()) as string;
+    /*const holder = TokenUtils.TOKEN_HOLDERS.get(token.toLowerCase()) as string;
     if (!holder) {
       throw new Error('Please add holder for ' + token);
     }
@@ -164,11 +166,11 @@ export class TokenUtils {
       await TokenUtils.transfer(token, signer, to, amount.toString(), silent);
     } else {
       await TokenUtils.transfer(token, signer, to, balance.toString(), silent);
-    }
+    }*/
     if (!silent) {
       TokenUtils.printDuration('getToken completed', start);
     }
-    return balance;
+    // return balance;
   }
 
   public static printDuration(text: string, start: number) {

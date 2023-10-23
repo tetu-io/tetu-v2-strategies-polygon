@@ -10,6 +10,8 @@ import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/add
 import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon';
 import { DeployerUtilsLocal } from '../../../scripts/utils/DeployerUtilsLocal';
 import { Misc } from '../../../scripts/utils/Misc';
+import {BASE_NETWORK_ID} from "../utils/HardhatUtils";
+import {BaseAddresses} from "../../../scripts/addresses/BaseAddresses";
 
 const log: Logger<undefined> = new Logger(logSettings);
 
@@ -35,12 +37,12 @@ export class PriceCalculatorUtils {
     console.log('getPriceCached token', token);
 
     const chainId = Misc.getChainId();
-    let network = '';
+    /*let network = '';
     if (chainId === 137) {
       network = 'MATIC';
     } else {
       throw Error('Wrong network ' + chainId);
-    }
+    }*/
     // if (network !== '') {
     //   const response = await axios.get(`https://api.tetu.io/api/v1/price/longTTL/?token=${token}&network=${network}`);
     //   log.info('price for', token, response?.data?.result);
@@ -57,6 +59,14 @@ export class PriceCalculatorUtils {
       const defaultToken = PolygonAddresses.USDC_TOKEN;
       // const decimals = await TokenUtils.decimals(token);
       const one = parseUnits('1'/*, decimals.toString()*/);
+      if (token.toLowerCase() === defaultToken.toLowerCase()) {
+        return one;
+      }
+
+      return liquidator.getPrice(token, defaultToken, one);
+    } else if (chainId === BASE_NETWORK_ID) {
+      const defaultToken = BaseAddresses.USDbC_TOKEN;
+      const one = parseUnits('1');
       if (token.toLowerCase() === defaultToken.toLowerCase()) {
         return one;
       }

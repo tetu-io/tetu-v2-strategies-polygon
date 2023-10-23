@@ -58,10 +58,14 @@ export class Misc {
   public static async getBlockTsFromChain(): Promise<number> {
     const signer = (await ethers.getSigners())[0];
     const tools = await DeployerUtilsLocal.getToolsAddresses();
-    const ctr = await DeployerUtils.connectInterface(signer, 'Multicall', tools.multicall) as Multicall;
-    // const ctr = await ethers.getContractAt('Multicall', tools.multicall, signer) as Multicall;
-    const ts = await ctr.getCurrentBlockTimestamp();
-    return ts.toNumber();
+    if (tools.multicall) {
+      const ctr = await DeployerUtils.connectInterface(signer, 'Multicall', tools.multicall) as Multicall;
+      // const ctr = await ethers.getContractAt('Multicall', tools.multicall, signer) as Multicall;
+      const ts = await ctr.getCurrentBlockTimestamp();
+      return ts.toNumber();
+    }
+
+    return (await ethers.provider.getBlock(await ethers.provider.getBlockNumber())).timestamp
   }
 
   public static getChainId() {

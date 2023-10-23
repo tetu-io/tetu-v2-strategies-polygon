@@ -52,6 +52,11 @@ export class EnvSetup {
           default: 48265751, // 46320827,
         },
 
+          baseForkBlock: {
+              type: 'number',
+              default: 5630000,
+          },
+
         /////// NETWORK EXPLORERS
 
         networkScanKey: {

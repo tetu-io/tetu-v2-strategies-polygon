@@ -21,6 +21,7 @@ import { exec } from 'child_process';
 import './hardhat-verify/verify1-task';
 import "hardhat-change-network";
 import { EnvSetup } from './scripts/utils/EnvSetup';
+import "hardhat-deal";
 
 task('deploy1', 'Deploy contract', async function(args, hre, runSuper) {
   const [signer] = await hre.ethers.getSigners();
