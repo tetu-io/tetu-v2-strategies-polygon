@@ -216,18 +216,25 @@ export class PairBasedStrategyPrepareStateUtils {
   static async unfoldBorrowsRepaySwapRepay(
     strategyAsOperator: IRebalancingV2Strategy,
     aggregator: string,
-    isWithdrawCompleted: () => boolean,
-    saveState?: (title: string, eventsState: IEventsSet) => Promise<void>,
+    isWithdrawCompleted: (lastState?: IStateNum) => boolean,
+    saveState?: (title: string, eventsState: IEventsSet) => Promise<IStateNum>,
+    requiredAmountToReduceDebt?: BigNumber
   ) {
     const state = await PackedData.getDefaultState(strategyAsOperator);
 
-    const planEntryData = defaultAbiCoder.encode(
-        ["uint256", "uint256"],
-        [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]
-    );
-
     let step = 0;
     while (true) {
+      const planEntryData = defaultAbiCoder.encode(
+        ["uint256", "uint256", "uint256"],
+        [
+          PLAN_REPAY_SWAP_REPAY,
+          Misc.MAX_UINT,
+          step === 0 && requiredAmountToReduceDebt
+            ? requiredAmountToReduceDebt
+            : 0
+        ]
+      );
+
       console.log("unfoldBorrows.quoteWithdrawByAgg.callStatic --------------------------------");
       const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
       console.log("unfoldBorrows.quoteWithdrawByAgg.FINISH --------------------------------", quote);
@@ -272,10 +279,11 @@ export class PairBasedStrategyPrepareStateUtils {
       );
       console.log("unfoldBorrows.withdrawByAggStep.FINISH --------------------------------");
 
+      let lastState: IStateNum | undefined;
       if (saveState) {
-        await saveState(`u${++step}`, eventsSet);
+        lastState = await saveState(`u${++step}`, eventsSet);
       }
-      if (isWithdrawCompleted()) break; // completed
+      if (isWithdrawCompleted(lastState)) break; // completed
     }
   }
 

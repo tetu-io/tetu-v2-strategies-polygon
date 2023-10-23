@@ -153,10 +153,12 @@ library PairBasedStrategyLib {
   /// @param converterLiquidator_ [TetuConverter, TetuLiquidator]
   /// @param tokens Tokens used by depositor (length == 2: underlying and not-underlying)
   /// @param liquidationThresholds Liquidation thresholds for the {tokens}
-  /// @param propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
-  ///                            The leftovers should be swapped to get following result proportions of the assets:
-  ///                            not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
+  /// @param entryDataValues [propNotUnderlying18, entryDataParam]
+  ///     propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
+  ///                           The leftovers should be swapped to get following result proportions of the assets:
+  ///                           not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
   ///                            Value type(uint).max means that the proportions should be read from the pool.
+  ///     entryDataParam It contains "required-amount-to-reduce-debt" in REPAY-SWAP-REPAY case
   /// @param amountsFromPool Amounts of {tokens} that will be received from the pool before calling withdraw
   /// @return tokenToSwap Address of the token that will be swapped on the next swap. 0 - no swap
   /// @return amountToSwap Amount that will be swapped on the next swap. 0 - no swap
@@ -167,7 +169,7 @@ library PairBasedStrategyLib {
     uint[] memory liquidationThresholds,
     uint[] memory amountsFromPool,
     uint planKind,
-    uint propNotUnderlying18
+    uint[2] memory entryDataValues
   ) external returns (
     address tokenToSwap,
     uint amountToSwap
@@ -180,14 +182,15 @@ library PairBasedStrategyLib {
       liquidator: ITetuLiquidator(converterLiquidator_[1]),
       tokens: tokens,
       liquidationThresholds: liquidationThresholds,
-      propNotUnderlying18: propNotUnderlying18 == type(uint).max
-      ? IPoolProportionsProvider(address(this)).getPropNotUnderlying18()
-      : propNotUnderlying18,
+      propNotUnderlying18: entryDataValues[0] == type(uint).max
+        ? IPoolProportionsProvider(address(this)).getPropNotUnderlying18()
+        : entryDataValues[0],
       prices: prices,
       decs: decs,
       balanceAdditions: amountsFromPool,
       planKind: planKind,
-      usePoolProportions: propNotUnderlying18 == type(uint).max
+      usePoolProportions: entryDataValues[0] == type(uint).max,
+      entryDataParam: entryDataValues[1]
     });
     return _quoteWithdrawStep(p);
   }
@@ -209,9 +212,11 @@ library PairBasedStrategyLib {
   ///                       It's allowed to pass liquidator address in {aggregator_} and set {useLiquidator_} to false -
   ///                       the liquidator will be used in same way as aggregator in this case.
   /// @param planKind One of IterationPlanLib.PLAN_XXX
-  /// @param propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
+  /// @param entryDataValues [propNotUnderlying18, entryDataParam]
+  ///     propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
   ///                           The leftovers should be swapped to get following result proportions of the assets:
   ///                           not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
+  ///     entryDataParam It contains "required-amount-to-reduce-debt" in REPAY-SWAP-REPAY case
   /// @return completed All debts were closed, leftovers were swapped to the required proportions
   function withdrawStep(
     address[2] memory converterLiquidator_,
@@ -223,7 +228,7 @@ library PairBasedStrategyLib {
     bytes memory swapData_,
     bool useLiquidator_,
     uint planKind,
-    uint propNotUnderlying18
+    uint[2] memory entryDataValues
   ) external returns (
     bool completed
   ){
@@ -236,14 +241,15 @@ library PairBasedStrategyLib {
       liquidator: ITetuLiquidator(converterLiquidator_[1]),
       tokens: tokens,
       liquidationThresholds: liquidationThresholds,
-      propNotUnderlying18: propNotUnderlying18 == type(uint).max
-      ? IPoolProportionsProvider(address(this)).getPropNotUnderlying18()
-      : propNotUnderlying18,
+      propNotUnderlying18: entryDataValues[0] == type(uint).max
+        ? IPoolProportionsProvider(address(this)).getPropNotUnderlying18()
+        : entryDataValues[0],
       prices: prices,
       decs: decs,
       balanceAdditions: new uint[](2), // 2 = tokens.length
       planKind: planKind,
-      usePoolProportions: propNotUnderlying18 == type(uint).max
+      usePoolProportions: entryDataValues[0] == type(uint).max,
+      entryDataParam: entryDataValues[1]
     });
     SwapByAggParams memory aggParams = SwapByAggParams({
       tokenToSwap: tokenToSwap_,
@@ -355,11 +361,12 @@ library PairBasedStrategyLib {
       p.balanceAdditions,
       [
         p.usePoolProportions ? 1 : 0,
-      p.planKind,
-      p.propNotUnderlying18,
-      type(uint).max,
-      IDX_ASSET,
-      IDX_TOKEN
+        p.planKind,
+        p.propNotUnderlying18,
+        type(uint).max,
+        IDX_ASSET,
+        IDX_TOKEN,
+        p.entryDataParam
       ]
     );
     if (indexTokenToSwapPlus1 != 0) {
@@ -385,11 +392,12 @@ library PairBasedStrategyLib {
       p.balanceAdditions,
       [
         p.usePoolProportions ? 1 : 0,
-      p.planKind,
-      p.propNotUnderlying18,
-      type(uint).max,
-      IDX_ASSET,
-      IDX_TOKEN
+        p.planKind,
+        p.propNotUnderlying18,
+        type(uint).max,
+        IDX_ASSET,
+        IDX_TOKEN,
+        p.entryDataParam
       ]
     );
 
@@ -741,14 +749,20 @@ library PairBasedStrategyLib {
   }
 
   /// @notice Extract propNotUnderlying18 from {planEntryData} of the given {planKind}
-  function _extractProp(uint planKind, bytes memory planEntryData) internal pure returns (uint propNotUnderlying18) {
-    require(planKind == IterationPlanLib.PLAN_SWAP_REPAY
-    || planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY
-    || planKind == IterationPlanLib.PLAN_SWAP_ONLY,
-      AppErrors.WRONG_VALUE
-    );
-    (, propNotUnderlying18) = abi.decode(planEntryData, (uint, uint));
-    require(propNotUnderlying18 <= 1e18 || propNotUnderlying18 == type(uint).max, AppErrors.INVALID_VALUE); // 0 is allowed
+  function _extractProp(uint planKind, bytes memory planEntryData) internal pure returns (
+    uint propNotUnderlying18,
+    uint entryDataParamValue
+  ) {
+    if (planKind == IterationPlanLib.PLAN_SWAP_REPAY || planKind == IterationPlanLib.PLAN_SWAP_ONLY) {
+      (, propNotUnderlying18) = abi.decode(planEntryData, (uint, uint));
+      require(propNotUnderlying18 <= 1e18 || propNotUnderlying18 == type(uint).max, AppErrors.INVALID_VALUE); // 0 is allowed
+    } else {
+      require(planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY, AppErrors.WRONG_VALUE);
+      // save "required-amount-to-reduce-debt" to entryDataParamValue
+      (, propNotUnderlying18, entryDataParamValue) = abi.decode(planEntryData, (uint, uint, uint));
+      require(propNotUnderlying18 <= 1e18 || propNotUnderlying18 == type(uint).max, AppErrors.INVALID_VALUE); // 0 is allowed
+    }
+    return (propNotUnderlying18, entryDataParamValue);
   }
   //endregion ------------------------------------------ Utils
 }

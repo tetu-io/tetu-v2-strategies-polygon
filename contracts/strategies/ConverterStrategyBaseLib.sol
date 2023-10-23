@@ -1058,7 +1058,7 @@ library ConverterStrategyBaseLib {
             v.prices,
             v.decs,
             v.balanceAdditions,
-            [0, IterationPlanLib.PLAN_SWAP_REPAY, 0, requestedAmount, d_.indexAsset, i]
+            [0, IterationPlanLib.PLAN_SWAP_REPAY, 0, requestedAmount, d_.indexAsset, i, 0]
           );
           if (v.idxToSwap1 == 0 && v.idxToRepay1 == 0) break;
 

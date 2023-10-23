@@ -342,6 +342,7 @@ export class StateUtilsNum {
     }
 
     const totalAssets = +formatUnits(await vault.totalAssets(), assetDecimals);
+    const totalAssetInStrategy = +formatUnits(await strategy.totalAssets(), assetDecimals);
     // noinspection UnnecessaryLocalVariableJS
     const dest: IStateNum = {
       title: title || 'no-name',
@@ -403,13 +404,12 @@ export class StateUtilsNum {
       },
 
       fuseStatus: fuseStatusA,
-      // fuseStatusB,
       withdrawDone,
 
       lockedInConverter: Math.abs(directBorrows.totalLockedAmountInUnderlying) + Math.abs(reverseBorrows.totalLockedAmountInUnderlying),
-      lockedPercent: totalAssets === 0
+      lockedPercent: totalAssetInStrategy === 0
         ? 0
-        : (Math.abs(directBorrows.totalLockedAmountInUnderlying) + Math.abs(reverseBorrows.totalLockedAmountInUnderlying)) / totalAssets,
+        : (Math.abs(directBorrows.totalLockedAmountInUnderlying) + Math.abs(reverseBorrows.totalLockedAmountInUnderlying)) / totalAssetInStrategy,
 
       pairState,
 

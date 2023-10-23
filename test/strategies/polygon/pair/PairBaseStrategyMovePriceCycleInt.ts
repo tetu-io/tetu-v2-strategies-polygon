@@ -154,9 +154,10 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
             strategyAsOperator,
             p.aggregator,
               () => true, // use single iteration
-            async (stateTitle, eventsSet) => {
+            async (stateTitle, eventsSet): Promise<IStateNum> => {
               states.push(await StateUtilsNum.getState(signer2, signer, converterStrategyBase, b.vault, stateTitle, {eventsSet}));
               await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+              return states[states.length - 1];
             },
           );
 

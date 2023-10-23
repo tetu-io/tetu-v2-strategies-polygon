@@ -27,7 +27,7 @@ library IterationPlanLib {
   ///         Swap + second repay tries to make asset balances to proportions required by the pool.
   ///         Proportions are read from pool through IPoolProportionsProvider(this) and re-read after swapping.
   ///         This mode is intended i.e. for rebalancing debts using single iteration.
-  ///         (uint256, uint256) - (entry kind, propNotUnderlying18)
+  ///         (uint256, uint256, uint256) - (entry kind, propNotUnderlying18, required-amount-to-reduce-the-debt)
   /// propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
   ///                     The assets should be swapped to get following result proportions:
   ///                     not-underlying : underlying === propNotUnderlying18 : (1e18 - propNotUnderlying18)
@@ -73,6 +73,9 @@ library IterationPlanLib {
 
     /// @notice proportions should be taken from the pool and re-read from the pool after each swap
     bool usePoolProportions;
+
+    /// @notice "required-amount-to-reduce-debt" in the case of REPAY-SWAP-REPAY, zero in other cases
+    uint entryDataParam;
   }
 
   struct GetIterationPlanLocal {
@@ -135,6 +138,7 @@ library IterationPlanLib {
   ///    3: requestedAmount: total amount that should be withdrawn, it can be type(uint).max
   ///    4: indexAsset: index of the underlying in {tokens} array
   ///    5: indexToken: index of the token in {tokens} array. We are going to withdraw the token and convert it to the asset
+  ///    6: entryDataParam: required-amount-to-reduce-debt in REPAY-SWAP-REPAY case; zero in other cases
   function buildIterationPlan(
     address[2] memory converterLiquidator,
     address[] memory tokens,
@@ -142,7 +146,7 @@ library IterationPlanLib {
     uint[] memory prices,
     uint[] memory decs,
     uint[] memory balanceAdditions,
-    uint[6] memory packedData
+    uint[7] memory packedData
   ) external returns (
     uint indexToSwapPlus1,
     uint amountToSwap,
@@ -159,7 +163,8 @@ library IterationPlanLib {
         balanceAdditions: balanceAdditions,
         planKind: packedData[1],
         propNotUnderlying18: packedData[2],
-        usePoolProportions: packedData[0] != 0
+        usePoolProportions: packedData[0] != 0,
+        entryDataParam: packedData[6]
       }),
       packedData[3],
       packedData[4],
@@ -234,8 +239,8 @@ library IterationPlanLib {
                 [v.assetBalance, v.tokenBalance],
                 [indexAsset, indexToken],
                 p.propNotUnderlying18,
-                v.totalCollateral,
-                v.totalDebt
+                [v.totalCollateral, v.totalDebt],
+                p.entryDataParam
               );
             } else {
               (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanForSellAndRepay(
@@ -259,8 +264,8 @@ library IterationPlanLib {
               [v.tokenBalance, v.assetBalance],
               [indexToken, indexAsset],
               1e18 - p.propNotUnderlying18,
-              v.collateralReverse,
-              v.debtReverse
+              [v.collateralReverse, v.debtReverse],
+              p.entryDataParam
             );
           } else {
             (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanForSellAndRepay(
@@ -290,23 +295,27 @@ library IterationPlanLib {
   /// @notice Repay B, get collateral A, then swap A => B, [make one more repay B] => get A:B in required proportions
   /// @param balancesAB [balanceA, balanceB]
   /// @param idxAB [indexA, indexB]
+  /// @param totalAB [totalCollateralA, totalBorrowB]
+  /// @param requiredAmountToReduceDebt If not zero: we are going to make repay-swap-repay to reduce total
+  ///        debt on the given amount. So, if possible it worth to make swap in such a way as to reduce
+  ///        the amount of debt by the given amount.
   function _buildPlanRepaySwapRepay(
     SwapRepayPlanParams memory p,
     uint[2] memory balancesAB,
     uint[2] memory idxAB,
     uint propB,
-    uint totalCollateralA,
-    uint totalBorrowB
+    uint[2] memory totalAB,
+    uint requiredAmountToReduceDebt
   ) internal returns (
     uint indexToSwapPlus1,
     uint amountToSwap,
     uint indexToRepayPlus1
   ) {
     // use all available tokenB to repay debt and receive as much as possible tokenA
-    uint amountToRepay = Math.min(balancesAB[1], totalBorrowB);
+    uint amountToRepay = Math.min(balancesAB[1], totalAB[1]);
     console.log("_buildPlanRepaySwapRepay.amountToRepay", amountToRepay);
     console.log("_buildPlanRepaySwapRepay.balancesAB[1]", balancesAB[1]);
-    console.log("_buildPlanRepaySwapRepay.totalBorrowB", totalBorrowB);
+    console.log("_buildPlanRepaySwapRepay.totalBorrowB", totalAB[1]);
 
     uint collateralAmount;
     if (amountToRepay >= AppLib.DUST_AMOUNT_TOKENS) {
@@ -330,8 +339,8 @@ library IterationPlanLib {
       idxAB[0],
       idxAB[1],
       propB,
-      totalCollateralA,
-      totalBorrowB,
+      totalAB[0],
+      totalAB[1],
       collateralAmount,
       amountToRepay
     );
@@ -340,10 +349,21 @@ library IterationPlanLib {
     console.log("_buildPlanRepaySwapRepay.idxAB[0]", idxAB[0]);
     console.log("_buildPlanRepaySwapRepay.idxAB[1]", idxAB[1]);
     console.log("_buildPlanRepaySwapRepay.propB", propB);
-    console.log("_buildPlanRepaySwapRepay.totalCollateralA", totalCollateralA);
-    console.log("_buildPlanRepaySwapRepay.totalBorrowB", totalBorrowB);
+    console.log("_buildPlanRepaySwapRepay.totalCollateralA", totalAB[0]);
+    console.log("_buildPlanRepaySwapRepay.totalBorrowB", totalAB[1]);
     console.log("_buildPlanRepaySwapRepay.collateralAmount", collateralAmount);
     console.log("_buildPlanRepaySwapRepay.amountToSwap", amountToSwap);
+
+    if (requiredAmountToReduceDebt != 0) {
+      console.log("_buildPlanRepaySwapRepay.requiredAmountToReduceDebt", requiredAmountToReduceDebt);
+      // probably it worth to increase amount to swap?
+      uint requiredAmountToSwap = requiredAmountToReduceDebt * p.prices[idxAB[1]] * p.decs[idxAB[0]] / p.prices[idxAB[0]] / p.decs[idxAB[1]];
+      console.log("_buildPlanRepaySwapRepay.requiredAmountToSwap", requiredAmountToSwap);
+      amountToSwap = Math.max(amountToSwap, requiredAmountToSwap);
+      console.log("_buildPlanRepaySwapRepay.amountToSwap.intermediate", amountToSwap);
+      amountToSwap = Math.min(amountToSwap, balancesAB[0]);
+      console.log("_buildPlanRepaySwapRepay.amountToSwap.final", amountToSwap);
+    }
 
     return (idxAB[0] + 1, amountToSwap, idxAB[1] + 1);
   }

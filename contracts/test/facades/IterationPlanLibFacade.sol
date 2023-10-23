@@ -42,7 +42,8 @@ contract IterationPlanLibFacade {
     uint[2] memory idxAB,
     uint propB,
     uint totalCollateralA,
-    uint totalBorrowB
+    uint totalBorrowB,
+    uint requiredAmountToReduceDebt
   ) external returns (
     uint indexToSwapPlus1,
     uint amountToSwap,
@@ -53,8 +54,8 @@ contract IterationPlanLibFacade {
       balancesAB,
       idxAB,
       propB,
-      totalCollateralA,
-      totalBorrowB
+      [totalCollateralA, totalBorrowB],
+      requiredAmountToReduceDebt
     );
   }
 }

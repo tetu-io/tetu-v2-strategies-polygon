@@ -18,6 +18,7 @@ library PairBasedStrategyLogicLib {
     uint[] liquidationThresholds;
     uint planKind;
     uint propNotUnderlying18;
+    uint entryDataParam;
   }
 
   /// @notice Common part of all XXXXConverterStrategyLogicLib.State
@@ -124,7 +125,7 @@ library PairBasedStrategyLogicLib {
     StrategyLib2.onlyOperators(dest.controller);
 
     dest.planKind = IterationPlanLib.getEntryKind(planEntryData);
-    dest.propNotUnderlying18 = PairBasedStrategyLib._extractProp(dest.planKind, planEntryData);
+    (dest.propNotUnderlying18, dest.entryDataParam)  = PairBasedStrategyLib._extractProp(dest.planKind, planEntryData);
 
     dest.tokens = new address[](2);
     (dest.tokens[0], dest.tokens[1]) = (tokens_[0], tokens_[1]);
@@ -279,7 +280,7 @@ library PairBasedStrategyLogicLib {
       w.liquidationThresholds,
       amounts_,
       w.planKind,
-      w.propNotUnderlying18
+      [w.propNotUnderlying18, w.entryDataParam]
     );
 
     if (amountToSwap != 0) {
@@ -336,7 +337,7 @@ library PairBasedStrategyLogicLib {
       swapData,
       v.aggregator == address(0),
       v.w.planKind,
-      v.w.propNotUnderlying18
+      [v.w.propNotUnderlying18, v.w.entryDataParam]
     );
 
     // fix loss / profitToCover

@@ -1960,9 +1960,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                 await b.strategy.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)),
                 MaticAddresses.TETU_LIQUIDATOR,
                 () => true,
-                async (stateTitle, eventsSet) => {
+                async (stateTitle, eventsSet): Promise<IStateNum> => {
                   states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, stateTitle, {eventsSet}));
                   StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+                  return states[states.length - 1];
                 }
               );
             }

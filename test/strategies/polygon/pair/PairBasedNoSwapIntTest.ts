@@ -191,11 +191,11 @@ describe('PairBasedNoSwapIntTest', function() {
       : (await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
           b,
           {
-            countRebalances: p.countRebalances ?? 1,
+            countRebalances: p.countRebalances ?? 2,
             movePricesUp: p.movePricesUp,
             swapAmountRatio: DEFAULT_SWAP_AMOUNT_RATIO,
             amountToDepositBySigner2: "100",
-            amountToDepositBySigner: "5000"
+            amountToDepositBySigner: "10000",
           },
           pathOut,
           signer,
@@ -253,8 +253,8 @@ describe('PairBasedNoSwapIntTest', function() {
         );
 
         await InjectUtils.injectTetuConverter(signer);
-        await ConverterUtils.disableAaveV3(signer);
-        await InjectUtils.redeployAaveTwoPoolAdapters(signer);
+        await ConverterUtils.disableAaveV2(signer);
+        // await InjectUtils.redeployAaveTwoPoolAdapters(signer);
 
         // provide $1000 of insurance to compensate possible price decreasing
         await PairBasedStrategyPrepareStateUtils.prepareInsurance(b, "1000");
