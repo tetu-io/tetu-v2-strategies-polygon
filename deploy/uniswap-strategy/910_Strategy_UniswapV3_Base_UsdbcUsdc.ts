@@ -50,10 +50,10 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     0,
     0,
     [
-      parseUnits('0.999'),
-      parseUnits('0.9991'),
-      parseUnits('1.001'),
-      parseUnits('1.0009')
+        parseUnits('0.9995'),
+        parseUnits('0.9996'),
+        parseUnits('1.0005'),
+        parseUnits('1.0004'),
     ],
     {
       ...params,
