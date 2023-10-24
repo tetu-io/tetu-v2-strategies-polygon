@@ -4,6 +4,7 @@ import { EnvSetup } from '../../../scripts/utils/EnvSetup';
 
 export const HARDHAT_NETWORK_ID = 31337;
 export const POLYGON_NETWORK_ID = 137;
+export const BASE_NETWORK_ID = 8453;
 
 export class HardhatUtils {
 
@@ -40,6 +41,15 @@ export class HardhatUtils {
             ? undefined  // most current block
             : block
           : env.maticForkBlock
+      );
+    } else if (chainId === BASE_NETWORK_ID) {
+      await reset(
+          env.baseRpcUrl,
+          block
+              ? block === -1
+                  ? undefined  // most current block
+                  : block
+              : env.baseForkBlock
       );
     } else {
       throw new Error('Unknown chain id ' + chainId);

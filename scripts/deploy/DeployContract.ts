@@ -54,8 +54,6 @@ const libraries = new Map<string, string[]>([
   ],
   ['KyberConverterStrategyLogicLib', ['KyberLib', 'KyberDebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib', 'PairBasedStrategyLib']],
   ['KyberDebtLib', ['KyberLib', 'ConverterStrategyBaseLib2', 'BorrowLib', 'PairBasedStrategyLogicLib']],
-  // Tetu Converter
-  ['TetuConverter', ['TetuConverterLogicLib']],
 ]);
 
 export async function deployContractSilently<T extends ContractFactory>(

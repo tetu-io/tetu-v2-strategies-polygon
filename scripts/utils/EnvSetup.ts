@@ -41,12 +41,21 @@ export class EnvSetup {
           type: 'string',
         },
 
+          baseRpcUrl: {
+              type: 'string',
+          },
+
         /////// BLOCKS
 
         maticForkBlock: {
           type: 'number',
           default: 48265751, // 46320827,
         },
+
+          baseForkBlock: {
+              type: 'number',
+              default: 5630000,
+          },
 
         /////// NETWORK EXPLORERS
 

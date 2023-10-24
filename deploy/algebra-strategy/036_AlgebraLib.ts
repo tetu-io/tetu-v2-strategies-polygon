@@ -7,3 +7,4 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
 };
 export default func;
 func.tags = ['AlgebraLib'];
+func.skip = async hre => (await hre.getChainId()) !== '137'

@@ -1,5 +1,4 @@
 /* tslint:disable:interface-name */
-import { config as dotEnvConfig } from 'dotenv';
 import '@nomicfoundation/hardhat-chai-matchers';
 import '@nomiclabs/hardhat-ethers';
 import '@nomiclabs/hardhat-etherscan';
@@ -17,10 +16,10 @@ import { deployAddresses } from './scripts/addresses/deploy-addresses';
 import '@gelatonetwork/web3-functions-sdk/hardhat-plugin';
 import path from 'path';
 import { TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD } from 'hardhat/builtin-tasks/task-names';
-import { exec } from 'child_process';
 import './hardhat-verify/verify1-task';
 import "hardhat-change-network";
 import { EnvSetup } from './scripts/utils/EnvSetup';
+import "hardhat-deal";
 
 task('deploy1', 'Deploy contract', async function(args, hre, runSuper) {
   const [signer] = await hre.ethers.getSigners();
@@ -58,11 +57,13 @@ export default {
         url:
           EnvSetup.getEnv().hardhatChainId === 1 ? EnvSetup.getEnv().ethRpcUrl :
             EnvSetup.getEnv().hardhatChainId === 137 ? EnvSetup.getEnv().maticRpcUrl :
-              undefined,
+                EnvSetup.getEnv().hardhatChainId === 8453 ? EnvSetup.getEnv().baseRpcUrl :
+                    undefined,
         blockNumber:
           EnvSetup.getEnv().hardhatChainId === 1 ? EnvSetup.getEnv().ethForkBlock !== 0 ? EnvSetup.getEnv().ethForkBlock : undefined :
             EnvSetup.getEnv().hardhatChainId === 137 ? EnvSetup.getEnv().maticForkBlock !== 0 ? EnvSetup.getEnv().maticForkBlock : undefined :
-              undefined,
+                EnvSetup.getEnv().hardhatChainId === 8453 ? EnvSetup.getEnv().baseForkBlock !== 0 ? EnvSetup.getEnv().baseForkBlock : undefined :
+                    undefined,
       } : undefined,
       accounts: {
         mnemonic: 'test test test test test test test test test test test junk',
@@ -78,6 +79,13 @@ export default {
       gas: 12_000_000,
       // gasPrice: 50_000_000_000,
       // gasMultiplier: 1.3,
+      accounts: [EnvSetup.getEnv().privateKey],
+    },
+    base: {
+      url: EnvSetup.getEnv().baseRpcUrl || '',
+      timeout: 99999,
+      chainId: 8453,
+      gas: 12_000_000,
       accounts: [EnvSetup.getEnv().privateKey],
     },
     w3fmatic: {

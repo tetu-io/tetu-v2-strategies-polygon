@@ -1,7 +1,7 @@
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
 import { DeployFunction } from 'hardhat-deploy/types';
 import { ethers } from 'hardhat';
-import { KyberConverterStrategy } from '../../typechain';
+import { UniswapV3ConverterStrategy } from '../../typechain';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
 import { isContractExist, txParams } from '../../deploy_constants/deploy-helpers';
@@ -10,16 +10,16 @@ import {parseUnits} from "ethers/lib/utils";
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts } = hre;
-  const { deployer, CONVERTER_ADDRESS, KYBER_USDC_DAI, SPLITTER_USDC_ADDRESS, KNC_ADDRESS} = await getNamedAccounts();
+  const { deployer, CONVERTER_ADDRESS, UNISWAPV3_BASE_DAI_USDbC_100, SPLITTER_USDbC_ADDRESS } = await getNamedAccounts();
 
-  if (await isContractExist(hre, 'Strategy_KyberConverterStrategy_UsdcDai')) {
+  if (await isContractExist(hre, 'Strategy_UniswapV3ConverterStrategy_Base_UsdbcDai')) {
     return;
   }
 
   const core = Addresses.getCore() as CoreAddresses;
 
-  const strategyImplDeployment = await deployments.get('KyberConverterStrategy');
-  const proxyDeployResult = await deployments.deploy('Strategy_KyberConverterStrategy_UsdcDai', {
+  const strategyImplDeployment = await deployments.get('UniswapV3ConverterStrategy');
+  const proxyDeployResult = await deployments.deploy('Strategy_UniswapV3ConverterStrategy_Base_UsdbcDai', {
     contract: '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled',
     from: deployer,
     log: true,
@@ -27,7 +27,7 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   });
 
   await deployments.execute(
-    'Strategy_KyberConverterStrategy_UsdcDai',
+    'Strategy_UniswapV3ConverterStrategy_Base_UsdbcDai',
     {
       from: deployer,
       log: true,
@@ -38,24 +38,22 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   );
 
   const strategyContract = await ethers.getContractAt(
-    'KyberConverterStrategy',
+    'UniswapV3ConverterStrategy',
     proxyDeployResult.address,
-  ) as KyberConverterStrategy;
+  ) as UniswapV3ConverterStrategy;
   const params = await txParams(hre, ethers.provider);
   await RunHelper.runAndWait(() => strategyContract.init(
     core.controller,
-    SPLITTER_USDC_ADDRESS,
+      SPLITTER_USDbC_ADDRESS,
     CONVERTER_ADDRESS,
-    KYBER_USDC_DAI,
+      UNISWAPV3_BASE_DAI_USDbC_100,
     0,
     0,
-    true,
-    55,
     [
-      parseUnits('0.999'),
-      parseUnits('0.9991'),
-      parseUnits('1.001'),
-      parseUnits('1.0009')
+      parseUnits('0.9995'),
+      parseUnits('0.9996'),
+      parseUnits('1.0005'),
+      parseUnits('1.0004'),
     ],
     {
       ...params,
@@ -63,6 +61,6 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   ));
 };
 export default func;
-func.tags = ['Strategy_KyberConverterStrategy_UsdcDai'];
-func.dependencies = ['KyberConverterStrategy'];
-func.skip = async hre => (await hre.getChainId()) !== '137'
+func.tags = ['Strategy_UniswapV3ConverterStrategy_Base_UsdbcDai'];
+func.dependencies = ['UniswapV3ConverterStrategy'];
+func.skip = async hre => (await hre.getChainId()) !== '8453'

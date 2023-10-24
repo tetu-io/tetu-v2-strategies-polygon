@@ -46,6 +46,7 @@ const openOceanChains = new Map<number, string>([
   [56, 'bsc'],
   [42161, 'arbitrum'],
   [10, 'optimism'],
+  [8453, 'base'],
 ]);
 
 async function quoteOneInch(
