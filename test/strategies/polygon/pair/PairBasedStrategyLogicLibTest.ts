@@ -20,8 +20,8 @@ import {IDefaultState, PackedData} from "../../../baseUT/utils/PackedData";
 import {
   FUSE_OFF_1,
   FUSE_ON_LOWER_LIMIT_2,
-  PLAN_REPAY_SWAP_REPAY,
-  PLAN_SWAP_REPAY
+  PLAN_REPAY_SWAP_REPAY_1,
+  PLAN_SWAP_REPAY_0
 } from "../../../baseUT/AppConstants";
 import {HARDHAT_NETWORK_ID, HardhatUtils} from '../../../baseUT/utils/HardhatUtils';
 
@@ -824,7 +824,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
         function initWithdrawLocalTest(): Promise<IInitWithdrawLocalResults> {
           const planEntryData = defaultAbiCoder.encode(
             ['uint256', 'uint256'],
-            [PLAN_SWAP_REPAY, Misc.ONE18.div(10)]
+            [PLAN_SWAP_REPAY_0, Misc.ONE18.div(10)]
           );
           return callInitWithdrawLocal({
             tokens: [usdc, weth],
@@ -847,7 +847,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
         });
         it("should return expected plan and prop", async () => {
           const ret = await loadFixture(initWithdrawLocalTest);
-          expect([ret.planKind, ret.propNotUnderlying18].toString()).eq([PLAN_SWAP_REPAY, Misc.ONE18.div(10)].join());
+          expect([ret.planKind, ret.propNotUnderlying18].toString()).eq([PLAN_SWAP_REPAY_0, Misc.ONE18.div(10)].join());
         });
       });
       describe("PLAN_REPAY_SWAP_REPAY", () => {
@@ -860,7 +860,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
         });
 
         function initWithdrawLocalTest(): Promise<IInitWithdrawLocalResults> {
-          const planEntryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
+          const planEntryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT]);
           return callInitWithdrawLocal({
             tokens: [usdc, weth],
             liquidationThresholds: ["1", "2"],
@@ -882,7 +882,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
         });
         it("should return expected plan and prop", async () => {
           const ret = await loadFixture(initWithdrawLocalTest);
-          expect([ret.planKind, ret.propNotUnderlying18].toString()).eq([PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT].join());
+          expect([ret.planKind, ret.propNotUnderlying18].toString()).eq([PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT].join());
         });
       });
     });

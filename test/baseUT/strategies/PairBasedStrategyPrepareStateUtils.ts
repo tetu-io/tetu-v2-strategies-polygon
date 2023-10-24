@@ -20,7 +20,7 @@ import {AggregatorUtils} from "../utils/AggregatorUtils";
 import {IStateNum, StateUtilsNum} from "../utils/StateUtilsNum";
 import {depositToVault, printVaultState} from "../universalTestUtils/StrategyTestUtils";
 import {CaptureEvents, IEventsSet} from "./CaptureEvents";
-import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../AppConstants";
+import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY_1} from "../AppConstants";
 import {UniversalTestUtils} from "../utils/UniversalTestUtils";
 
 export interface IPrepareOverCollateralParams {
@@ -227,7 +227,7 @@ export class PairBasedStrategyPrepareStateUtils {
       const planEntryData = defaultAbiCoder.encode(
         ["uint256", "uint256", "uint256"],
         [
-          PLAN_REPAY_SWAP_REPAY,
+          PLAN_REPAY_SWAP_REPAY_1,
           Misc.MAX_UINT,
           step === 0 && requiredAmountToReduceDebt
             ? requiredAmountToReduceDebt

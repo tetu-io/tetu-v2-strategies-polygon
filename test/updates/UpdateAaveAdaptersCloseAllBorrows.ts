@@ -24,7 +24,7 @@ import {HardhatUtils, POLYGON_NETWORK_ID} from "../baseUT/utils/HardhatUtils";
 import {TimeUtils} from "../../scripts/utils/TimeUtils";
 import {ethers} from "hardhat";
 import {makeFullWithdraw} from "../../scripts/utils/WithdrawAllByAggUtils";
-import {ENTRY_TO_POOL_DISABLED, PLAN_SWAP_REPAY} from "../baseUT/AppConstants";
+import {ENTRY_TO_POOL_DISABLED, PLAN_SWAP_REPAY_0} from "../baseUT/AppConstants";
 import {defaultAbiCoder} from "ethers/lib/utils";
 import {IStateNum, StateUtilsNum} from "../baseUT/utils/StateUtilsNum";
 import {IEventsSet} from "../baseUT/strategies/CaptureEvents";
@@ -216,7 +216,7 @@ describe("UpdateAaveAdaptersCloseAllBorrows @skip-on-coverage", () => {
         {
           entryToPool: ENTRY_TO_POOL_DISABLED,
           aggregator: MaticAddresses.TETU_LIQUIDATOR, //  MaticAddresses.AGG_ONEINCH_V5,
-          planEntryDataGetter: async () => defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY, 0]),
+          planEntryDataGetter: async () => defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY_0, 0]),
           saveStates: saver,
           maxAmountToSwap: "30000",
           isCompleted: async (completed: boolean) => {

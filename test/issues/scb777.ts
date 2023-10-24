@@ -16,7 +16,7 @@ import {PackedData} from "../baseUT/utils/PackedData";
 import {Misc} from "../../scripts/utils/Misc";
 import {BigNumber, BytesLike} from "ethers";
 import {AggregatorUtils} from "../baseUT/utils/AggregatorUtils";
-import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../baseUT/AppConstants";
+import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY_1} from "../baseUT/AppConstants";
 import {IStateNum, StateUtilsNum} from "../baseUT/utils/StateUtilsNum";
 import {ethers} from "hardhat";
 import {CaptureEvents} from "../baseUT/strategies/CaptureEvents";
@@ -125,7 +125,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
 
       const planEntryData = defaultAbiCoder.encode(
         ["uint256", "uint256"],
-        [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]
+        [PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT]
       );
 
       console.log("unfoldBorrows.quoteWithdrawByAgg.callStatic --------------------------------");
@@ -325,7 +325,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
 
       const planEntryData = defaultAbiCoder.encode(
         ["uint256", "uint256"],
-        [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]
+        [PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT]
       );
 
       const block = (await ethers.provider.getBlock("latest")).number;
@@ -388,7 +388,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
       const signer = await DeployerUtilsLocal.impersonate(SENDER);
       const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, signer);
       const aggregator = MaticAddresses.TETU_LIQUIDATOR;
-      const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
+      const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT]);
       const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
       console.log("quote", quote);
     });
@@ -410,7 +410,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
 
       const state = await PackedData.getDefaultState(strategyAsOperator);
 
-      const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
+      const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT]);
 
       console.log("unfoldBorrows.quoteWithdrawByAgg.callStatic --------------------------------");
       const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);

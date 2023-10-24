@@ -27,13 +27,14 @@ import {
   ENTRY_TO_POOL_DISABLED,
   ENTRY_TO_POOL_IS_ALLOWED,
   ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED, FUSE_OFF_1,
-  PLAN_REPAY_SWAP_REPAY, PLAN_SWAP_ONLY, PLAN_SWAP_REPAY
+  PLAN_REPAY_SWAP_REPAY_1, PLAN_SWAP_ONLY_2, PLAN_SWAP_REPAY_0
 } from "../../../baseUT/AppConstants";
 import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
 import {MockAggregatorUtils} from "../../../baseUT/mocks/MockAggregatorUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
+import {buildEntryData0, buildEntryData1, buildEntryData2} from "../../../baseUT/utils/EntryDataUtils";
 
 /**
  * There are two kind of tests here:
@@ -76,9 +77,11 @@ describe('PairBasedNoSwapIntTest', function() {
     entryToPool: number;
     singleIteration: boolean;
   }
-  async function makeFullWithdraw(b: IBuilderResults, p: IWithdrawParams, pathOut: string, states: IStateNum[], mockSwapper?: MockSwapper): Promise<IListStates> {
+  async function makeFullWithdraw(b: IBuilderResults, p: IWithdrawParams, pathOut: string, states0: IStateNum[], mockSwapper?: MockSwapper): Promise<IListStates> {
     const state = await PackedData.getDefaultState(b.strategy);
     const strategyAsOperator = b.strategy.connect(b.operator);
+
+    const states = [...states0];
     
     let step = 0;
     while (true) {
@@ -153,7 +156,7 @@ describe('PairBasedNoSwapIntTest', function() {
       if (p.singleIteration || completed) break;
     }
 
-    return {states};
+    return {states: states};
   }
 
   interface IPrepareWithdrawTestParams {
@@ -174,7 +177,7 @@ describe('PairBasedNoSwapIntTest', function() {
     entryToPool: number;
     planKind: number;
     singleIteration: boolean;
-    propNotUnderlying18?: BigNumber;
+    propNotUnderlying?: string; // use Number.MAX_SAFE_INTEGER for MAX_UINT
     pathOut: string;
     states0: IStateNum[];
 
@@ -213,12 +216,12 @@ describe('PairBasedNoSwapIntTest', function() {
         singleIteration: p.singleIteration,
         aggregator: p.aggregator ?? Misc.ZERO_ADDRESS,
         entryToPool: p.entryToPool,
-        planEntryData: p.planKind === PLAN_REPAY_SWAP_REPAY
-          ? defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT])
-          : p.planKind === PLAN_SWAP_REPAY
-            ? defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY, p?.propNotUnderlying18 ?? 0])
-            : p.planKind === PLAN_SWAP_ONLY
-              ? defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_ONLY, p?.propNotUnderlying18 ?? 0])
+        planEntryData: p.planKind === PLAN_REPAY_SWAP_REPAY_1
+          ? buildEntryData1(BigNumber.from(0), p.propNotUnderlying)
+          : p.planKind === PLAN_SWAP_REPAY_0
+            ? buildEntryData0(p.propNotUnderlying)
+            : p.planKind === PLAN_SWAP_ONLY_2
+              ? buildEntryData2(p.propNotUnderlying)
               : "0x",
       },
       p.pathOut,
@@ -267,8 +270,8 @@ describe('PairBasedNoSwapIntTest', function() {
         return b;
       }
 
-      describe(`${strategyInfo.name}`, () => {
-        describe("Move prices up", () => {
+      describe(`${strategyInfo.name}`, function () {
+        describe("Move prices up", function () {
           let snapshotLevel0: string;
           let builderResults: IBuilderResults;
           let ptr: IPrepareWithdrawTestResults;
@@ -285,8 +288,8 @@ describe('PairBasedNoSwapIntTest', function() {
           });
 
           describe('unfold debts using single iteration', function() {
-            describe("Use liquidator", () => {
-              describe("Liquidator, entry to pool at the end", () => {
+            describe("Use liquidator", function () {
+              describe("Liquidator, entry to pool at the end", function (){
                 let snapshot: string;
                 before(async function () {
                   snapshot = await TimeUtils.snapshot();
@@ -299,8 +302,8 @@ describe('PairBasedNoSwapIntTest', function() {
                   return completeWithdrawTest(builderResults, {
                     singleIteration: true,
                     entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
-                    planKind: PLAN_REPAY_SWAP_REPAY,
-                    pathOut: ptr.pathOut + ".enter-to-pool.csv",
+                    planKind: PLAN_REPAY_SWAP_REPAY_1,
+                    pathOut: ptr.pathOut + ".single.enter-to-pool.csv",
                     states0: ptr.states
                   });
                 }
@@ -359,7 +362,7 @@ describe('PairBasedNoSwapIntTest', function() {
                   }
                 });
               });
-              describe("Liquidator, don't enter to the pool", () => {
+              describe("Liquidator, don't enter to the pool", function () {
                 let snapshot: string;
                 before(async function () {
                   snapshot = await TimeUtils.snapshot();
@@ -372,8 +375,8 @@ describe('PairBasedNoSwapIntTest', function() {
                   return completeWithdrawTest(builderResults, {
                     singleIteration: true,
                     entryToPool: ENTRY_TO_POOL_DISABLED,
-                    planKind: PLAN_REPAY_SWAP_REPAY,
-                    pathOut: ptr.pathOut + ".dont-enter-to-poo.csv",
+                    planKind: PLAN_REPAY_SWAP_REPAY_1,
+                    pathOut: ptr.pathOut + ".single.dont-enter-to-pool.csv",
                     states0: ptr.states
                   });
                 }
@@ -427,7 +430,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 });
               });
             });
-            describe("Use liquidator as aggregator", () => {
+            describe("Use liquidator as aggregator", function () {
               describe("Liquidator, entry to pool at the end", () => {
                 let snapshot: string;
                 before(async function () {
@@ -442,8 +445,8 @@ describe('PairBasedNoSwapIntTest', function() {
                     aggregator: MaticAddresses.TETU_LIQUIDATOR,
                     singleIteration: true,
                     entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
-                    planKind: PLAN_REPAY_SWAP_REPAY,
-                    pathOut: ptr.pathOut + ".enter-to-pool-liquidator.csv",
+                    planKind: PLAN_REPAY_SWAP_REPAY_1,
+                    pathOut: ptr.pathOut + ".single.enter-to-pool.liquidator.csv",
                     states0: ptr.states
                   });
                 }
@@ -515,8 +518,8 @@ describe('PairBasedNoSwapIntTest', function() {
                     aggregator: MaticAddresses.TETU_LIQUIDATOR,
                     singleIteration: true,
                     entryToPool: ENTRY_TO_POOL_DISABLED,
-                    planKind: PLAN_REPAY_SWAP_REPAY,
-                    pathOut: ptr.pathOut + ".dont-enter-to-pool-liquidator.csv",
+                    planKind: PLAN_REPAY_SWAP_REPAY_1,
+                    pathOut: ptr.pathOut + ".single.dont-enter-to-pool.liquidator.csv",
                     states0: ptr.states
                   });
                 }
@@ -571,7 +574,7 @@ describe('PairBasedNoSwapIntTest', function() {
             });
           });
           describe('withdraw all by steps', function() {
-            describe("Use liquidator", () => {
+            describe("Use liquidator", function () {
               describe('Enter to the pool after completion with pools proportions', function () {
                 let snapshot: string;
                 before(async function () {
@@ -585,10 +588,10 @@ describe('PairBasedNoSwapIntTest', function() {
                   return completeWithdrawTest(builderResults, {
                     singleIteration: false,
                     entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
-                    planKind: PLAN_SWAP_REPAY,
-                    propNotUnderlying18: BigNumber.from(Misc.MAX_UINT), // use pool's proportions
+                    planKind: PLAN_SWAP_REPAY_0,
+                    propNotUnderlying: Number.MAX_SAFE_INTEGER.toString(), // use pool's proportions
                     states0: ptr.states,
-                    pathOut: ptr.pathOut + ".enter-to-pool.csv"
+                    pathOut: ptr.pathOut + ".all.enter-to-pool.csv"
                   });
                 }
 
@@ -639,8 +642,9 @@ describe('PairBasedNoSwapIntTest', function() {
                   return completeWithdrawTest(builderResults, {
                     singleIteration: false,
                     entryToPool: ENTRY_TO_POOL_DISABLED,
-                    planKind: PLAN_SWAP_REPAY,
-                    pathOut: ptr.pathOut + ".dont-enter-pool.csv",
+                    planKind: PLAN_SWAP_REPAY_0,
+                    propNotUnderlying: "0",
+                    pathOut: ptr.pathOut + ".all.dont-enter-pool.csv",
                     states0: ptr.states
                   });
                 }
@@ -687,7 +691,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 });
               });
             });
-            describe("Use liquidator as aggregator", () => {
+            describe("Use liquidator as aggregator", function () {
               describe('Dont enter to the pool', function () {
                 let snapshot: string;
                 before(async function () {
@@ -702,9 +706,10 @@ describe('PairBasedNoSwapIntTest', function() {
                     singleIteration: false,
                     aggregator: MaticAddresses.TETU_LIQUIDATOR,
                     entryToPool: ENTRY_TO_POOL_DISABLED,
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
+                    propNotUnderlying: "0",
                     states0: ptr.states,
-                    pathOut: ptr.pathOut + ".dont-enter-pool-liquidator.csv"
+                    pathOut: ptr.pathOut + ".all.dont-enter-pool.liquidator.csv"
                   });
                 }
 
@@ -770,8 +775,8 @@ describe('PairBasedNoSwapIntTest', function() {
             await TimeUtils.rollback(snapshotLevel0);
           });
           describe('unfold debts using single iteration', function() {
-            describe("Use liquidator", () => {
-              describe("Liquidator, entry to pool at the end", () => {
+            describe("Use liquidator", function () {
+              describe("Liquidator, entry to pool at the end", function () {
                 let snapshot: string;
                 before(async function () {
                   snapshot = await TimeUtils.snapshot();
@@ -784,7 +789,7 @@ describe('PairBasedNoSwapIntTest', function() {
                   return completeWithdrawTest(builderResults, {
                     singleIteration: true,
                     entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
-                    planKind: PLAN_REPAY_SWAP_REPAY,
+                    planKind: PLAN_REPAY_SWAP_REPAY_1,
                     pathOut: ptr.pathOut + ".enter-to-poo.csv",
                     states0: ptr.states
                   });
@@ -844,7 +849,7 @@ describe('PairBasedNoSwapIntTest', function() {
                   }
                 });
               });
-              describe("Liquidator, don't enter to the pool", () => {
+              describe("Liquidator, don't enter to the pool", function () {
                 let snapshot: string;
                 before(async function () {
                   snapshot = await TimeUtils.snapshot();
@@ -857,7 +862,7 @@ describe('PairBasedNoSwapIntTest', function() {
                   return completeWithdrawTest(builderResults, {
                     singleIteration: true,
                     entryToPool: ENTRY_TO_POOL_DISABLED,
-                    planKind: PLAN_REPAY_SWAP_REPAY,
+                    planKind: PLAN_REPAY_SWAP_REPAY_1,
                     pathOut: ptr.pathOut + ".dont-enter-to-poo.csv",
                     states0: ptr.states
                   });
@@ -913,7 +918,7 @@ describe('PairBasedNoSwapIntTest', function() {
             });
           });
           describe('withdraw all by steps', function() {
-            describe("Use liquidator", () => {
+            describe("Use liquidator", function () {
               describe('Enter to the pool after completion', function () {
                 let snapshot: string;
                 before(async function () {
@@ -927,10 +932,10 @@ describe('PairBasedNoSwapIntTest', function() {
                   return completeWithdrawTest(builderResults, {
                     singleIteration: false,
                     entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
-                    planKind: PLAN_SWAP_REPAY,
-                    propNotUnderlying18: BigNumber.from(Misc.MAX_UINT), // use pool's proportions
+                    planKind: PLAN_SWAP_REPAY_0,
+                    propNotUnderlying: Number.MAX_SAFE_INTEGER.toString(), // use pool's proportions
                     states0: ptr.states,
-                    pathOut: ptr.pathOut + "enter-to-pool.csv"
+                    pathOut: ptr.pathOut + ".enter-to-pool.csv"
                   });
                 }
 
@@ -958,10 +963,8 @@ describe('PairBasedNoSwapIntTest', function() {
               });
               describe('Dont enter to the pool after completion', function () {
                 let snapshot: string;
-                let builderResults: IBuilderResults;
                 before(async function () {
                   snapshot = await TimeUtils.snapshot();
-                  builderResults = await prepareStrategy();
                 });
                 after(async function () {
                   await TimeUtils.rollback(snapshot);
@@ -971,9 +974,9 @@ describe('PairBasedNoSwapIntTest', function() {
                   return completeWithdrawTest(builderResults, {
                     singleIteration: false,
                     entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
                     states0: ptr.states,
-                    pathOut: ptr.pathOut + "dont-enter-to-pool.csv"
+                    pathOut: ptr.pathOut + ".dont-enter-to-pool.csv"
                   });
                 }
 
@@ -1019,7 +1022,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 });
               });
             });
-            describe("Use liquidator as aggregator", () => {
+            describe("Use liquidator as aggregator", function () {
               describe('Dont enter to the pool', function () {
                 let snapshot: string;
                 before(async function () {
@@ -1034,9 +1037,9 @@ describe('PairBasedNoSwapIntTest', function() {
                     aggregator: MaticAddresses.TETU_LIQUIDATOR,
                     singleIteration: false,
                     entryToPool: ENTRY_TO_POOL_DISABLED,
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
                     states0: ptr.states,
-                    pathOut: ".enter-to-pool-liquidator.csv"
+                    pathOut: ptr.pathOut + ".enter-to-pool-liquidator.csv"
                   });
                 }
 
@@ -1196,7 +1199,7 @@ describe('PairBasedNoSwapIntTest', function() {
               {
                 singleIteration: true,
                 entryToPool: ENTRY_TO_POOL_DISABLED,
-                planKind: PLAN_REPAY_SWAP_REPAY,
+                planKind: PLAN_REPAY_SWAP_REPAY_1,
                 aggregator: MaticAddresses.TETU_LIQUIDATOR,
                 mockSwapper,
                 pathOut: ptr1.pathOut,
@@ -1220,7 +1223,7 @@ describe('PairBasedNoSwapIntTest', function() {
               {
                 singleIteration: true,
                 entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
-                planKind: PLAN_REPAY_SWAP_REPAY,
+                planKind: PLAN_REPAY_SWAP_REPAY_1,
                 aggregator: MaticAddresses.TETU_LIQUIDATOR,
                 states0: ptr2.states,
                 pathOut: ptr2.pathOut
@@ -1370,8 +1373,8 @@ describe('PairBasedNoSwapIntTest', function() {
             return completeWithdrawTest(builderResults, {
               singleIteration: false,
               entryToPool: ENTRY_TO_POOL_DISABLED,
-              planKind: PLAN_SWAP_REPAY,
-              propNotUnderlying18: BigNumber.from(0),
+              planKind: PLAN_SWAP_REPAY_0,
+              propNotUnderlying: "0",
               states0: ptr.states,
               pathOut: ptr.pathOut
             });

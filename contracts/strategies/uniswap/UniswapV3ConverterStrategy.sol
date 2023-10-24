@@ -196,6 +196,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     bytes memory planEntryData,
     uint entryToPool
   ) external returns (bool completed) {
+    console.log("withdrawByAggStep.entryToPool", entryToPool);
     // restriction "operator only" is checked inside UniswapV3ConverterStrategyLogicLib.withdrawByAggStep
 
     // fix price changes, exit from the pool
@@ -324,6 +325,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   /// @notice Make actions after rebalance: depositor enter, update invested assets
   function _rebalanceAfter(uint[] memory tokenAmounts) internal {
+    console.log("withdrawByAggStep._rebalanceAfter.tokenAmounts.length", tokenAmounts.length);
     if (tokenAmounts.length == 2 && !_isFuseTriggeredOn()) {
       _depositorEnter(tokenAmounts);
     }

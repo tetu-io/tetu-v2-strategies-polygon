@@ -15,7 +15,7 @@ import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
 import {expect} from "chai";
 import {Misc} from "../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
-import {PLAN_REPAY_SWAP_REPAY, PLAN_SWAP_ONLY, PLAN_SWAP_REPAY} from "../../baseUT/AppConstants";
+import {PLAN_REPAY_SWAP_REPAY_1, PLAN_SWAP_ONLY_2, PLAN_SWAP_REPAY_0} from "../../baseUT/AppConstants";
 import {HARDHAT_NETWORK_ID, HardhatUtils} from '../../baseUT/utils/HardhatUtils';
 
 describe('IterationPlanLibTest', () => {
@@ -107,6 +107,7 @@ describe('IterationPlanLibTest', () => {
             parseUnits("1", decimalsA),
             parseUnits("1", decimalsB),
           ],
+          entryDataParam: 0, // todo
           converter: Misc.ZERO_ADDRESS, // not used here
           liquidator: MaticAddresses.TETU_LIQUIDATOR,
           tokens: [], // not used here
@@ -114,7 +115,7 @@ describe('IterationPlanLibTest', () => {
           balanceAdditions: [], // not used here
           planKind: 0, // not used here
           propNotUnderlying18: 0, // not used here
-          usePoolProportions: false
+          usePoolProportions: false,
         },
         parseUnits(p.balancesAB[0], decimalsA),
         parseUnits(p.balancesAB[1], decimalsB),
@@ -328,19 +329,19 @@ describe('IterationPlanLibTest', () => {
 
   describe("getEntryKind", () => {
     it("should return default value", async () => {
-      expect((await facade.getEntryKind("0x")).toNumber()).eq(PLAN_SWAP_REPAY)
+      expect((await facade.getEntryKind("0x")).toNumber()).eq(PLAN_SWAP_REPAY_0)
     });
     it("should return PLAN_SWAP_REPAY", async () => {
-      const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_SWAP_REPAY, 1]);
-      expect((await facade.getEntryKind(entryData)).toNumber()).eq(PLAN_SWAP_REPAY)
+      const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_SWAP_REPAY_0, 1]);
+      expect((await facade.getEntryKind(entryData)).toNumber()).eq(PLAN_SWAP_REPAY_0)
     });
     it("should return PLAN_REPAY_SWAP_REPAY", async () => {
-      const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_REPAY_SWAP_REPAY, 1]);
-      expect((await facade.getEntryKind(entryData)).toNumber()).eq(PLAN_REPAY_SWAP_REPAY)
+      const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_REPAY_SWAP_REPAY_1, 1]);
+      expect((await facade.getEntryKind(entryData)).toNumber()).eq(PLAN_REPAY_SWAP_REPAY_1)
     });
     it("should return PLAN_SWAP_ONLY", async () => {
-      const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_SWAP_ONLY, 1]);
-      expect((await facade.getEntryKind(entryData)).toNumber()).eq(PLAN_SWAP_ONLY)
+      const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_SWAP_ONLY_2, 1]);
+      expect((await facade.getEntryKind(entryData)).toNumber()).eq(PLAN_SWAP_ONLY_2)
     });
   });
 
@@ -358,13 +359,15 @@ describe('IterationPlanLibTest', () => {
               usePoolProportions: false,
               balanceAdditions: [0, 0],
               propNotUnderlying18: 0,
-              liquidationThresholds: [0, 0]
+              liquidationThresholds: [0, 0],
+              entryDataParam: 0 // todo
             },
             [1000, 0],
             [0, 1], // any values
             1, // any value
             1, // any value
-            1 // any value
+            1, // any value
+          0 // todo
         )
       });
     });

@@ -27,7 +27,7 @@ import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
-import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../../../baseUT/AppConstants";
+import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY_1} from "../../../baseUT/AppConstants";
 
 /**
  * Study noSwap-rebalance.
@@ -213,7 +213,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
 
       const planEntryData = defaultAbiCoder.encode(
           ["uint256", "uint256"],
-          [PLAN_REPAY_SWAP_REPAY, 0] // we need 100% of underlying
+          [PLAN_REPAY_SWAP_REPAY_1, 0] // we need 100% of underlying
       );
 
       const AMOUNT_TO_DEPOSIT= "1000";

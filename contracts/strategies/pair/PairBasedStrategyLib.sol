@@ -174,6 +174,8 @@ library PairBasedStrategyLib {
     address tokenToSwap,
     uint amountToSwap
   ){
+    console.log("quoteWithdrawStep.entryDataValues[0]", entryDataValues[0]);
+    console.log("quoteWithdrawStep.entryDataValues[1]", entryDataValues[1]);
     (uint[] memory prices,
       uint[] memory decs
     ) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(ITetuConverter(converterLiquidator_[0])), tokens, 2);
@@ -468,9 +470,10 @@ library PairBasedStrategyLib {
           && p.propNotUnderlying18 != 0 && p.propNotUnderlying18 != 1e18 // BorrowLib doesn't allow prop=0
         ) {
           console.log("fix leftovers");
+          console.log("fix leftovers.p.usePoolProportions", p.usePoolProportions);
           _fixLeftoversProportions(p);
-          console.log("balance[0]", IERC20(p.tokens[0]).balanceOf(address(this)));
-          console.log("balance[1]", IERC20(p.tokens[1]).balanceOf(address(this)));
+          console.log("balance[0].after.fix leftovers", IERC20(p.tokens[0]).balanceOf(address(this)));
+          console.log("balance[1].after.fix leftovers", IERC20(p.tokens[1]).balanceOf(address(this)));
         }
       }
     }
@@ -523,17 +526,24 @@ library PairBasedStrategyLib {
   /// @notice Set balances to right proportions using borrow
   ///         (it can be necessary if propNotUnderlying18 was changed after swap)
   function _fixLeftoversProportions(IterationPlanLib.SwapRepayPlanParams memory p) internal {
+    console.log("_fixLeftoversProportions");
     uint balanceAsset = IERC20(p.tokens[IDX_ASSET]).balanceOf(address(this));
     uint balanceToken = IERC20(p.tokens[IDX_TOKEN]).balanceOf(address(this));
+    console.log("_fixLeftoversProportions.balanceAsset", balanceAsset);
+    console.log("_fixLeftoversProportions.balanceToken", balanceToken);
     (uint targetAssets,
       uint targetTokens
     ) = IterationPlanLib._getTargetAmounts(p.prices, p.decs, balanceAsset, balanceToken, p.propNotUnderlying18, IDX_ASSET, IDX_TOKEN);
 
+    console.log("_fixLeftoversProportions.targetAssets", targetAssets);
+    console.log("_fixLeftoversProportions.targetTokens", targetTokens);
     if (balanceAsset > targetAssets) {
       if (balanceAsset - targetAssets > p.liquidationThresholds[IDX_ASSET]) {
+        console.log("_fixLeftoversProportions.balanceAsset - targetAssets", balanceAsset - targetAssets);
         _borrowToProportions(p, IDX_ASSET, IDX_TOKEN, balanceAsset, balanceToken, true);
       }
     } else if (balanceToken > targetTokens) {
+      console.log("_fixLeftoversProportions.balanceToken - targetTokens", balanceToken - targetTokens);
       if (balanceToken - targetTokens > p.liquidationThresholds[IDX_ASSET]) {
         _borrowToProportions(p, IDX_TOKEN, IDX_ASSET, balanceToken, balanceAsset, true);
       }

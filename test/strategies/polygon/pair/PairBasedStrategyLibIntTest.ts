@@ -23,7 +23,7 @@ import {MaticHolders} from "../../../../scripts/addresses/MaticHolders";
 import {IterationPlanLib} from "../../../../typechain/contracts/test/facades/PairBasedStrategyLibFacade";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
-import {PLAN_REPAY_SWAP_REPAY, PLATFORM_KIND_AAVE2_2, PLATFORM_KIND_AAVE3_3} from "../../../baseUT/AppConstants";
+import {PLAN_REPAY_SWAP_REPAY_1, PLATFORM_KIND_AAVE2_2, PLATFORM_KIND_AAVE3_3} from "../../../baseUT/AppConstants";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 describe('PairBasedStrategyLibIntTest', () => {
@@ -654,7 +654,7 @@ describe('PairBasedStrategyLibIntTest', () => {
           amountToSwap: "727.183544",
           tokenToSwap: MaticAddresses.USDC_TOKEN,
 
-          planKind: PLAN_REPAY_SWAP_REPAY,
+          planKind: PLAN_REPAY_SWAP_REPAY_1,
           propNotUnderlying18: "0.44",
 
           liquidationThresholds: ["0.01000", "0.01000"],

@@ -11,8 +11,8 @@ import {makeFullWithdraw} from "../utils/WithdrawAllByAggUtils";
 import {
   ENTRY_TO_POOL_DISABLED,
   ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
-  PLAN_REPAY_SWAP_REPAY,
-  PLAN_SWAP_REPAY
+  PLAN_REPAY_SWAP_REPAY_1,
+  PLAN_SWAP_REPAY_0
 } from "../../test/baseUT/AppConstants";
 import {defaultAbiCoder} from "ethers/lib/utils";
 import {Misc} from "../utils/Misc";
@@ -54,7 +54,7 @@ async function main() {
   // use PLAN_SWAP_REPAY to withdraw all to underlying
   await makeFullWithdraw(strategyAsOperator, {
     entryToPool: ENTRY_TO_POOL_DISABLED,
-    planEntryDataGetter: async () => defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY, 0]),
+    planEntryDataGetter: async () => defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY_0, 0]),
     saveStates: saver,
     maxAmountToSwap: "30000",
     isCompleted: async (completed: boolean) => {

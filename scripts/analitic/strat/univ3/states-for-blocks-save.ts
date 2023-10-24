@@ -22,7 +22,7 @@ import {
 import {InjectUtils} from "../../../../test/baseUT/strategies/InjectUtils";
 import { AggregatorUtils } from '../../../../test/baseUT/utils/AggregatorUtils';
 import { CaptureEvents } from '../../../../test/baseUT/strategies/CaptureEvents';
-import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from '../../../../test/baseUT/AppConstants';
+import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY_1} from '../../../../test/baseUT/AppConstants';
 import {BigNumber} from "ethers";
 import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
 
@@ -96,7 +96,7 @@ async function main() {
       // const planEntryData = "0x0000000000000000000000000000000000000000000000000000000000000001ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
       const planEntryData = defaultAbiCoder.encode(
         ["uint256", "uint256"],
-        [PLAN_REPAY_SWAP_REPAY, parseUnits("0.99", 18)]
+        [PLAN_REPAY_SWAP_REPAY_1, parseUnits("0.99", 18)]
       );
 
       console.log("unfoldBorrows.quoteWithdrawByAgg.callStatic --------------------------------");

@@ -21,7 +21,7 @@ import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {GAS_LIMIT_PAIR_BASED_WITHDRAW, GAS_REBALANCE_NO_SWAP} from "../../../baseUT/GasLimits";
-import {ENTRY_TO_POOL_DISABLED, ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY, PLAN_SWAP_REPAY} from "../../../baseUT/AppConstants";
+import {ENTRY_TO_POOL_DISABLED, ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY_1, PLAN_SWAP_REPAY_0} from "../../../baseUT/AppConstants";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {
   ISwapper__factory
@@ -290,7 +290,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const b = await loadFixture(prepareStrategy);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-          const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
+          const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT]);
           const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
           const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
@@ -492,7 +492,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const b = await loadFixture(prepareStrategy);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-          const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
+          const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT]);
           const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
           const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
@@ -679,7 +679,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const b = await loadFixture(prepareStrategy);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-          const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY, 0]);
+          const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY_0, 0]);
           const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
           const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
           console.log("stateBefore", stateBefore);
@@ -886,7 +886,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             const b = await loadFixture(prepareStrategy);
             const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-            const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
+            const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT]);
             const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
             const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
@@ -1070,7 +1070,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const b = await loadFixture(prepareStrategy);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-          const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
+          const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT]);
           const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
           const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
@@ -1252,7 +1252,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             const b = await loadFixture(prepareStrategy);
             const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-            const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
+            const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT]);
             const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
             const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
@@ -1498,7 +1498,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             const b = await loadFixture(prepareStrategy);
             const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-            const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
+            const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT]);
             const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
             const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
@@ -2000,7 +2000,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             console.log(`locketAmount=${locketAmount} totalAsset=${totalAsset} lockedPercent=${lockedPercent}`);
             if (lockedPercent > maxLockedPercent) {
               console.log("Rebalance debts");
-              const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
+              const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT]);
               const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
               await b.strategy.withdrawByAggStep(
                 quote.tokenToSwap,

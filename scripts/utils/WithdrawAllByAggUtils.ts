@@ -7,7 +7,7 @@ import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
 import {MaticAddresses} from "../addresses/MaticAddresses";
 import {AggregatorUtils} from "../../test/baseUT/utils/AggregatorUtils";
 import {IERC20Metadata__factory} from "../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
-import {PLAN_SWAP_REPAY} from "../../test/baseUT/AppConstants";
+import {PLAN_SWAP_REPAY_0} from "../../test/baseUT/AppConstants";
 import {RunHelper} from "./RunHelper";
 import {ethers} from "hardhat";
 
@@ -34,7 +34,7 @@ export async function makeFullWithdraw(strategyAsOperator: IRebalancingV2Strateg
   while (true) {
     const planEntryData = p?.planEntryDataGetter
       ? await p?.planEntryDataGetter()
-      : defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY, 0]);
+      : defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY_0, 0]);
 
     console.log(`=========================== ${step} =====================`);
     const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
