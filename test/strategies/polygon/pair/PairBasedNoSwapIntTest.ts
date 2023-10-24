@@ -156,52 +156,57 @@ describe('PairBasedNoSwapIntTest', function() {
     return {states};
   }
 
-  type IMakeWithdrawTestResults = IListStates;
-  interface IMakeWithdrawTestParams {
+  interface IPrepareWithdrawTestParams {
+    pathTag: string;
     movePricesUp: boolean;
+
+    /** 2 by default */
+    countRebalances?: number;
+
+    skipOverCollateralStep?: boolean;
+  }
+  interface IPrepareWithdrawTestResults {
+    pathOut: string;
+    states: IStateNum[];
+  }
+
+  interface ICompleteWithdrawTestParams {
     entryToPool: number;
     planKind: number;
     singleIteration: boolean;
     propNotUnderlying18?: BigNumber;
+    pathOut: string;
+    states0: IStateNum[];
 
-    /** 2 by default */
-    countRebalances?: number;
     /** ZERO by default */
     aggregator?: string;
     mockSwapper?: MockSwapper;
-
-    skipOverCollateralStep?: boolean;
   }
 
-  async function makeWithdrawTest(b: IBuilderResults, p: IMakeWithdrawTestParams, fnPostfix?: string): Promise<IMakeWithdrawTestResults> {
+  async function prepareWithdrawTest(b: IBuilderResults, p: IPrepareWithdrawTestParams): Promise<IPrepareWithdrawTestResults> {
     const platform = await ConverterStrategyBase__factory.connect(b.strategy.address, signer).PLATFORM();
-    const agg = p.aggregator === Misc.ZERO_ADDRESS
-      ? "no"
-      : p.aggregator === MaticAddresses.TETU_LIQUIDATOR
-        ? "liquidator-as-agg"
-        : p.aggregator === MaticAddresses.AGG_ONEINCH_V5
-          ? "1inch"
-          : p.mockSwapper
-            ? "mock-swapper"
-            : "no";
-    const pathOut = `./tmp/${platform}-entry${p.entryToPool}-${p.singleIteration ? "single" : "many"}-${p.movePricesUp ? "up" : "down"}-${agg}${fnPostfix ? fnPostfix : ""}.csv`;
+    const pathOut = `./tmp/${platform}-${p.pathTag}.csv`;
 
-    const states0: IStateNum[] = p.skipOverCollateralStep
+    const states: IStateNum[] = p.skipOverCollateralStep
       ? []
       : (await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
-          b,
-          {
-            countRebalances: p.countRebalances ?? 2,
-            movePricesUp: p.movePricesUp,
-            swapAmountRatio: DEFAULT_SWAP_AMOUNT_RATIO,
-            amountToDepositBySigner2: "100",
-            amountToDepositBySigner: "10000",
-          },
-          pathOut,
-          signer,
-          signer2,
+        b,
+        {
+          countRebalances: p.countRebalances ?? 2,
+          movePricesUp: p.movePricesUp,
+          swapAmountRatio: DEFAULT_SWAP_AMOUNT_RATIO,
+          amountToDepositBySigner2: "100",
+          amountToDepositBySigner: "10000",
+        },
+        pathOut,
+        signer,
+        signer2,
       )).states;
 
+    return {states, pathOut};
+  }
+
+  async function completeWithdrawTest(b: IBuilderResults, p: ICompleteWithdrawTestParams): Promise<IListStates> {
     const {states} = await makeFullWithdraw(
       b,
       {
@@ -216,8 +221,8 @@ describe('PairBasedNoSwapIntTest', function() {
               ? defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_ONLY, p?.propNotUnderlying18 ?? 0])
               : "0x",
       },
-      pathOut,
-      states0,
+      p.pathOut,
+      p.states0,
       p.mockSwapper
     );
 
@@ -226,7 +231,7 @@ describe('PairBasedNoSwapIntTest', function() {
 //endregion Withdraw-with-iterations impl
 
 //region Unit tests
-  describe('unfold debts using single iteration', function() {
+  describe('Change prices', function() {
     interface IStrategyInfo {
       name: string,
       sharePriceDeviation: number
@@ -263,553 +268,826 @@ describe('PairBasedNoSwapIntTest', function() {
       }
 
       describe(`${strategyInfo.name}`, () => {
-        describe("Use liquidator", () => {
-          describe("Move prices up", () => {
-            describe("Liquidator, entry to pool at the end", () => {
-              let snapshot: string;
-              let builderResults: IBuilderResults;
-              before(async function () {
-                snapshot = await TimeUtils.snapshot();
-
-                builderResults = await prepareStrategy();
-              });
-              after(async function () {
-                await TimeUtils.rollback(snapshot);
-              });
-
-              async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
-                return makeWithdrawTest(builderResults, {
-                  movePricesUp: true,
-                  singleIteration: true,
-                  entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
-                  planKind: PLAN_REPAY_SWAP_REPAY,
-                });
-              }
-
-              it("should not change share price significantly", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const sharePrice0 = states[0].vault.sharePrice;
-                let sumUncoveredLoss = 0;
-                for (let i = 1; i < states.length; ++i) {
-                  sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
-                  const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
-                  expect(sharePrice0).approximately(adjustedSharePrice, strategyInfo.sharePriceDeviation, states[i].title);
-                }
-              });
-              it("should reduce locked amount significantly", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const [stateLast, statePrev, ...rest] = [...states].reverse();
-                expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
-              });
-              it("should enter to the pool at the end", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const [stateLast, ...rest] = [...states].reverse();
-                expect(stateLast.strategy.liquidity > 0).eq(true);
-              });
-              it("should put more at least half liquidity to the pool", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const prevTotalLiquidity = states[states.length - 2].strategy.liquidity;
-                const finalTotalLiquidity = states[states.length - 1].strategy.liquidity;
-                expect(finalTotalLiquidity).gt(prevTotalLiquidity / 2);
-              });
-              it("should reduce amount-to-repay", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const prevState = states[states.length - 2];
-                const finalState = states[states.length - 1];
-                const amountToRepayPrev = Math.max(prevState.converterDirect.amountsToRepay[0], prevState.converterReverse.amountsToRepay[0]);
-                const amountToRepayFinal = Math.max(finalState.converterDirect.amountsToRepay[0], finalState.converterReverse.amountsToRepay[0]);
-                expect(amountToRepayFinal).lt(amountToRepayPrev);
-              });
-              it("should reduce collateral amount", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const prevState = states[states.length - 2];
-                const finalState = states[states.length - 1];
-                const amountCollateralPrev = Math.max(prevState.converterDirect.collaterals[0], prevState.converterReverse.collaterals[0]);
-                const amountCollateralFinal = Math.max(finalState.converterDirect.collaterals[0], finalState.converterReverse.collaterals[0]);
-                expect(amountCollateralFinal).lt(amountCollateralPrev);
-              });
-
-              it("should not change vault.totalAssets too much", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const totalAssets0 = states[0].vault.totalAssets;
-                let sumUncoveredLoss = 0;
-                for (let i = 1; i < states.length; ++i) {
-                  sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
-                  const totalAssets = states[i].vault.totalAssets;
-                  expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
-                }
-              });
-            });
-            describe("Liquidator, don't enter to the pool", () => {
-              let snapshot: string;
-              let builderResults: IBuilderResults;
-              before(async function () {
-                snapshot = await TimeUtils.snapshot();
-
-                builderResults = await prepareStrategy();
-              });
-              after(async function () {
-                await TimeUtils.rollback(snapshot);
-              });
-
-              async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
-                return makeWithdrawTest(builderResults, {
-                  movePricesUp: true,
-                  singleIteration: true,
-                  entryToPool: ENTRY_TO_POOL_DISABLED,
-                  planKind: PLAN_REPAY_SWAP_REPAY,
-                });
-              }
-
-              it("should not change share price significantly", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const sharePrice0 = states[0].vault.sharePrice;
-                let sumUncoveredLoss = 0;
-                for (let i = 1; i < states.length; ++i) {
-                  sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
-                  const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
-                  expect(sharePrice0).approximately(adjustedSharePrice, strategyInfo.sharePriceDeviation, states[i].title);
-                }
-              });
-              it("should reduce locked amount significantly", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const [stateLast, statePrev, ...rest] = [...states].reverse();
-                expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
-              });
-              it("should not enter to the pool at the end", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const [stateLast, ...rest] = [...states].reverse();
-                expect(stateLast.strategy.liquidity).eq(0);
-              });
-              it("should reduce amount-to-repay", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const prevState = states[states.length - 2];
-                const finalState = states[states.length - 1];
-                const amountToRepayPrev = Math.max(prevState.converterDirect.amountsToRepay[0], prevState.converterReverse.amountsToRepay[0]);
-                const amountToRepayFinal = Math.max(finalState.converterDirect.amountsToRepay[0], finalState.converterReverse.amountsToRepay[0]);
-                expect(amountToRepayFinal).lt(amountToRepayPrev);
-              });
-              it("should reduce collateral amount", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const prevState = states[states.length - 2];
-                const finalState = states[states.length - 1];
-                const amountCollateralPrev = Math.max(prevState.converterDirect.collaterals[0], prevState.converterReverse.collaterals[0]);
-                const amountCollateralFinal = Math.max(finalState.converterDirect.collaterals[0], finalState.converterReverse.collaterals[0]);
-                expect(amountCollateralFinal).lt(amountCollateralPrev);
-              });
-
-              it("should not change vault.totalAssets too much", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const totalAssets0 = states[0].vault.totalAssets;
-                let sumUncoveredLoss = 0;
-                for (let i = 1; i < states.length; ++i) {
-                  sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
-                  const totalAssets = states[i].vault.totalAssets;
-                  expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
-                }
-              });
-            });
-          });
-          describe("Move prices down", () => {
-            describe("Liquidator, entry to pool at the end", () => {
-              let snapshot: string;
-              let builderResults: IBuilderResults;
-              before(async function () {
-                snapshot = await TimeUtils.snapshot();
-
-                builderResults = await prepareStrategy();
-              });
-              after(async function () {
-                await TimeUtils.rollback(snapshot);
-              });
-
-              async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
-                return makeWithdrawTest(builderResults, {
-                  movePricesUp: false,
-                  singleIteration: true,
-                  entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
-                  planKind: PLAN_REPAY_SWAP_REPAY,
-                  countRebalances: strategyInfo.name === PLATFORM_ALGEBRA ? 1 : 2
-                });
-              }
-
-              it("should reduce locked amount significantly", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const [stateLast, statePrev, ...rest] = [...states].reverse();
-                expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
-              });
-              it("should not change share price significantly", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const sharePrice0 = states[0].vault.sharePrice;
-                let sumUncoveredLoss = 0;
-                for (let i = 1; i < states.length; ++i) {
-                  sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
-                  const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
-                  expect(sharePrice0).approximately(adjustedSharePrice, strategyInfo.sharePriceDeviation, states[i].title);
-                }
-              });
-              it("should enter to the pool at the end", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const [stateLast, ...rest] = [...states].reverse();
-                expect(stateLast.strategy.liquidity > 0).eq(true);
-              });
-              it("should put at least half liquidity to the pool", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const prevTotalLiquidity = states[states.length - 2].strategy.liquidity;
-                const finalTotalLiquidity = states[states.length - 1].strategy.liquidity;
-                expect(finalTotalLiquidity).gt(prevTotalLiquidity / 2);
-              });
-              it("should reduce amount-to-repay", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const prevState = states[states.length - 2];
-                const finalState = states[states.length - 1];
-                const amountToRepayPrev = Math.max(prevState.converterDirect.amountsToRepay[0], prevState.converterReverse.amountsToRepay[0]);
-                const amountToRepayFinal = Math.max(finalState.converterDirect.amountsToRepay[0], finalState.converterReverse.amountsToRepay[0]);
-                expect(amountToRepayFinal).lt(amountToRepayPrev);
-              });
-              it("should reduce collateral amount", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const prevState = states[states.length - 2];
-                const finalState = states[states.length - 1];
-                const amountCollateralPrev = Math.max(prevState.converterDirect.collaterals[0], prevState.converterReverse.collaterals[0]);
-                const amountCollateralFinal = Math.max(finalState.converterDirect.collaterals[0], finalState.converterReverse.collaterals[0]);
-                expect(amountCollateralFinal).lt(amountCollateralPrev);
-              });
-
-              it("should not change vault.totalAssets too much", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const totalAssets0 = states[0].vault.totalAssets;
-                let sumUncoveredLoss = 0;
-                for (let i = 1; i < states.length; ++i) {
-                  sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
-                  const totalAssets = states[i].vault.totalAssets;
-                  expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
-                }
-              });
-            });
-            describe("Liquidator, don't enter to the pool", () => {
-              let snapshot: string;
-              let builderResults: IBuilderResults;
-              before(async function () {
-                snapshot = await TimeUtils.snapshot();
-
-                builderResults = await prepareStrategy();
-              });
-              after(async function () {
-                await TimeUtils.rollback(snapshot);
-              });
-
-              async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
-                return makeWithdrawTest(builderResults, {
-                  movePricesUp: false,
-                  singleIteration: true,
-                  entryToPool: ENTRY_TO_POOL_DISABLED,
-                  planKind: PLAN_REPAY_SWAP_REPAY,
-                  countRebalances: strategyInfo.name === PLATFORM_ALGEBRA ? 1 : 2
-                });
-              }
-
-              it("should reduce locked amount significantly", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const [stateLast, statePrev, ...rest] = [...states].reverse();
-                expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
-              });
-              it("should not change share price significantly", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const sharePrice0 = states[0].vault.sharePrice;
-                let sumUncoveredLoss = 0;
-                for (let i = 1; i < states.length; ++i) {
-                  sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
-                  const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
-                  expect(sharePrice0).approximately(adjustedSharePrice, strategyInfo.sharePriceDeviation, states[i].title);
-                }
-              });
-              it("should not enter to the pool at the end", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const [stateLast, ...rest] = [...states].reverse();
-                expect(stateLast.strategy.liquidity).eq(0);
-              });
-              it("should reduce amount-to-repay", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const prevState = states[states.length - 2];
-                const finalState = states[states.length - 1];
-                const amountToRepayPrev = Math.max(prevState.converterDirect.amountsToRepay[0], prevState.converterReverse.amountsToRepay[0]);
-                const amountToRepayFinal = Math.max(finalState.converterDirect.amountsToRepay[0], finalState.converterReverse.amountsToRepay[0]);
-                expect(amountToRepayFinal).lt(amountToRepayPrev);
-              });
-              it("should reduce collateral amount", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const prevState = states[states.length - 2];
-                const finalState = states[states.length - 1];
-                const amountCollateralPrev = Math.max(prevState.converterDirect.collaterals[0], prevState.converterReverse.collaterals[0]);
-                const amountCollateralFinal = Math.max(finalState.converterDirect.collaterals[0], finalState.converterReverse.collaterals[0]);
-                expect(amountCollateralFinal).lt(amountCollateralPrev);
-              });
-              it("should not change vault.totalAssets too much", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const totalAssets0 = states[0].vault.totalAssets;
-                let sumUncoveredLoss = 0;
-                for (let i = 1; i < states.length; ++i) {
-                  sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
-                  const totalAssets = states[i].vault.totalAssets;
-                  expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
-                }
-              });
-            });
-          });
-        });
-        describe("Use liquidator as aggregator", () => {
-          describe("Move prices up", () => {
-            describe("Liquidator, entry to pool at the end", () => {
-              let snapshot: string;
-              let builderResults: IBuilderResults;
-              before(async function () {
-                snapshot = await TimeUtils.snapshot();
-
-                builderResults = await prepareStrategy();
-              });
-              after(async function () {
-                await TimeUtils.rollback(snapshot);
-              });
-
-              async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
-                return makeWithdrawTest(builderResults, {
-                  aggregator: MaticAddresses.TETU_LIQUIDATOR,
-                  movePricesUp: true,
-                  singleIteration: true,
-                  entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
-                  planKind: PLAN_REPAY_SWAP_REPAY,
-                  countRebalances: 1
-                });
-              }
-
-              it("should reduce locked amount significantly", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const [stateLast, statePrev, ...rest] = [...states].reverse();
-                expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
-              });
-              it("should not change share price significantly", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const sharePrice0 = states[0].vault.sharePrice;
-                let sumUncoveredLoss = 0;
-                for (let i = 1; i < states.length; ++i) {
-                  sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
-                  const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
-                  expect(sharePrice0).approximately(adjustedSharePrice, strategyInfo.sharePriceDeviation, states[i].title);
-                }
-              });
-              it("should enter to the pool at the end", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const [stateLast, ...rest] = [...states].reverse();
-                expect(stateLast.strategy.liquidity > 0).eq(true);
-              });
-              it("should put more liquidity to the pool", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const prevTotalLiquidity = states[states.length - 2].strategy.liquidity;
-                const finalTotalLiquidity = states[states.length - 1].strategy.liquidity;
-                expect(finalTotalLiquidity).gt(prevTotalLiquidity);
-              });
-              it("should reduce amount-to-repay", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const prevState = states[states.length - 2];
-                const finalState = states[states.length - 1];
-                const amountToRepayPrev = Math.max(prevState.converterDirect.amountsToRepay[0], prevState.converterReverse.amountsToRepay[0]);
-                const amountToRepayFinal = Math.max(finalState.converterDirect.amountsToRepay[0], finalState.converterReverse.amountsToRepay[0]);
-                expect(amountToRepayFinal).lt(amountToRepayPrev);
-              });
-              it("should reduce collateral amount", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const prevState = states[states.length - 2];
-                const finalState = states[states.length - 1];
-                const amountCollateralPrev = Math.max(prevState.converterDirect.collaterals[0], prevState.converterReverse.collaterals[0]);
-                const amountCollateralFinal = Math.max(finalState.converterDirect.collaterals[0], finalState.converterReverse.collaterals[0]);
-                expect(amountCollateralFinal).lt(amountCollateralPrev);
-              });
-
-              it("should not change vault.totalAssets too much", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const totalAssets0 = states[0].vault.totalAssets;
-                let sumUncoveredLoss = 0;
-                for (let i = 1; i < states.length; ++i) {
-                  sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
-                  const totalAssets = states[i].vault.totalAssets;
-                  expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
-                }
-              });
-            });
-            describe("Liquidator, don't enter to the pool", () => {
-              let snapshot: string;
-              let builderResults: IBuilderResults;
-              before(async function () {
-                snapshot = await TimeUtils.snapshot();
-
-                builderResults = await prepareStrategy();
-              });
-              after(async function () {
-                await TimeUtils.rollback(snapshot);
-              });
-
-              async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
-                return makeWithdrawTest(builderResults, {
-                  aggregator: MaticAddresses.TETU_LIQUIDATOR,
-                  movePricesUp: true,
-                  singleIteration: true,
-                  entryToPool: ENTRY_TO_POOL_DISABLED,
-                  planKind: PLAN_REPAY_SWAP_REPAY,
-                  countRebalances: 1
-                });
-              }
-              it("should reduce locked amount significantly", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const [stateLast, statePrev, ...rest] = [...states].reverse();
-                expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
-              });
-              it("should not change share price significantly", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const sharePrice0 = states[0].vault.sharePrice;
-                let sumUncoveredLoss = 0;
-                for (let i = 1; i < states.length; ++i) {
-                  sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
-                  const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
-                  expect(sharePrice0).approximately(adjustedSharePrice, strategyInfo.sharePriceDeviation, states[i].title);
-                }
-              });
-              it("should not enter to the pool at the end", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const [stateLast, ...rest] = [...states].reverse();
-                expect(stateLast.strategy.liquidity).eq(0);
-              });
-              it("should reduce amount-to-repay", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const prevState = states[states.length - 2];
-                const finalState = states[states.length - 1];
-                const amountToRepayPrev = Math.max(prevState.converterDirect.amountsToRepay[0], prevState.converterReverse.amountsToRepay[0]);
-                const amountToRepayFinal = Math.max(finalState.converterDirect.amountsToRepay[0], finalState.converterReverse.amountsToRepay[0]);
-                expect(amountToRepayFinal).lt(amountToRepayPrev);
-              });
-              it("should reduce collateral amount", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const prevState = states[states.length - 2];
-                const finalState = states[states.length - 1];
-                const amountCollateralPrev = Math.max(prevState.converterDirect.collaterals[0], prevState.converterReverse.collaterals[0]);
-                const amountCollateralFinal = Math.max(finalState.converterDirect.collaterals[0], finalState.converterReverse.collaterals[0]);
-                expect(amountCollateralFinal).lt(amountCollateralPrev);
-              });
-
-              it("should not change vault.totalAssets too much", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const totalAssets0 = states[0].vault.totalAssets;
-                let sumUncoveredLoss = 0;
-                for (let i = 1; i < states.length; ++i) {
-                  sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
-                  const totalAssets = states[i].vault.totalAssets;
-                  expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
-                }
-              });
-            });
-          });
-        });
-      });
-    });
-  });
-
-  describe('unfold debts using single iteration, 1inch @skip-on-coverage', function() {
-    let snapshotLocal: string;
-    before(async function() {
-      snapshotLocal = await TimeUtils.snapshot();
-      await HardhatUtils.switchToMostCurrentBlock(); // 1inch works on current block only
-
-      // we need to display full objects, so we use util.inspect, see
-      // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
-      require("util").inspect.defaultOptions.depth = null;
-      [signer, signer2] = await ethers.getSigners();
-    })
-
-    after(async function() {
-      await HardhatUtils.restoreBlockFromEnv();
-      await TimeUtils.rollback(snapshotLocal);
-    });
-
-    interface IStrategyInfo {
-      name: string,
-      sharePriceDeviation: number
-    }
-    const strategies: IStrategyInfo[] = [
-      { name: PLATFORM_ALGEBRA, sharePriceDeviation: 2e-5},
-      { name: PLATFORM_UNIV3, sharePriceDeviation: 2e-5},
-      { name: PLATFORM_KYBER, sharePriceDeviation: 2e-5},
-    ];
-
-    strategies.forEach(function (strategyInfo: IStrategyInfo) {
-      async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
-          strategyInfo.name,
-          signer,
-          signer2,
-          {kyberPid: KYBER_PID_DEFAULT_BLOCK}
-        );
-
-        // provide $1000 of insurance to compensate possible price decreasing
-        await PairBasedStrategyPrepareStateUtils.prepareInsurance(b, "1000");
-
-        return b;
-      }
-
-      describe(`${strategyInfo.name}`, () => {
         describe("Move prices up", () => {
-          describe("Liquidator, entry to pool at the end", () => {
-            let snapshot: string;
-            let r: IMakeWithdrawTestResults;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-
-              r = await callWithdrawSingleIteration();
+          let snapshotLevel0: string;
+          let builderResults: IBuilderResults;
+          let ptr: IPrepareWithdrawTestResults;
+          before(async function () {
+            snapshotLevel0 = await TimeUtils.snapshot();
+            builderResults = await prepareStrategy();
+            ptr = await prepareWithdrawTest(builderResults, {
+              movePricesUp: true,
+              pathTag: "#up1"
             });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshotLevel0);
+          });
 
-            async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
-              return makeWithdrawTest(await prepareStrategy(),
-                  {
-                    aggregator: MaticAddresses.AGG_ONEINCH_V5,
-                    movePricesUp: true,
+          describe('unfold debts using single iteration', function() {
+            describe("Use liquidator", () => {
+              describe("Liquidator, entry to pool at the end", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function callWithdrawSingleIteration(): Promise<IListStates> {
+                  return completeWithdrawTest(builderResults, {
                     singleIteration: true,
                     entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
                     planKind: PLAN_REPAY_SWAP_REPAY,
-                  }
-              );
-            }
+                    pathOut: ptr.pathOut + ".enter-to-pool.csv",
+                    states0: ptr.states
+                  });
+                }
 
-            it("should reduce locked amount significantly", async () => {
-              const [stateLast, statePrev, ...rest] = [...r.states].reverse();
-              expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
+                it("should not change share price significantly", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const sharePrice0 = states[0].vault.sharePrice;
+                  let sumUncoveredLoss = 0;
+                  for (let i = 1; i < states.length; ++i) {
+                    sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                    const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
+                    expect(sharePrice0).approximately(adjustedSharePrice, strategyInfo.sharePriceDeviation, states[i].title);
+                  }
+                });
+                it("should reduce locked amount significantly", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const [stateLast, statePrev, ...rest] = [...states].reverse();
+                  expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
+                });
+                it("should enter to the pool at the end", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const [stateLast, ...rest] = [...states].reverse();
+                  expect(stateLast.strategy.liquidity > 0).eq(true);
+                });
+                it("should put more at least half liquidity to the pool", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const prevTotalLiquidity = states[states.length - 2].strategy.liquidity;
+                  const finalTotalLiquidity = states[states.length - 1].strategy.liquidity;
+                  expect(finalTotalLiquidity).gt(prevTotalLiquidity / 2);
+                });
+                it("should reduce amount-to-repay", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const prevState = states[states.length - 2];
+                  const finalState = states[states.length - 1];
+                  const amountToRepayPrev = Math.max(prevState.converterDirect.amountsToRepay[0], prevState.converterReverse.amountsToRepay[0]);
+                  const amountToRepayFinal = Math.max(finalState.converterDirect.amountsToRepay[0], finalState.converterReverse.amountsToRepay[0]);
+                  expect(amountToRepayFinal).lt(amountToRepayPrev);
+                });
+                it("should reduce collateral amount", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const prevState = states[states.length - 2];
+                  const finalState = states[states.length - 1];
+                  const amountCollateralPrev = Math.max(prevState.converterDirect.collaterals[0], prevState.converterReverse.collaterals[0]);
+                  const amountCollateralFinal = Math.max(finalState.converterDirect.collaterals[0], finalState.converterReverse.collaterals[0]);
+                  expect(amountCollateralFinal).lt(amountCollateralPrev);
+                });
+
+                it("should not change vault.totalAssets too much", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const totalAssets0 = states[0].vault.totalAssets;
+                  let sumUncoveredLoss = 0;
+                  for (let i = 1; i < states.length; ++i) {
+                    sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                    const totalAssets = states[i].vault.totalAssets;
+                    expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
+                  }
+                });
+              });
+              describe("Liquidator, don't enter to the pool", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function callWithdrawSingleIteration(): Promise<IListStates> {
+                  return completeWithdrawTest(builderResults, {
+                    singleIteration: true,
+                    entryToPool: ENTRY_TO_POOL_DISABLED,
+                    planKind: PLAN_REPAY_SWAP_REPAY,
+                    pathOut: ptr.pathOut + ".dont-enter-to-poo.csv",
+                    states0: ptr.states
+                  });
+                }
+
+                it("should not change share price significantly", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const sharePrice0 = states[0].vault.sharePrice;
+                  let sumUncoveredLoss = 0;
+                  for (let i = 1; i < states.length; ++i) {
+                    sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                    const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
+                    expect(sharePrice0).approximately(adjustedSharePrice, strategyInfo.sharePriceDeviation, states[i].title);
+                  }
+                });
+                it("should reduce locked amount significantly", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const [stateLast, statePrev, ...rest] = [...states].reverse();
+                  expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
+                });
+                it("should not enter to the pool at the end", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const [stateLast, ...rest] = [...states].reverse();
+                  expect(stateLast.strategy.liquidity).eq(0);
+                });
+                it("should reduce amount-to-repay", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const prevState = states[states.length - 2];
+                  const finalState = states[states.length - 1];
+                  const amountToRepayPrev = Math.max(prevState.converterDirect.amountsToRepay[0], prevState.converterReverse.amountsToRepay[0]);
+                  const amountToRepayFinal = Math.max(finalState.converterDirect.amountsToRepay[0], finalState.converterReverse.amountsToRepay[0]);
+                  expect(amountToRepayFinal).lt(amountToRepayPrev);
+                });
+                it("should reduce collateral amount", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const prevState = states[states.length - 2];
+                  const finalState = states[states.length - 1];
+                  const amountCollateralPrev = Math.max(prevState.converterDirect.collaterals[0], prevState.converterReverse.collaterals[0]);
+                  const amountCollateralFinal = Math.max(finalState.converterDirect.collaterals[0], finalState.converterReverse.collaterals[0]);
+                  expect(amountCollateralFinal).lt(amountCollateralPrev);
+                });
+
+                it("should not change vault.totalAssets too much", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const totalAssets0 = states[0].vault.totalAssets;
+                  let sumUncoveredLoss = 0;
+                  for (let i = 1; i < states.length; ++i) {
+                    sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                    const totalAssets = states[i].vault.totalAssets;
+                    expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
+                  }
+                });
+              });
             });
-            // Share price can change here because prices are not changed in 1inch
-            it("should enter to the pool at the end", async () => {
-              const [stateLast, ...rest] = [...r.states].reverse();
-              expect(stateLast.strategy.liquidity > 0).eq(true);
+            describe("Use liquidator as aggregator", () => {
+              describe("Liquidator, entry to pool at the end", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function callWithdrawSingleIteration(): Promise<IListStates> {
+                  return completeWithdrawTest(builderResults, {
+                    aggregator: MaticAddresses.TETU_LIQUIDATOR,
+                    singleIteration: true,
+                    entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
+                    planKind: PLAN_REPAY_SWAP_REPAY,
+                    pathOut: ptr.pathOut + ".enter-to-pool-liquidator.csv",
+                    states0: ptr.states
+                  });
+                }
+
+                it("should reduce locked amount significantly", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const [stateLast, statePrev, ...rest] = [...states].reverse();
+                  expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
+                });
+                it("should not change share price significantly", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const sharePrice0 = states[0].vault.sharePrice;
+                  let sumUncoveredLoss = 0;
+                  for (let i = 1; i < states.length; ++i) {
+                    sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                    const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
+                    expect(sharePrice0).approximately(adjustedSharePrice, strategyInfo.sharePriceDeviation, states[i].title);
+                  }
+                });
+                it("should enter to the pool at the end", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const [stateLast, ...rest] = [...states].reverse();
+                  expect(stateLast.strategy.liquidity > 0).eq(true);
+                });
+                it("should put more liquidity to the pool", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const prevTotalLiquidity = states[states.length - 2].strategy.liquidity;
+                  const finalTotalLiquidity = states[states.length - 1].strategy.liquidity;
+                  expect(finalTotalLiquidity).gt(prevTotalLiquidity);
+                });
+                it("should reduce amount-to-repay", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const prevState = states[states.length - 2];
+                  const finalState = states[states.length - 1];
+                  const amountToRepayPrev = Math.max(prevState.converterDirect.amountsToRepay[0], prevState.converterReverse.amountsToRepay[0]);
+                  const amountToRepayFinal = Math.max(finalState.converterDirect.amountsToRepay[0], finalState.converterReverse.amountsToRepay[0]);
+                  expect(amountToRepayFinal).lt(amountToRepayPrev);
+                });
+                it("should reduce collateral amount", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const prevState = states[states.length - 2];
+                  const finalState = states[states.length - 1];
+                  const amountCollateralPrev = Math.max(prevState.converterDirect.collaterals[0], prevState.converterReverse.collaterals[0]);
+                  const amountCollateralFinal = Math.max(finalState.converterDirect.collaterals[0], finalState.converterReverse.collaterals[0]);
+                  expect(amountCollateralFinal).lt(amountCollateralPrev);
+                });
+                it("should not change vault.totalAssets too much", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const totalAssets0 = states[0].vault.totalAssets;
+                  let sumUncoveredLoss = 0;
+                  for (let i = 1; i < states.length; ++i) {
+                    sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                    const totalAssets = states[i].vault.totalAssets;
+                    expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
+                  }
+                });
+              });
+              describe("Liquidator, don't enter to the pool", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function callWithdrawSingleIteration(): Promise<IListStates> {
+                  return completeWithdrawTest(builderResults, {
+                    aggregator: MaticAddresses.TETU_LIQUIDATOR,
+                    singleIteration: true,
+                    entryToPool: ENTRY_TO_POOL_DISABLED,
+                    planKind: PLAN_REPAY_SWAP_REPAY,
+                    pathOut: ptr.pathOut + ".dont-enter-to-pool-liquidator.csv",
+                    states0: ptr.states
+                  });
+                }
+
+                it("should reduce locked amount significantly", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const [stateLast, statePrev, ...rest] = [...states].reverse();
+                  expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
+                });
+                it("should not change share price significantly", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const sharePrice0 = states[0].vault.sharePrice;
+                  let sumUncoveredLoss = 0;
+                  for (let i = 1; i < states.length; ++i) {
+                    sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                    const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
+                    expect(sharePrice0).approximately(adjustedSharePrice, strategyInfo.sharePriceDeviation, states[i].title);
+                  }
+                });
+                it("should not enter to the pool at the end", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const [stateLast, ...rest] = [...states].reverse();
+                  expect(stateLast.strategy.liquidity).eq(0);
+                });
+                it("should reduce amount-to-repay", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const prevState = states[states.length - 2];
+                  const finalState = states[states.length - 1];
+                  const amountToRepayPrev = Math.max(prevState.converterDirect.amountsToRepay[0], prevState.converterReverse.amountsToRepay[0]);
+                  const amountToRepayFinal = Math.max(finalState.converterDirect.amountsToRepay[0], finalState.converterReverse.amountsToRepay[0]);
+                  expect(amountToRepayFinal).lt(amountToRepayPrev);
+                });
+                it("should reduce collateral amount", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const prevState = states[states.length - 2];
+                  const finalState = states[states.length - 1];
+                  const amountCollateralPrev = Math.max(prevState.converterDirect.collaterals[0], prevState.converterReverse.collaterals[0]);
+                  const amountCollateralFinal = Math.max(finalState.converterDirect.collaterals[0], finalState.converterReverse.collaterals[0]);
+                  expect(amountCollateralFinal).lt(amountCollateralPrev);
+                });
+                it("should not change vault.totalAssets too much", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const totalAssets0 = states[0].vault.totalAssets;
+                  let sumUncoveredLoss = 0;
+                  for (let i = 1; i < states.length; ++i) {
+                    sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                    const totalAssets = states[i].vault.totalAssets;
+                    expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
+                  }
+                });
+              });
             });
-            it("should put more liquidity to the pool", async () => {
-              const prevTotalLiquidity = r.states[r.states.length - 2].strategy.liquidity;
-              const finalTotalLiquidity = r.states[r.states.length - 1].strategy.liquidity;
-              expect(finalTotalLiquidity).gt(prevTotalLiquidity);
+          });
+          describe('withdraw all by steps', function() {
+            describe("Use liquidator", () => {
+              describe('Enter to the pool after completion with pools proportions', function () {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeWithdrawAll(): Promise<IListStates> {
+                  return completeWithdrawTest(builderResults, {
+                    singleIteration: false,
+                    entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
+                    planKind: PLAN_SWAP_REPAY,
+                    propNotUnderlying18: BigNumber.from(Misc.MAX_UINT), // use pool's proportions
+                    states0: ptr.states,
+                    pathOut: ptr.pathOut + ".enter-to-pool.csv"
+                  });
+                }
+
+                it("should enter to the pool at the end", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const stateFirst = ret.states[0];
+                  const stateLast = ret.states[ret.states.length - 1];
+                  const statePrev = ret.states[ret.states.length - 2];
+                  expect(statePrev.strategy.liquidity).approximately(0, 100); // ignore dust
+                  expect(stateLast.strategy.liquidity / stateFirst.strategy.liquidity).gt(0.5);
+                });
+                it("should set expected investedAssets", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const stateFirst = ret.states[0];
+                  const stateLast = ret.states[ret.states.length - 1];
+                  expect(stateLast.strategy.investedAssets / stateFirst.strategy.investedAssets).gt(0.98);
+                });
+                it("should set expected totalAssets", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const uncoveredLoss = StateUtilsNum.getTotalUncoveredLoss(ret.states);
+                  const stateFirst = ret.states[0];
+                  const stateLast = ret.states[ret.states.length - 1];
+                  expect(stateLast.vault.totalAssets + uncoveredLoss).approximately(stateFirst.vault.totalAssets, 100);
+                });
+                it("should have withdrawDone=0 at the end", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const stateFirst = ret.states[0];
+                  const stateLast = ret.states[ret.states.length - 1];
+                  expect(stateLast.pairState?.withdrawDone).eq(0); // 1 is set only if the fuse is triggered ON
+                  expect(stateFirst.pairState?.withdrawDone).eq(0);
+                });
+                it("should set lastRebalanceNoSwap to 0 at the end", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const stateLast = ret.states[ret.states.length - 1];
+                  expect(stateLast.pairState?.lastRebalanceNoSwap).eq(0);
+                });
+              });
+              describe('Dont enter to the pool after completion', function () {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeWithdrawAll(): Promise<IListStates> {
+                  return completeWithdrawTest(builderResults, {
+                    singleIteration: false,
+                    entryToPool: ENTRY_TO_POOL_DISABLED,
+                    planKind: PLAN_SWAP_REPAY,
+                    pathOut: ptr.pathOut + ".dont-enter-pool.csv",
+                    states0: ptr.states
+                  });
+                }
+
+                it("should reduce locked amount to zero", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  console.log("stateLast", stateLast);
+                  expect(stateLast.lockedInConverter).eq(0);
+                });
+                it("should close all debts", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  console.log("stateLast", stateLast);
+                  expect(stateLast.converterDirect.amountsToRepay.length).eq(1);
+                  expect(stateLast.converterDirect.amountsToRepay[0]).eq(0);
+
+                  expect(stateLast.converterDirect.collaterals.length).eq(1);
+                  expect(stateLast.converterDirect.collaterals[0]).eq(0);
+
+                  expect(stateLast.converterReverse.amountsToRepay.length).eq(1);
+                  expect(stateLast.converterReverse.amountsToRepay[0]).eq(0);
+
+                  expect(stateLast.converterReverse.collaterals.length).eq(1);
+                  expect(stateLast.converterReverse.collaterals[0]).eq(0);
+
+                });
+                it("should not enter to the pool at the end", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  expect(stateLast.strategy.liquidity).eq(0);
+                });
+                it("should set investedAssets to zero", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  // coverLoss can compensate loss by transferring of USDC/USDT on strategy balance
+                  // so, even if we are going to convert all assets to underlying, we can have small amount of not-underlying on balance
+                  expect(stateLast.strategy.investedAssets).lt(1);
+                });
+                it("should receive totalAssets on balance", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  expect(stateLast.strategy.totalAssets).approximately(stateLast.strategy.assetBalance, 1);
+                });
+              });
             });
-            it("should reduce amount-to-repay", async () => {
-              const amountToRepayPrev = r.states[r.states.length - 2].converterDirect.amountsToRepay[0];
-              const amountToRepayFinal = r.states[r.states.length - 1].converterDirect.amountsToRepay[0]
-              expect(amountToRepayFinal).lt(amountToRepayPrev);
+            describe("Use liquidator as aggregator", () => {
+              describe('Dont enter to the pool', function () {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeWithdrawAll(): Promise<IListStates> {
+                  return completeWithdrawTest(builderResults, {
+                    singleIteration: false,
+                    aggregator: MaticAddresses.TETU_LIQUIDATOR,
+                    entryToPool: ENTRY_TO_POOL_DISABLED,
+                    planKind: PLAN_SWAP_REPAY,
+                    states0: ptr.states,
+                    pathOut: ptr.pathOut + ".dont-enter-pool-liquidator.csv"
+                  });
+                }
+
+                it("should reduce locked amount to zero", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  console.log("stateLast", stateLast);
+                  expect(stateLast.lockedInConverter).eq(0);
+                });
+                it("should close all debts", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  console.log("stateLast", stateLast);
+                  expect(stateLast.converterDirect.amountsToRepay.length).eq(1);
+                  expect(stateLast.converterDirect.amountsToRepay[0]).eq(0);
+
+                  expect(stateLast.converterDirect.collaterals.length).eq(1);
+                  expect(stateLast.converterDirect.collaterals[0]).eq(0);
+
+                  expect(stateLast.converterReverse.amountsToRepay.length).eq(1);
+                  expect(stateLast.converterReverse.amountsToRepay[0]).eq(0);
+
+                  expect(stateLast.converterReverse.collaterals.length).eq(1);
+                  expect(stateLast.converterReverse.collaterals[0]).eq(0);
+
+                });
+                it("should not enter to the pool at the end", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  expect(stateLast.strategy.liquidity).eq(0);
+                });
+                it("should set investedAssets to zero", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  // coverLoss can compensate loss by transferring of USDC/USDT on strategy balance
+                  // so, even if we are going to convert all assets to underlying, we can have small amount of not-underlying on balance
+                  expect(stateLast.strategy.investedAssets).lt(1);
+                });
+                it("should receive totalAssets on balance", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  expect(stateLast.strategy.totalAssets).approximately(stateLast.strategy.assetBalance, 1);
+                });
+              });
             });
-            it("should reduce collateral amount", async () => {
-              const amountCollateralPrev = r.states[r.states.length - 2].converterDirect.collaterals[0];
-              const amountCollateralFinal = r.states[r.states.length - 1].converterDirect.collaterals[0]
-              expect(amountCollateralFinal).lt(amountCollateralPrev);
+          });
+        });
+        describe("Move prices down", () => {
+          let snapshotLevel0: string;
+          let builderResults: IBuilderResults;
+          let ptr: IPrepareWithdrawTestResults;
+          before(async function () {
+            snapshotLevel0 = await TimeUtils.snapshot();
+
+            builderResults = await prepareStrategy();
+            ptr = await prepareWithdrawTest(builderResults, {
+              movePricesUp: false,
+              pathTag: "#down1",
+              countRebalances: strategyInfo.name === PLATFORM_ALGEBRA ? 1 : 2
+            });
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshotLevel0);
+          });
+          describe('unfold debts using single iteration', function() {
+            describe("Use liquidator", () => {
+              describe("Liquidator, entry to pool at the end", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function callWithdrawSingleIteration(): Promise<IListStates> {
+                  return completeWithdrawTest(builderResults, {
+                    singleIteration: true,
+                    entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
+                    planKind: PLAN_REPAY_SWAP_REPAY,
+                    pathOut: ptr.pathOut + ".enter-to-poo.csv",
+                    states0: ptr.states
+                  });
+                }
+
+                it("should reduce locked amount significantly", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const [stateLast, statePrev, ...rest] = [...states].reverse();
+                  expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
+                });
+                it("should not change share price significantly", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const sharePrice0 = states[0].vault.sharePrice;
+                  let sumUncoveredLoss = 0;
+                  for (let i = 1; i < states.length; ++i) {
+                    sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                    const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
+                    expect(sharePrice0).approximately(adjustedSharePrice, strategyInfo.sharePriceDeviation, states[i].title);
+                  }
+                });
+                it("should enter to the pool at the end", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const [stateLast, ...rest] = [...states].reverse();
+                  expect(stateLast.strategy.liquidity > 0).eq(true);
+                });
+                it("should put at least half liquidity to the pool", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const prevTotalLiquidity = states[states.length - 2].strategy.liquidity;
+                  const finalTotalLiquidity = states[states.length - 1].strategy.liquidity;
+                  expect(finalTotalLiquidity).gt(prevTotalLiquidity / 2);
+                });
+                it("should reduce amount-to-repay", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const prevState = states[states.length - 2];
+                  const finalState = states[states.length - 1];
+                  const amountToRepayPrev = Math.max(prevState.converterDirect.amountsToRepay[0], prevState.converterReverse.amountsToRepay[0]);
+                  const amountToRepayFinal = Math.max(finalState.converterDirect.amountsToRepay[0], finalState.converterReverse.amountsToRepay[0]);
+                  expect(amountToRepayFinal).lt(amountToRepayPrev);
+                });
+                it("should reduce collateral amount", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const prevState = states[states.length - 2];
+                  const finalState = states[states.length - 1];
+                  const amountCollateralPrev = Math.max(prevState.converterDirect.collaterals[0], prevState.converterReverse.collaterals[0]);
+                  const amountCollateralFinal = Math.max(finalState.converterDirect.collaterals[0], finalState.converterReverse.collaterals[0]);
+                  expect(amountCollateralFinal).lt(amountCollateralPrev);
+                });
+
+                it("should not change vault.totalAssets too much", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const totalAssets0 = states[0].vault.totalAssets;
+                  let sumUncoveredLoss = 0;
+                  for (let i = 1; i < states.length; ++i) {
+                    sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                    const totalAssets = states[i].vault.totalAssets;
+                    expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
+                  }
+                });
+              });
+              describe("Liquidator, don't enter to the pool", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function callWithdrawSingleIteration(): Promise<IListStates> {
+                  return completeWithdrawTest(builderResults, {
+                    singleIteration: true,
+                    entryToPool: ENTRY_TO_POOL_DISABLED,
+                    planKind: PLAN_REPAY_SWAP_REPAY,
+                    pathOut: ptr.pathOut + ".dont-enter-to-poo.csv",
+                    states0: ptr.states
+                  });
+                }
+
+                it("should reduce locked amount significantly", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const [stateLast, statePrev, ...rest] = [...states].reverse();
+                  expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
+                });
+                it("should not change share price significantly", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const sharePrice0 = states[0].vault.sharePrice;
+                  let sumUncoveredLoss = 0;
+                  for (let i = 1; i < states.length; ++i) {
+                    sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                    const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
+                    expect(sharePrice0).approximately(adjustedSharePrice, strategyInfo.sharePriceDeviation, states[i].title);
+                  }
+                });
+                it("should not enter to the pool at the end", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const [stateLast, ...rest] = [...states].reverse();
+                  expect(stateLast.strategy.liquidity).eq(0);
+                });
+                it("should reduce amount-to-repay", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const prevState = states[states.length - 2];
+                  const finalState = states[states.length - 1];
+                  const amountToRepayPrev = Math.max(prevState.converterDirect.amountsToRepay[0], prevState.converterReverse.amountsToRepay[0]);
+                  const amountToRepayFinal = Math.max(finalState.converterDirect.amountsToRepay[0], finalState.converterReverse.amountsToRepay[0]);
+                  expect(amountToRepayFinal).lt(amountToRepayPrev);
+                });
+                it("should reduce collateral amount", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const prevState = states[states.length - 2];
+                  const finalState = states[states.length - 1];
+                  const amountCollateralPrev = Math.max(prevState.converterDirect.collaterals[0], prevState.converterReverse.collaterals[0]);
+                  const amountCollateralFinal = Math.max(finalState.converterDirect.collaterals[0], finalState.converterReverse.collaterals[0]);
+                  expect(amountCollateralFinal).lt(amountCollateralPrev);
+                });
+                it("should not change vault.totalAssets too much", async () => {
+                  const {states} = await loadFixture(callWithdrawSingleIteration);
+                  const totalAssets0 = states[0].vault.totalAssets;
+                  let sumUncoveredLoss = 0;
+                  for (let i = 1; i < states.length; ++i) {
+                    sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                    const totalAssets = states[i].vault.totalAssets;
+                    expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
+                  }
+                });
+              });
+            });
+          });
+          describe('withdraw all by steps', function() {
+            describe("Use liquidator", () => {
+              describe('Enter to the pool after completion', function () {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeWithdrawAll(): Promise<IListStates> {
+                  return completeWithdrawTest(builderResults, {
+                    singleIteration: false,
+                    entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
+                    planKind: PLAN_SWAP_REPAY,
+                    propNotUnderlying18: BigNumber.from(Misc.MAX_UINT), // use pool's proportions
+                    states0: ptr.states,
+                    pathOut: ptr.pathOut + "enter-to-pool.csv"
+                  });
+                }
+
+                it("should enter to the pool at the end", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const stateFirst = ret.states[0];
+                  const stateLast = ret.states[ret.states.length - 1];
+                  const statePrev = ret.states[ret.states.length - 2];
+                  expect(statePrev.strategy.liquidity).approximately(0, 100); // ignore dust
+                  expect(stateLast.strategy.liquidity / stateFirst.strategy.liquidity).gt(0.5);
+                });
+                it("should set expected investedAssets", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const stateFirst = ret.states[0];
+                  const stateLast = ret.states[ret.states.length - 1];
+                  expect(stateLast.strategy.investedAssets / stateFirst.strategy.investedAssets).gt(0.98);
+                });
+                it("should set expected totalAssets", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const uncoveredLoss = StateUtilsNum.getTotalUncoveredLoss(ret.states);
+                  const stateFirst = ret.states[0];
+                  const stateLast = ret.states[ret.states.length - 1];
+                  expect(stateLast.vault.totalAssets + uncoveredLoss).approximately(stateFirst.vault.totalAssets, 100);
+                });
+              });
+              describe('Dont enter to the pool after completion', function () {
+                let snapshot: string;
+                let builderResults: IBuilderResults;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                  builderResults = await prepareStrategy();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeWithdrawAll(): Promise<IListStates> {
+                  return completeWithdrawTest(builderResults, {
+                    singleIteration: false,
+                    entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
+                    planKind: PLAN_SWAP_REPAY,
+                    states0: ptr.states,
+                    pathOut: ptr.pathOut + "dont-enter-to-pool.csv"
+                  });
+                }
+
+                it("should reduce locked amount to zero", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  console.log("stateLast", stateLast);
+                  expect(stateLast.lockedInConverter).eq(0);
+                });
+                it("should close all debts", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  console.log("stateLast", stateLast);
+                  expect(stateLast.converterDirect.amountsToRepay.length).eq(1);
+                  expect(stateLast.converterDirect.amountsToRepay[0]).eq(0);
+
+                  expect(stateLast.converterDirect.collaterals.length).eq(1);
+                  expect(stateLast.converterDirect.collaterals[0]).eq(0);
+
+                  expect(stateLast.converterReverse.amountsToRepay.length).eq(1);
+                  expect(stateLast.converterReverse.amountsToRepay[0]).eq(0);
+
+                  expect(stateLast.converterReverse.collaterals.length).eq(1);
+                  expect(stateLast.converterReverse.collaterals[0]).eq(0);
+
+                });
+                it("should not enter to the pool at the end", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  expect(stateLast.strategy.liquidity).eq(0);
+                });
+                it("should set investedAssets to zero", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  // coverLoss can compensate loss by transferring of USDC/USDT on strategy balance
+                  // so, even if we are going to convert all assets to underlying, we can have small amount of not-underlying on balance
+                  expect(stateLast.strategy.investedAssets).lt(5);
+                });
+                it("should receive totalAssets on balance", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  expect(stateLast.strategy.totalAssets).approximately(stateLast.strategy.assetBalance, 5);
+                });
+              });
+            });
+            describe("Use liquidator as aggregator", () => {
+              describe('Dont enter to the pool', function () {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeWithdrawAll(): Promise<IListStates> {
+                  return completeWithdrawTest(builderResults, {
+                    aggregator: MaticAddresses.TETU_LIQUIDATOR,
+                    singleIteration: false,
+                    entryToPool: ENTRY_TO_POOL_DISABLED,
+                    planKind: PLAN_SWAP_REPAY,
+                    states0: ptr.states,
+                    pathOut: ".enter-to-pool-liquidator.csv"
+                  });
+                }
+
+                it("should reduce locked amount to zero", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  console.log("stateLast", stateLast);
+                  expect(stateLast.lockedInConverter).eq(0);
+                });
+                it("should close all debts", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  console.log("stateLast", stateLast);
+                  expect(stateLast.converterDirect.amountsToRepay.length).eq(1);
+                  expect(stateLast.converterDirect.amountsToRepay[0]).eq(0);
+
+                  expect(stateLast.converterDirect.collaterals.length).eq(1);
+                  expect(stateLast.converterDirect.collaterals[0]).eq(0);
+
+                  expect(stateLast.converterReverse.amountsToRepay.length).eq(1);
+                  expect(stateLast.converterReverse.amountsToRepay[0]).eq(0);
+
+                  expect(stateLast.converterReverse.collaterals.length).eq(1);
+                  expect(stateLast.converterReverse.collaterals[0]).eq(0);
+
+                });
+                it("should not enter to the pool at the end", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  expect(stateLast.strategy.liquidity).eq(0);
+                });
+                it("should set investedAssets to zero", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  // coverLoss can compensate loss by transferring of USDC/USDT on strategy balance
+                  // so, even if we are going to convert all assets to underlying, we can have small amount of not-underlying on balance
+                  expect(stateLast.strategy.investedAssets).lt(20);
+                });
+                it("should receive totalAssets on balance", async () => {
+                  const ret = await loadFixture(makeWithdrawAll);
+                  const [stateLast, ...rest] = [...ret.states].reverse();
+                  expect(stateLast.strategy.totalAssets).approximately(stateLast.strategy.assetBalance, 20); // 10966 vs 10954
+                });
+              });
             });
           });
         });
       });
     });
   });
+
   describe('scb-792: Unfold debts using single iteration, MockSwapper changes prices', function() {
     let snapshotLocal: string;
     before(async function() {
@@ -905,35 +1183,48 @@ describe('PairBasedNoSwapIntTest', function() {
            * 2) Mock swapper is not used, prices are not changed. Enter to the pool.
            */
           async function callWithdrawTwoIterations(): Promise<ICallWithdrawTwoIterationsResults> {
-            const r1 = await makeWithdrawTest(
+            const ptr1 = await prepareWithdrawTest(
               builderResults,
               {
                 movePricesUp: true,
+                countRebalances: 1,
+                pathTag: strategyInfo.increaseOutput ? "#amountOutUpper" : "#amountOutLower"
+              },
+            );
+            const r1 = await completeWithdrawTest(
+              builderResults,
+              {
                 singleIteration: true,
                 entryToPool: ENTRY_TO_POOL_DISABLED,
                 planKind: PLAN_REPAY_SWAP_REPAY,
                 aggregator: MaticAddresses.TETU_LIQUIDATOR,
-                countRebalances: 1,
-                mockSwapper
+                mockSwapper,
+                pathOut: ptr1.pathOut,
+                states0: ptr1.states
               },
-              strategyInfo.increaseOutput ? "amountOutUpper" : "amountOutLower"
             );
 
             const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, builderResults.operator);
             const calcInvestedAssets = await converterStrategyBase.callStatic.calcInvestedAssets();
 
-            const r2 = await makeWithdrawTest(
+            const ptr2 = await prepareWithdrawTest(
               builderResults,
               {
                 skipOverCollateralStep: true,
-
                 movePricesUp: true,
+                pathTag: "#final"
+              },
+            );
+            const r2 = await completeWithdrawTest(
+              builderResults,
+              {
                 singleIteration: true,
                 entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
                 planKind: PLAN_REPAY_SWAP_REPAY,
                 aggregator: MaticAddresses.TETU_LIQUIDATOR,
+                states0: ptr2.states,
+                pathOut: ptr2.pathOut
               },
-              "final"
             );
 
             return {
@@ -1013,7 +1304,7 @@ describe('PairBasedNoSwapIntTest', function() {
     });
   });
 
-  describe('withdraw all by steps', function() {
+  describe('Full withdraw when fuse is triggered ON', function() {
     interface IStrategyInfo {
       name: string,
     }
@@ -1037,440 +1328,95 @@ describe('PairBasedNoSwapIntTest', function() {
       }
 
       describe(`${strategyInfo.name}`, () => {
-        describe("Use liquidator", () => {
-          describe('Move prices up, enter to pool after completion with pools proportions', function () {
-            let snapshot: string;
-            let builderResults: IBuilderResults;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-              builderResults = await prepareStrategy();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-
-            async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
-              return makeWithdrawTest(builderResults, {
-                movePricesUp: true,
-                singleIteration: false,
-                entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
-                planKind: PLAN_SWAP_REPAY,
-                propNotUnderlying18: BigNumber.from(Misc.MAX_UINT) // use pool's proportions
-              });
-            }
-
-            it("should enter to the pool at the end", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const stateFirst = ret.states[0];
-              const stateLast = ret.states[ret.states.length - 1];
-              const statePrev = ret.states[ret.states.length - 2];
-              expect(statePrev.strategy.liquidity).approximately(0, 100); // ignore dust
-              expect(stateLast.strategy.liquidity / stateFirst.strategy.liquidity).gt(0.5);
-            });
-            it("should set expected investedAssets", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const stateFirst = ret.states[0];
-              const stateLast = ret.states[ret.states.length - 1];
-              expect(stateLast.strategy.investedAssets / stateFirst.strategy.investedAssets).gt(0.98);
-            });
-            it("should set expected totalAssets", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const uncoveredLoss = StateUtilsNum.getTotalUncoveredLoss(ret.states);
-              const stateFirst = ret.states[0];
-              const stateLast = ret.states[ret.states.length - 1];
-              expect(stateLast.vault.totalAssets + uncoveredLoss).approximately(stateFirst.vault.totalAssets, 100);
-            });
-            it("should have withdrawDone=0 at the end", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const stateFirst = ret.states[0];
-              const stateLast = ret.states[ret.states.length - 1];
-              expect(stateLast.pairState?.withdrawDone).eq(0); // 1 is set only if the fuse is triggered ON
-              expect(stateFirst.pairState?.withdrawDone).eq(0);
-            });
-            it("should set lastRebalanceNoSwap to 0 at the end", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const stateLast = ret.states[ret.states.length - 1];
-              expect(stateLast.pairState?.lastRebalanceNoSwap).eq(0);
-            });
+          const pathOut = `./tmp/${strategyInfo.name}-full-withdraw-fuse-on.csv`;
+          let snapshot: string;
+          let builderResults: IBuilderResults;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+            builderResults = await initialize();
           });
-          describe('Move prices up, dont enter to pool after completion', function () {
-            let snapshot: string;
-            let builderResults: IBuilderResults;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-              builderResults = await prepareStrategy();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-            async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
-              return makeWithdrawTest(builderResults, {
-                movePricesUp: true,
-                singleIteration: false,
-                entryToPool: ENTRY_TO_POOL_DISABLED,
-                planKind: PLAN_SWAP_REPAY,
-              });
-            }
-
-            it("should reduce locked amount to zero", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              console.log("stateLast", stateLast);
-              expect(stateLast.lockedInConverter).eq(0);
-            });
-            it("should close all debts", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              console.log("stateLast", stateLast);
-              expect(stateLast.converterDirect.amountsToRepay.length).eq(1);
-              expect(stateLast.converterDirect.amountsToRepay[0]).eq(0);
-
-              expect(stateLast.converterDirect.collaterals.length).eq(1);
-              expect(stateLast.converterDirect.collaterals[0]).eq(0);
-
-              expect(stateLast.converterReverse.amountsToRepay.length).eq(1);
-              expect(stateLast.converterReverse.amountsToRepay[0]).eq(0);
-
-              expect(stateLast.converterReverse.collaterals.length).eq(1);
-              expect(stateLast.converterReverse.collaterals[0]).eq(0);
-
-            });
-            it("should not enter to the pool at the end", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              expect(stateLast.strategy.liquidity).eq(0);
-            });
-            it("should set investedAssets to zero", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              // coverLoss can compensate loss by transferring of USDC/USDT on strategy balance
-              // so, even if we are going to convert all assets to underlying, we can have small amount of not-underlying on balance
-              expect(stateLast.strategy.investedAssets).lt(1);
-            });
-            it("should receive totalAssets on balance", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              expect(stateLast.strategy.totalAssets).approximately(stateLast.strategy.assetBalance, 1);
-            });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
           });
-          describe('Move prices down, enter to pool after completion', function () {
-            let snapshot: string;
-            let builderResults: IBuilderResults;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-              builderResults = await prepareStrategy();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-            async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
-              return makeWithdrawTest(builderResults, {
-                movePricesUp: false,
-                singleIteration: false,
-                entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
-                planKind: PLAN_SWAP_REPAY,
-                propNotUnderlying18: BigNumber.from(Misc.MAX_UINT), // use pool's proportions
-                countRebalances: strategyInfo.name === PLATFORM_ALGEBRA ? 1 : 2
-              });
-            }
+          async function initialize(): Promise<IBuilderResults> {
+            const b = await prepareStrategy();
+            await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
+              b, {
+                  movePricesUp: true,
+                  countRebalances: 1,
+                  swapAmountRatio: DEFAULT_SWAP_AMOUNT_RATIO,
+                  amountToDepositBySigner2: "100",
+                  amountToDepositBySigner: "2000"
+                },
+                pathOut,
+                signer,
+                signer2,
+            );
+            // prepare fuse
+            await PairBasedStrategyPrepareStateUtils.prepareFuse(b, true);
+            // enable fuse
+            await b.strategy.connect(signer).rebalanceNoSwaps(true, {gasLimit: 10_000_000});
 
-            it("should enter to the pool at the end", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const stateFirst = ret.states[0];
-              const stateLast = ret.states[ret.states.length - 1];
-              const statePrev = ret.states[ret.states.length - 2];
-              expect(statePrev.strategy.liquidity).approximately(0, 100); // ignore dust
-              expect(stateLast.strategy.liquidity / stateFirst.strategy.liquidity).gt(0.5);
+            return b;
+          }
+
+          async function makeWithdrawAll(): Promise<IListStates> {
+            const ptr = await prepareWithdrawTest(builderResults, {
+              movePricesUp: true, // not used here
+              skipOverCollateralStep: true,
+              pathTag: "#full-withdraw-fuse-on"
             });
-            it("should set expected investedAssets", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const stateFirst = ret.states[0];
-              const stateLast = ret.states[ret.states.length - 1];
-              expect(stateLast.strategy.investedAssets / stateFirst.strategy.investedAssets).gt(0.98);
+
+            return completeWithdrawTest(builderResults, {
+              singleIteration: false,
+              entryToPool: ENTRY_TO_POOL_DISABLED,
+              planKind: PLAN_SWAP_REPAY,
+              propNotUnderlying18: BigNumber.from(0),
+              states0: ptr.states,
+              pathOut: ptr.pathOut
             });
-            it("should set expected totalAssets", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const uncoveredLoss = StateUtilsNum.getTotalUncoveredLoss(ret.states);
-              const stateFirst = ret.states[0];
-              const stateLast = ret.states[ret.states.length - 1];
-              expect(stateLast.vault.totalAssets + uncoveredLoss).approximately(stateFirst.vault.totalAssets, 100);
-            });
+          }
+
+          it("initially should set fuse triggered ON", async () => {
+            const state = await PackedData.getDefaultState(builderResults.strategy);
+            expect(state.fuseStatus > FUSE_OFF_1).eq(true);
           });
-          describe('Move prices down, dont enter to pool after completion', function () {
-            let snapshot: string;
-            let builderResults: IBuilderResults;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-              builderResults = await prepareStrategy();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-            async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
-              return makeWithdrawTest(builderResults, {
-                movePricesUp: false,
-                singleIteration: false,
-                entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
-                planKind: PLAN_SWAP_REPAY,
-                countRebalances: strategyInfo.name === PLATFORM_ALGEBRA ? 1 : 2
-              });
-            }
-
-            it("should reduce locked amount to zero", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              console.log("stateLast", stateLast);
-              expect(stateLast.lockedInConverter).eq(0);
-            });
-            it("should close all debts", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              console.log("stateLast", stateLast);
-              expect(stateLast.converterDirect.amountsToRepay.length).eq(1);
-              expect(stateLast.converterDirect.amountsToRepay[0]).eq(0);
-
-              expect(stateLast.converterDirect.collaterals.length).eq(1);
-              expect(stateLast.converterDirect.collaterals[0]).eq(0);
-
-              expect(stateLast.converterReverse.amountsToRepay.length).eq(1);
-              expect(stateLast.converterReverse.amountsToRepay[0]).eq(0);
-
-              expect(stateLast.converterReverse.collaterals.length).eq(1);
-              expect(stateLast.converterReverse.collaterals[0]).eq(0);
-
-            });
-            it("should not enter to the pool at the end", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              expect(stateLast.strategy.liquidity).eq(0);
-            });
-            it("should set investedAssets to zero", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              // coverLoss can compensate loss by transferring of USDC/USDT on strategy balance
-              // so, even if we are going to convert all assets to underlying, we can have small amount of not-underlying on balance
-              expect(stateLast.strategy.investedAssets).lt(5);
-            });
-            it("should receive totalAssets on balance", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              expect(stateLast.strategy.totalAssets).approximately(stateLast.strategy.assetBalance, 5);
-            });
+          it("initially should set withdrawDone = 0", async () => {
+            const state = await PackedData.getDefaultState(builderResults.strategy);
+            expect(state.withdrawDone).eq(0);
           });
-          describe("Full withdraw when fuse is triggered ON", () => {
-            const pathOut = `./tmp/${strategyInfo.name}-full-withdraw-fuse-on.csv`;
-            let snapshot: string;
-            let builderResults: IBuilderResults;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-              builderResults = await initialize();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-            async function initialize(): Promise<IBuilderResults> {
-              const b = await prepareStrategy();
-              await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
-                b, {
-                    movePricesUp: true,
-                    countRebalances: 1,
-                    swapAmountRatio: DEFAULT_SWAP_AMOUNT_RATIO,
-                    amountToDepositBySigner2: "100",
-                    amountToDepositBySigner: "2000"
-                  },
-                  pathOut,
-                  signer,
-                  signer2,
-              );
-              // prepare fuse
-              await PairBasedStrategyPrepareStateUtils.prepareFuse(b, true);
-              // enable fuse
-              await b.strategy.connect(signer).rebalanceNoSwaps(true, {gasLimit: 10_000_000});
-
-              return b;
-            }
-
-            async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
-              return makeWithdrawTest(builderResults, {
-                movePricesUp: true, // not used here
-                singleIteration: false,
-                entryToPool: ENTRY_TO_POOL_DISABLED,
-                planKind: PLAN_SWAP_REPAY,
-                propNotUnderlying18: BigNumber.from(0),
-                skipOverCollateralStep: true
-              });
-            }
-
-            it("initially should set fuse triggered ON", async () => {
-              const state = await PackedData.getDefaultState(builderResults.strategy);
-              expect(state.fuseStatus > FUSE_OFF_1).eq(true);
-            });
-            it("initially should set withdrawDone = 0", async () => {
-              const state = await PackedData.getDefaultState(builderResults.strategy);
-              expect(state.withdrawDone).eq(0);
-            });
-            it("should not enter to the pool at the end", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const stateLast = ret.states[ret.states.length - 1];
-              expect(stateLast.strategy.liquidity).lt(1000);
-            });
-            it("should set expected investedAssets", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const stateFirst = ret.states[0];
-              const stateLast = ret.states[ret.states.length - 1];
-              expect(stateLast.strategy.investedAssets).lt(1000);
-            });
-            it("should set expected totalAssets", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const uncoveredLoss = StateUtilsNum.getTotalUncoveredLoss(ret.states);
-              const stateFirst = ret.states[0];
-              const stateLast = ret.states[ret.states.length - 1];
-              expect(stateLast.vault.totalAssets + uncoveredLoss).approximately(stateFirst.vault.totalAssets, 100);
-            });
-            it("should set withdrawDone=1 at the end", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const stateFirst = ret.states[0];
-              const stateLast = ret.states[ret.states.length - 1];
-              expect(stateLast.pairState?.withdrawDone).eq(1);
-              expect(stateFirst.pairState?.withdrawDone).eq(0);
-            });
-            it("should set lastRebalanceNoSwap to 0 at the end", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const stateLast = ret.states[ret.states.length - 1];
-              expect(stateLast.pairState?.lastRebalanceNoSwap).eq(0);
-            });
+          it("should not enter to the pool at the end", async () => {
+            const ret = await loadFixture(makeWithdrawAll);
+            const stateLast = ret.states[ret.states.length - 1];
+            expect(stateLast.strategy.liquidity).lt(1000);
+          });
+          it("should set expected investedAssets", async () => {
+            const ret = await loadFixture(makeWithdrawAll);
+            const stateFirst = ret.states[0];
+            const stateLast = ret.states[ret.states.length - 1];
+            expect(stateLast.strategy.investedAssets).lt(1000);
+          });
+          it("should set expected totalAssets", async () => {
+            const ret = await loadFixture(makeWithdrawAll);
+            const uncoveredLoss = StateUtilsNum.getTotalUncoveredLoss(ret.states);
+            const stateFirst = ret.states[0];
+            const stateLast = ret.states[ret.states.length - 1];
+            expect(stateLast.vault.totalAssets + uncoveredLoss).approximately(stateFirst.vault.totalAssets, 100);
+          });
+          it("should set withdrawDone=1 at the end", async () => {
+            const ret = await loadFixture(makeWithdrawAll);
+            const stateFirst = ret.states[0];
+            const stateLast = ret.states[ret.states.length - 1];
+            expect(stateLast.pairState?.withdrawDone).eq(1);
+            expect(stateFirst.pairState?.withdrawDone).eq(0);
+          });
+          it("should set lastRebalanceNoSwap to 0 at the end", async () => {
+            const ret = await loadFixture(makeWithdrawAll);
+            const stateLast = ret.states[ret.states.length - 1];
+            expect(stateLast.pairState?.lastRebalanceNoSwap).eq(0);
           });
         });
-        describe("Use liquidator as aggregator", () => {
-          describe('Move prices up, dont enter to the pool', function () {
-            let snapshot: string;
-            let builderResults: IBuilderResults;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-              builderResults = await prepareStrategy();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-            async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
-              return makeWithdrawTest(builderResults, {
-                movePricesUp: true,
-                singleIteration: false,
-                aggregator: MaticAddresses.TETU_LIQUIDATOR,
-                entryToPool: ENTRY_TO_POOL_DISABLED,
-                planKind: PLAN_SWAP_REPAY,
-              });
-            }
-
-            it("should reduce locked amount to zero", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              console.log("stateLast", stateLast);
-              expect(stateLast.lockedInConverter).eq(0);
-            });
-            it("should close all debts", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              console.log("stateLast", stateLast);
-              expect(stateLast.converterDirect.amountsToRepay.length).eq(1);
-              expect(stateLast.converterDirect.amountsToRepay[0]).eq(0);
-
-              expect(stateLast.converterDirect.collaterals.length).eq(1);
-              expect(stateLast.converterDirect.collaterals[0]).eq(0);
-
-              expect(stateLast.converterReverse.amountsToRepay.length).eq(1);
-              expect(stateLast.converterReverse.amountsToRepay[0]).eq(0);
-
-              expect(stateLast.converterReverse.collaterals.length).eq(1);
-              expect(stateLast.converterReverse.collaterals[0]).eq(0);
-
-            });
-            it("should not enter to the pool at the end", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              expect(stateLast.strategy.liquidity).eq(0);
-            });
-            it("should set investedAssets to zero", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              // coverLoss can compensate loss by transferring of USDC/USDT on strategy balance
-              // so, even if we are going to convert all assets to underlying, we can have small amount of not-underlying on balance
-              expect(stateLast.strategy.investedAssets).lt(1);
-            });
-            it("should receive totalAssets on balance", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              expect(stateLast.strategy.totalAssets).approximately(stateLast.strategy.assetBalance, 1);
-            });
-          });
-          describe('Move prices down, dont enter to the pool', function () {
-            let snapshot: string;
-            let builderResults: IBuilderResults;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-              builderResults = await prepareStrategy();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-            async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
-              return makeWithdrawTest(builderResults, {
-                aggregator: MaticAddresses.TETU_LIQUIDATOR,
-                movePricesUp: false,
-                singleIteration: false,
-                entryToPool: ENTRY_TO_POOL_DISABLED,
-                planKind: PLAN_SWAP_REPAY,
-              });
-            }
-
-            it("should reduce locked amount to zero", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              console.log("stateLast", stateLast);
-              expect(stateLast.lockedInConverter).eq(0);
-            });
-            it("should close all debts", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              console.log("stateLast", stateLast);
-              expect(stateLast.converterDirect.amountsToRepay.length).eq(1);
-              expect(stateLast.converterDirect.amountsToRepay[0]).eq(0);
-
-              expect(stateLast.converterDirect.collaterals.length).eq(1);
-              expect(stateLast.converterDirect.collaterals[0]).eq(0);
-
-              expect(stateLast.converterReverse.amountsToRepay.length).eq(1);
-              expect(stateLast.converterReverse.amountsToRepay[0]).eq(0);
-
-              expect(stateLast.converterReverse.collaterals.length).eq(1);
-              expect(stateLast.converterReverse.collaterals[0]).eq(0);
-
-            });
-            it("should not enter to the pool at the end", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              expect(stateLast.strategy.liquidity).eq(0);
-            });
-            it("should set investedAssets to zero", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              // coverLoss can compensate loss by transferring of USDC/USDT on strategy balance
-              // so, even if we are going to convert all assets to underlying, we can have small amount of not-underlying on balance
-              expect(stateLast.strategy.investedAssets).lt(20);
-            });
-            it("should receive totalAssets on balance", async () => {
-              const ret = await loadFixture(makeWithdrawAll);
-              const [stateLast, ...rest] = [...ret.states].reverse();
-              expect(stateLast.strategy.totalAssets).approximately(stateLast.strategy.assetBalance, 20); // 10966 vs 10954
-            });
-          });
-        });
-      });
     });
-  });
-
-  describe('withdraw - pure swap', function() {
-// todo
   });
 
   describe('rebalanceNoSwaps', function() {
