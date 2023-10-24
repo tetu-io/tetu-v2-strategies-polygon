@@ -76,9 +76,7 @@ describe('IterationPlanLibTest', () => {
 //endregion before, after
 
 //region Unit tests
-  /**
-   * See 20230717.3.estimateSwapAmountForRepaySwapRepay.xlsx
-   */
+  /** See 20230717.3.estimateSwapAmountForRepaySwapRepay.xlsx */
   describe("estimateSwapAmountForRepaySwapRepay", () => {
     interface IEstimateSwapAmountParams {
       balancesAB: string[];
@@ -336,7 +334,7 @@ describe('IterationPlanLibTest', () => {
       expect((await facade.getEntryKind(entryData)).toNumber()).eq(PLAN_SWAP_REPAY_0)
     });
     it("should return PLAN_REPAY_SWAP_REPAY", async () => {
-      const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_REPAY_SWAP_REPAY_1, 1]);
+      const entryData = defaultAbiCoder.encode(['uint256', 'uint256', 'uint256'], [PLAN_REPAY_SWAP_REPAY_1, 1, 0]);
       expect((await facade.getEntryKind(entryData)).toNumber()).eq(PLAN_REPAY_SWAP_REPAY_1)
     });
     it("should return PLAN_SWAP_ONLY", async () => {

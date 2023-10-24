@@ -28,6 +28,7 @@ import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {PLAN_REPAY_SWAP_REPAY_1} from "../../../baseUT/AppConstants";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
+import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
 
 describe('AlgebraConverterStrategy reduce debt by agg test', function() {
 
@@ -150,10 +151,7 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
 
     expect(await s.needRebalance()).eq(false)
 
-    const planEntryData = defaultAbiCoder.encode(
-      ["uint256", "uint256"],
-      [PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT]
-    );
+    const planEntryData = buildEntryData1();
     const quote = await strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
     console.log('Quote', quote)

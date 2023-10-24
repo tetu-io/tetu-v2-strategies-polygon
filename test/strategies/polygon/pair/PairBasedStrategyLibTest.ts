@@ -25,6 +25,7 @@ import {
   PLAN_SWAP_REPAY_0
 } from "../../../baseUT/AppConstants";
 import {HARDHAT_NETWORK_ID, HardhatUtils} from '../../../baseUT/utils/HardhatUtils';
+import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
 
 describe('PairBasedStrategyLibTest', () => {
   /** prop0 + prop1 */
@@ -3363,8 +3364,8 @@ describe('PairBasedStrategyLibTest', () => {
         await expect(facade._extractProp(555, entryData)).revertedWith("TS-9 wrong value"); // WRONG_VALUE
       });
       it("should revert if proportion is greater than 1e18", async () => {
-        const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_REPAY_SWAP_REPAY_1, Misc.ONE18.add(1)]);
-        await expect(facade._extractProp(PLAN_SWAP_REPAY_0, entryData)).revertedWith("TS-30 invalid value"); // INVALID_VALUE
+        const entryData = buildEntryData1(BigNumber.from(0), "1.01");
+        await expect(facade._extractProp(PLAN_REPAY_SWAP_REPAY_1, entryData)).revertedWith("TS-30 invalid value"); // INVALID_VALUE
       });
     });
   });

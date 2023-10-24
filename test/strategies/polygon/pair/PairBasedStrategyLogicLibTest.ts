@@ -24,6 +24,7 @@ import {
   PLAN_SWAP_REPAY_0
 } from "../../../baseUT/AppConstants";
 import {HARDHAT_NETWORK_ID, HardhatUtils} from '../../../baseUT/utils/HardhatUtils';
+import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
 
 describe('PairBasedStrategyLogicLibTest', () => {
 //region Constants and variables
@@ -860,7 +861,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
         });
 
         function initWithdrawLocalTest(): Promise<IInitWithdrawLocalResults> {
-          const planEntryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT]);
+          const planEntryData = buildEntryData1();
           return callInitWithdrawLocal({
             tokens: [usdc, weth],
             liquidationThresholds: ["1", "2"],

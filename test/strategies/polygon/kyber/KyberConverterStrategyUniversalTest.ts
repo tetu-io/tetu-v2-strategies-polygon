@@ -26,7 +26,7 @@ import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatU
 import {
   KYBER_PID_DEFAULT_BLOCK,
   KYBER_USDC_DAI_PID_DEFAULT_BLOCK
-} from '../../../baseUT/strategies/PairBasedStrategyBuilder';
+} from '../../../baseUT/strategies/pair/PairBasedStrategyBuilder';
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 // const {expect} = chai;

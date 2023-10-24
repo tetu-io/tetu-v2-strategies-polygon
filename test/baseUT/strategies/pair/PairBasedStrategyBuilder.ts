@@ -1,41 +1,19 @@
-import {Misc} from "../../../scripts/utils/Misc";
-import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
+import {Misc} from "../../../../scripts/utils/Misc";
+import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
-import {
-    AlgebraConverterStrategy,
-    AlgebraConverterStrategy__factory, AlgebraLib,
-    ControllerV2,
-    ControllerV2__factory,
-    ConverterStrategyBase__factory, ConverterStrategyBaseLibFacade2,
-    IController__factory,
-    IERC20__factory,
-    IERC20Metadata,
-    IERC20Metadata__factory,
-    IRebalancingV2Strategy,
-    IRebalancingV2Strategy__factory,
-    ISetupPairBasedStrategy__factory,
-    IStrategyV2, ITetuConverter, ITetuConverter__factory, ITetuConverterCallback__factory,
-    ITetuLiquidator,
-    KyberConverterStrategy,
-    KyberConverterStrategy__factory, KyberLib,
-    StrategySplitterV2, SwapHelper,
-    TetuVaultV2,
-    UniswapV3ConverterStrategy,
-    UniswapV3ConverterStrategy__factory, UniswapV3Lib,
-    VaultFactory__factory
-} from "../../../typechain";
-import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../../scripts/utils/DeployerUtilsLocal";
-import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
-import {ConverterUtils} from "../utils/ConverterUtils";
-import {IDefaultState, PackedData} from "../utils/PackedData";
-import {PriceOracleImitatorUtils} from "../converter/PriceOracleImitatorUtils";
-import {UniversalTestUtils} from "../utils/UniversalTestUtils";
+import {AlgebraConverterStrategy, AlgebraConverterStrategy__factory, AlgebraLib, ControllerV2, ControllerV2__factory, ConverterStrategyBase__factory, ConverterStrategyBaseLibFacade2, IERC20__factory, IERC20Metadata, IERC20Metadata__factory, IRebalancingV2Strategy, IRebalancingV2Strategy__factory, ISetupPairBasedStrategy__factory, IStrategyV2, ITetuConverter, ITetuConverter__factory, ITetuLiquidator, KyberConverterStrategy, KyberConverterStrategy__factory, KyberLib, StrategySplitterV2, SwapHelper, TetuVaultV2, UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory, UniswapV3Lib, VaultFactory__factory} from "../../../../typechain";
+import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../../../scripts/utils/DeployerUtilsLocal";
+import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
+import {ConverterUtils} from "../../utils/ConverterUtils";
+import {IDefaultState, PackedData} from "../../utils/PackedData";
+import {PriceOracleImitatorUtils} from "../../converter/PriceOracleImitatorUtils";
+import {UniversalTestUtils} from "../../utils/UniversalTestUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {IStateParams} from "../utils/StateUtilsNum";
+import {IStateParams} from "../../utils/StateUtilsNum";
 import {parseUnits} from "ethers/lib/utils";
-import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
-import {MockHelper} from "../helpers/MockHelper";
+import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../AppPlatforms";
+import {MockHelper} from "../../helpers/MockHelper";
 
 /**
  * Kyber PID for most current block

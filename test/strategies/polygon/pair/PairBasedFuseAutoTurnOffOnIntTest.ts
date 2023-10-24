@@ -13,11 +13,11 @@ import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {expect} from "chai";
 import {IDefaultState, PackedData} from "../../../baseUT/utils/PackedData";
-import {IBuilderResults} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
+import {IBuilderResults} from "../../../baseUT/strategies/pair/PairBasedStrategyBuilder";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
-import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtures";
+import {PairStrategyFixtures} from "../../../baseUT/strategies/pair/PairStrategyFixtures";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
 import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 import {
   FUSE_IDX_LOWER_LIMIT_OFF,

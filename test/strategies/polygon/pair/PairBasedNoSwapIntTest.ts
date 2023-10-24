@@ -9,19 +9,17 @@ import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
-import {BigNumber, BytesLike} from "ethers";
-import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {PackedData} from "../../../baseUT/utils/PackedData";
-import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
+import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../../baseUT/strategies/pair/PairBasedStrategyBuilder";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
 import {differenceInPercentsNumLessThan} from "../../../baseUT/utils/MathUtils";
-import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtures";
+import {PairStrategyFixtures} from "../../../baseUT/strategies/pair/PairStrategyFixtures";
 import {
   IListStates,
   PairBasedStrategyPrepareStateUtils
-} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+} from "../../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {
   ENTRY_TO_POOL_DISABLED,
@@ -34,7 +32,11 @@ import {MockAggregatorUtils} from "../../../baseUT/mocks/MockAggregatorUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
-import {buildEntryData0, buildEntryData1, buildEntryData2} from "../../../baseUT/utils/EntryDataUtils";
+import {
+  DEFAULT_SWAP_AMOUNT_RATIO,
+  IPrepareWithdrawTestResults,
+  PairWithdrawByAggUtils
+} from "../../../baseUT/strategies/pair/PairWithdrawByAggUtils";
 
 /**
  * There are two kind of tests here:
@@ -43,10 +45,6 @@ import {buildEntryData0, buildEntryData1, buildEntryData2} from "../../../baseUT
  * Liquidator has modified price, but aggregator has unchanged current price different from the price in our test.
  */
 describe('PairBasedNoSwapIntTest', function() {
-//region Constants
-  const DEFAULT_SWAP_AMOUNT_RATIO = 0.3;
-//endregion Constants
-
 //region Variables
   let snapshotBefore: string;
 
@@ -69,169 +67,6 @@ describe('PairBasedNoSwapIntTest', function() {
     await TimeUtils.rollback(snapshotBefore);
   });
 //endregion before, after
-
-//region Withdraw-with-iterations impl
-  interface IWithdrawParams {
-    aggregator: string;
-    planEntryData: string;
-    entryToPool: number;
-    singleIteration: boolean;
-  }
-  async function makeFullWithdraw(b: IBuilderResults, p: IWithdrawParams, pathOut: string, states0: IStateNum[], mockSwapper?: MockSwapper): Promise<IListStates> {
-    const state = await PackedData.getDefaultState(b.strategy);
-    const strategyAsOperator = b.strategy.connect(b.operator);
-
-    const states = [...states0];
-    
-    let step = 0;
-    while (true) {
-      const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(p.planEntryData);
-      console.log("makeFullWithdraw.quote", quote);
-
-      let swapData: BytesLike = "0x";
-      const tokenToSwap = quote.amountToSwap.eq(0) ? Misc.ZERO_ADDRESS : quote.tokenToSwap;
-      const amountToSwap = quote.amountToSwap.eq(0) ? 0 : quote.amountToSwap;
-
-      if (tokenToSwap !== Misc.ZERO_ADDRESS) {
-        if (p.aggregator === MaticAddresses.AGG_ONEINCH_V5) {
-          swapData = await AggregatorUtils.buildSwapTransactionData(
-            quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-            quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-            quote.amountToSwap,
-            strategyAsOperator.address,
-          );
-        } else if (p.aggregator === MaticAddresses.TETU_LIQUIDATOR) {
-          swapData = AggregatorUtils.buildTxForSwapUsingLiquidatorAsAggregator({
-            tokenIn: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-            tokenOut: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-            amount: quote.amountToSwap,
-            slippage: BigNumber.from(5_000)
-          });
-          console.log("swapData for tetu liquidator", swapData);
-        }
-      }
-      console.log("makeFullWithdraw.withdrawByAggStep.execute --------------------------------");
-      console.log("tokenToSwap", tokenToSwap);
-      console.log("AGGREGATOR", p.aggregator);
-      console.log("amountToSwap", amountToSwap);
-      console.log("swapData", swapData);
-      console.log("swapData.length", swapData.length);
-      console.log("planEntryData", p.planEntryData);
-      console.log("ENTRY_TO_POOL_IS_ALLOWED", p.entryToPool);
-
-      if (mockSwapper) {
-        // temporary replace swappery by mocked one
-        await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, mockSwapper.address);
-      }
-
-      const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
-          tokenToSwap,
-          p.aggregator,
-          amountToSwap,
-          swapData,
-          p.planEntryData,
-          p.entryToPool,
-          {gasLimit: 19_000_000}
-      );
-      const eventsSet = await CaptureEvents.makeWithdrawByAggStep(
-        strategyAsOperator,
-        tokenToSwap,
-        p.aggregator,
-        amountToSwap,
-        swapData,
-        p.planEntryData,
-        p.entryToPool,
-      );
-      console.log(`unfoldBorrows.withdrawByAggStep.FINISH --------------------------------`);
-
-      states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `u${++step}`, {eventsSet}));
-      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
-
-      if (mockSwapper) {
-        // restore original swapper
-        await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, b.swapper);
-      }
-
-
-      if (p.singleIteration || completed) break;
-    }
-
-    return {states: states};
-  }
-
-  interface IPrepareWithdrawTestParams {
-    pathTag: string;
-    movePricesUp: boolean;
-
-    /** 2 by default */
-    countRebalances?: number;
-
-    skipOverCollateralStep?: boolean;
-  }
-  interface IPrepareWithdrawTestResults {
-    pathOut: string;
-    states: IStateNum[];
-  }
-
-  interface ICompleteWithdrawTestParams {
-    entryToPool: number;
-    planKind: number;
-    singleIteration: boolean;
-    propNotUnderlying?: string; // use Number.MAX_SAFE_INTEGER for MAX_UINT
-    pathOut: string;
-    states0: IStateNum[];
-
-    /** ZERO by default */
-    aggregator?: string;
-    mockSwapper?: MockSwapper;
-  }
-
-  async function prepareWithdrawTest(b: IBuilderResults, p: IPrepareWithdrawTestParams): Promise<IPrepareWithdrawTestResults> {
-    const platform = await ConverterStrategyBase__factory.connect(b.strategy.address, signer).PLATFORM();
-    const pathOut = `./tmp/${platform}-${p.pathTag}.csv`;
-
-    const states: IStateNum[] = p.skipOverCollateralStep
-      ? []
-      : (await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
-        b,
-        {
-          countRebalances: p.countRebalances ?? 2,
-          movePricesUp: p.movePricesUp,
-          swapAmountRatio: DEFAULT_SWAP_AMOUNT_RATIO,
-          amountToDepositBySigner2: "100",
-          amountToDepositBySigner: "10000",
-        },
-        pathOut,
-        signer,
-        signer2,
-      )).states;
-
-    return {states, pathOut};
-  }
-
-  async function completeWithdrawTest(b: IBuilderResults, p: ICompleteWithdrawTestParams): Promise<IListStates> {
-    const {states} = await makeFullWithdraw(
-      b,
-      {
-        singleIteration: p.singleIteration,
-        aggregator: p.aggregator ?? Misc.ZERO_ADDRESS,
-        entryToPool: p.entryToPool,
-        planEntryData: p.planKind === PLAN_REPAY_SWAP_REPAY_1
-          ? buildEntryData1(BigNumber.from(0), p.propNotUnderlying)
-          : p.planKind === PLAN_SWAP_REPAY_0
-            ? buildEntryData0(p.propNotUnderlying)
-            : p.planKind === PLAN_SWAP_ONLY_2
-              ? buildEntryData2(p.propNotUnderlying)
-              : "0x",
-      },
-      p.pathOut,
-      p.states0,
-      p.mockSwapper
-    );
-
-    return {states};
-  }
-//endregion Withdraw-with-iterations impl
 
 //region Unit tests
   describe('Change prices', function() {
@@ -278,7 +113,7 @@ describe('PairBasedNoSwapIntTest', function() {
           before(async function () {
             snapshotLevel0 = await TimeUtils.snapshot();
             builderResults = await prepareStrategy();
-            ptr = await prepareWithdrawTest(builderResults, {
+            ptr = await PairWithdrawByAggUtils.prepareWithdrawTest(signer, signer2, builderResults, {
               movePricesUp: true,
               pathTag: "#up1"
             });
@@ -299,7 +134,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 });
 
                 async function callWithdrawSingleIteration(): Promise<IListStates> {
-                  return completeWithdrawTest(builderResults, {
+                  return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
                     singleIteration: true,
                     entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
                     planKind: PLAN_REPAY_SWAP_REPAY_1,
@@ -372,7 +207,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 });
 
                 async function callWithdrawSingleIteration(): Promise<IListStates> {
-                  return completeWithdrawTest(builderResults, {
+                  return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
                     singleIteration: true,
                     entryToPool: ENTRY_TO_POOL_DISABLED,
                     planKind: PLAN_REPAY_SWAP_REPAY_1,
@@ -441,7 +276,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 });
 
                 async function callWithdrawSingleIteration(): Promise<IListStates> {
-                  return completeWithdrawTest(builderResults, {
+                  return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
                     aggregator: MaticAddresses.TETU_LIQUIDATOR,
                     singleIteration: true,
                     entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
@@ -514,7 +349,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 });
 
                 async function callWithdrawSingleIteration(): Promise<IListStates> {
-                  return completeWithdrawTest(builderResults, {
+                  return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
                     aggregator: MaticAddresses.TETU_LIQUIDATOR,
                     singleIteration: true,
                     entryToPool: ENTRY_TO_POOL_DISABLED,
@@ -585,7 +420,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 });
 
                 async function makeWithdrawAll(): Promise<IListStates> {
-                  return completeWithdrawTest(builderResults, {
+                  return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
                     singleIteration: false,
                     entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
                     planKind: PLAN_SWAP_REPAY_0,
@@ -639,7 +474,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 });
 
                 async function makeWithdrawAll(): Promise<IListStates> {
-                  return completeWithdrawTest(builderResults, {
+                  return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
                     singleIteration: false,
                     entryToPool: ENTRY_TO_POOL_DISABLED,
                     planKind: PLAN_SWAP_REPAY_0,
@@ -702,7 +537,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 });
 
                 async function makeWithdrawAll(): Promise<IListStates> {
-                  return completeWithdrawTest(builderResults, {
+                  return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
                     singleIteration: false,
                     aggregator: MaticAddresses.TETU_LIQUIDATOR,
                     entryToPool: ENTRY_TO_POOL_DISABLED,
@@ -765,7 +600,7 @@ describe('PairBasedNoSwapIntTest', function() {
             snapshotLevel0 = await TimeUtils.snapshot();
 
             builderResults = await prepareStrategy();
-            ptr = await prepareWithdrawTest(builderResults, {
+            ptr = await PairWithdrawByAggUtils.prepareWithdrawTest(signer, signer2, builderResults, {
               movePricesUp: false,
               pathTag: "#down1",
               countRebalances: strategyInfo.name === PLATFORM_ALGEBRA ? 1 : 2
@@ -786,7 +621,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 });
 
                 async function callWithdrawSingleIteration(): Promise<IListStates> {
-                  return completeWithdrawTest(builderResults, {
+                  return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
                     singleIteration: true,
                     entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
                     planKind: PLAN_REPAY_SWAP_REPAY_1,
@@ -859,7 +694,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 });
 
                 async function callWithdrawSingleIteration(): Promise<IListStates> {
-                  return completeWithdrawTest(builderResults, {
+                  return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
                     singleIteration: true,
                     entryToPool: ENTRY_TO_POOL_DISABLED,
                     planKind: PLAN_REPAY_SWAP_REPAY_1,
@@ -929,7 +764,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 });
 
                 async function makeWithdrawAll(): Promise<IListStates> {
-                  return completeWithdrawTest(builderResults, {
+                  return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
                     singleIteration: false,
                     entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
                     planKind: PLAN_SWAP_REPAY_0,
@@ -971,7 +806,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 });
 
                 async function makeWithdrawAll(): Promise<IListStates> {
-                  return completeWithdrawTest(builderResults, {
+                  return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
                     singleIteration: false,
                     entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
                     planKind: PLAN_SWAP_REPAY_0,
@@ -1033,7 +868,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 });
 
                 async function makeWithdrawAll(): Promise<IListStates> {
-                  return completeWithdrawTest(builderResults, {
+                  return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
                     aggregator: MaticAddresses.TETU_LIQUIDATOR,
                     singleIteration: false,
                     entryToPool: ENTRY_TO_POOL_DISABLED,
@@ -1186,7 +1021,7 @@ describe('PairBasedNoSwapIntTest', function() {
            * 2) Mock swapper is not used, prices are not changed. Enter to the pool.
            */
           async function callWithdrawTwoIterations(): Promise<ICallWithdrawTwoIterationsResults> {
-            const ptr1 = await prepareWithdrawTest(
+            const ptr1 = await PairWithdrawByAggUtils.prepareWithdrawTest(signer, signer2,
               builderResults,
               {
                 movePricesUp: true,
@@ -1194,7 +1029,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 pathTag: strategyInfo.increaseOutput ? "#amountOutUpper" : "#amountOutLower"
               },
             );
-            const r1 = await completeWithdrawTest(
+            const r1 = await PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2,
               builderResults,
               {
                 singleIteration: true,
@@ -1210,7 +1045,7 @@ describe('PairBasedNoSwapIntTest', function() {
             const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, builderResults.operator);
             const calcInvestedAssets = await converterStrategyBase.callStatic.calcInvestedAssets();
 
-            const ptr2 = await prepareWithdrawTest(
+            const ptr2 = await PairWithdrawByAggUtils.prepareWithdrawTest(signer, signer2,
               builderResults,
               {
                 skipOverCollateralStep: true,
@@ -1218,7 +1053,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 pathTag: "#final"
               },
             );
-            const r2 = await completeWithdrawTest(
+            const r2 = await PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2,
               builderResults,
               {
                 singleIteration: true,
@@ -1307,13 +1142,13 @@ describe('PairBasedNoSwapIntTest', function() {
     });
   });
 
-  describe('Full withdraw when fuse is triggered ON', function() {
+  describe('Twisted debts', function() {
     interface IStrategyInfo {
       name: string,
     }
     const strategies: IStrategyInfo[] = [
-      { name: PLATFORM_ALGEBRA, },
       { name: PLATFORM_UNIV3, },
+      { name: PLATFORM_ALGEBRA, },
       { name: PLATFORM_KYBER, }
     ];
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
@@ -1331,46 +1166,48 @@ describe('PairBasedNoSwapIntTest', function() {
       }
 
       describe(`${strategyInfo.name}`, () => {
-          const pathOut = `./tmp/${strategyInfo.name}-full-withdraw-fuse-on.csv`;
-          let snapshot: string;
-          let builderResults: IBuilderResults;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-            builderResults = await initialize();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
-          async function initialize(): Promise<IBuilderResults> {
-            const b = await prepareStrategy();
-            await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
-              b, {
-                  movePricesUp: true,
-                  countRebalances: 1,
-                  swapAmountRatio: DEFAULT_SWAP_AMOUNT_RATIO,
-                  amountToDepositBySigner2: "100",
-                  amountToDepositBySigner: "2000"
-                },
-                pathOut,
-                signer,
-                signer2,
-            );
-            // prepare fuse
-            await PairBasedStrategyPrepareStateUtils.prepareFuse(b, true);
-            // enable fuse
-            await b.strategy.connect(signer).rebalanceNoSwaps(true, {gasLimit: 10_000_000});
+        const pathOut = `./tmp/${strategyInfo.name}-full-withdraw-fuse-on.csv`;
+        let snapshot: string;
+        let builderResults: IBuilderResults;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+          builderResults = await prepareTwistedDebts();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
 
-            return b;
-          }
+        async function prepareTwistedDebts(): Promise<IBuilderResults> {
+          const b = await prepareStrategy();
+          await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
+            b, {
+              movePricesUp: true,
+              countRebalances: 1,
+              swapAmountRatio: DEFAULT_SWAP_AMOUNT_RATIO,
+              amountToDepositBySigner2: "100",
+              amountToDepositBySigner: "2000"
+            },
+            pathOut,
+            signer,
+            signer2,
+          );
+          // prepare fuse
+          await PairBasedStrategyPrepareStateUtils.prepareFuse(b, true);
+          // enable fuse
+          await b.strategy.connect(signer).rebalanceNoSwaps(true, {gasLimit: 10_000_000});
 
+          return b;
+        }
+
+        describe('Full withdraw when fuse is triggered ON', function () {
           async function makeWithdrawAll(): Promise<IListStates> {
-            const ptr = await prepareWithdrawTest(builderResults, {
+            const ptr = await PairWithdrawByAggUtils.prepareWithdrawTest(signer, signer2, builderResults, {
               movePricesUp: true, // not used here
               skipOverCollateralStep: true,
               pathTag: "#full-withdraw-fuse-on"
             });
 
-            return completeWithdrawTest(builderResults, {
+            return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
               singleIteration: false,
               entryToPool: ENTRY_TO_POOL_DISABLED,
               planKind: PLAN_SWAP_REPAY_0,
@@ -1419,6 +1256,7 @@ describe('PairBasedNoSwapIntTest', function() {
             expect(stateLast.pairState?.lastRebalanceNoSwap).eq(0);
           });
         });
+      });
     });
   });
 

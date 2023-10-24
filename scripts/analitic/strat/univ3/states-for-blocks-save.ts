@@ -18,7 +18,7 @@ import { PackedData } from '../../../../test/baseUT/utils/PackedData';
 import { DeployerUtilsLocal } from '../../../utils/DeployerUtilsLocal';
 import {
   PairBasedStrategyPrepareStateUtils
-} from "../../../../test/baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+} from "../../../../test/baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
 import {InjectUtils} from "../../../../test/baseUT/strategies/InjectUtils";
 import { AggregatorUtils } from '../../../../test/baseUT/utils/AggregatorUtils';
 import { CaptureEvents } from '../../../../test/baseUT/strategies/CaptureEvents';

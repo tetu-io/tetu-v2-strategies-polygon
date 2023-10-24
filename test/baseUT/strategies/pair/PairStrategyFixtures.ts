@@ -1,9 +1,9 @@
 /* tslint:disable:no-trailing-whitespace */
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
+import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {IBuilderResults, PairBasedStrategyBuilder} from "./PairBasedStrategyBuilder";
-import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
-import {MockSwapper} from "../../../typechain";
+import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../AppPlatforms";
+import {MockSwapper} from "../../../../typechain";
 
 interface IBuildPairStrategyParams {
   notUnderlying?: string; // default is MaticAddresses.USDT_TOKEN

@@ -23,7 +23,7 @@ import {TokenUtils} from "../../scripts/utils/TokenUtils";
 import {InjectUtils} from "../baseUT/strategies/InjectUtils";
 import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
 import {Misc} from "../../scripts/utils/Misc";
-import {PairBasedStrategyPrepareStateUtils} from "../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {PairBasedStrategyPrepareStateUtils} from "../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
 
 describe("Scb830 @skip-on-coverage", () => {
   const BLOCK = 49049236;

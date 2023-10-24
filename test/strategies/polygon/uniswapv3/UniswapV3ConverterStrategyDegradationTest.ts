@@ -28,6 +28,7 @@ import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY_1} from "../../../baseUT/AppConstants";
+import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
 
 /**
  * Study noSwap-rebalance.
@@ -193,11 +194,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
         listStates.push(stateStep);
         console.log(`state ${i}`, stateStep);
 
-        await StateUtilsNum.saveListStatesToCSVColumns(
-          './tmp/degradation.csv',
-          listStates,
-          stateParams
-        );
+        await StateUtilsNum.saveListStatesToCSVColumns('./tmp/degradation.csv', listStates, stateParams);
       }
     })
   })
@@ -211,9 +208,9 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
       // const AGGREGATOR = MaticAddresses.AGG_ONEINCH_V5; // use real aggregator for swaps
       const AGGREGATOR = Misc.ZERO_ADDRESS; // use liquidator for swaps
 
-      const planEntryData = defaultAbiCoder.encode(
-          ["uint256", "uint256"],
-          [PLAN_REPAY_SWAP_REPAY_1, 0] // we need 100% of underlying
+      const planEntryData = buildEntryData1(
+        BigNumber.from(0),
+        "0" // we need 100% of underlying
       );
 
       const AMOUNT_TO_DEPOSIT= "1000";

@@ -10,7 +10,7 @@ import {ConverterAdaptersHelper} from "../converter/ConverterAdaptersHelper";
 import {BigNumber} from "ethers";
 import {PackedData} from "./PackedData";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../strategies/AppPlatforms";
-import {PairStrategyLiquidityUtils} from "../strategies/PairStrategyLiquidityUtils";
+import {PairStrategyLiquidityUtils} from "../strategies/pair/PairStrategyLiquidityUtils";
 import {CaptureEvents, IEventsSet, ISummaryFromEventsSet} from "../strategies/CaptureEvents";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 

@@ -1,4 +1,4 @@
-import {PairBasedStrategyPrepareStateUtils} from "../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {PairBasedStrategyPrepareStateUtils} from "../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
 import {
   ConverterStrategyBase__factory,
   IRebalancingV2Strategy__factory,
@@ -22,6 +22,7 @@ import {ethers} from "hardhat";
 import {CaptureEvents} from "../baseUT/strategies/CaptureEvents";
 import fs from "fs";
 import {InjectUtils} from "../baseUT/strategies/InjectUtils";
+import {buildEntryData1} from "../baseUT/utils/EntryDataUtils";
 
 describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
   describe("SCB-777: withdrawByAgg, TC-29", () => {
@@ -123,10 +124,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
 
       const state = await PackedData.getDefaultState(strategyAsOperator);
 
-      const planEntryData = defaultAbiCoder.encode(
-        ["uint256", "uint256"],
-        [PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT]
-      );
+      const planEntryData = buildEntryData1();
 
       console.log("unfoldBorrows.quoteWithdrawByAgg.callStatic --------------------------------");
       const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
@@ -323,10 +321,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
       const signer = await DeployerUtilsLocal.impersonate(SENDER);
       const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, signer);
 
-      const planEntryData = defaultAbiCoder.encode(
-        ["uint256", "uint256"],
-        [PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT]
-      );
+      const planEntryData = buildEntryData1();
 
       const block = (await ethers.provider.getBlock("latest")).number;
       console.log("block", block);
@@ -388,7 +383,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
       const signer = await DeployerUtilsLocal.impersonate(SENDER);
       const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, signer);
       const aggregator = MaticAddresses.TETU_LIQUIDATOR;
-      const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT]);
+      const planEntryData = buildEntryData1();
       const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
       console.log("quote", quote);
     });
@@ -410,7 +405,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
 
       const state = await PackedData.getDefaultState(strategyAsOperator);
 
-      const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT]);
+      const planEntryData = buildEntryData1();
 
       console.log("unfoldBorrows.quoteWithdrawByAgg.callStatic --------------------------------");
       const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
