@@ -63,9 +63,9 @@ const argv = require('yargs/yargs')()
 async function main() {
   console.log('Strategies NSR and debt rebalancer');
 
-  if (!['localhost', 'matic'].includes(hre.network.name)) {
+  if (!['localhost', 'matic', 'base'].includes(hre.network.name)) {
     console.log('Unsupported network', hre.network.name);
-    console.log('Only localhost and matic networks supported');
+    console.log('Only localhost, matic and base networks supported');
     process.exit(-1);
   }
 
