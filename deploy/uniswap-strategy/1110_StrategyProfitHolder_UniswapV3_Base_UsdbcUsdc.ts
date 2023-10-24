@@ -5,7 +5,7 @@ import {ethers} from "hardhat";
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const { deployments } = hre;
-  const strategyAddress = (await deployments.get('Strategy_UniswapV3ConverterStrategy_UsdcUsdt')).address
+  const strategyAddress = (await deployments.get('Strategy_UniswapV3ConverterStrategy_Base_UsdbcUsdc')).address
   const strategy = await ethers.getContractAt('UniswapV3ConverterStrategy', strategyAddress)
   const state = await strategy.getDefaultState()
   await hardhatDeploy(
@@ -13,12 +13,12 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     'StrategyProfitHolder',
     true,
     undefined,
-    'StrategyProfitHolder_UniswapV3_UsdcUsdt',
+    'StrategyProfitHolder_UniswapV3_Base_UsdbcUsdc',
       [strategyAddress, [state[0][0], state[0][1]]],
     true
   )
 };
 export default func;
-func.tags = ['StrategyProfitHolder_UniswapV3_UsdcUsdt'];
-func.dependencies = ['Strategy_UniswapV3ConverterStrategy_UsdcUsdt'];
-func.skip = async hre => (await hre.getChainId()) !== '137'
+func.tags = ['StrategyProfitHolder_UniswapV3_Base_UsdbcUsdc'];
+func.dependencies = ['Strategy_UniswapV3ConverterStrategy_Base_UsdbcUsdc'];
+func.skip = async hre => (await hre.getChainId()) !== '8453'

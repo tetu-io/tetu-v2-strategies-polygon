@@ -63,3 +63,4 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
 export default func;
 func.tags = ['Strategy_UniswapV3ConverterStrategy_UsdcUsdt'];
 func.dependencies = ['UniswapV3ConverterStrategy'];
+func.skip = async hre => (await hre.getChainId()) !== '137'

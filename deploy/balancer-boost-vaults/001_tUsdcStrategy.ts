@@ -21,3 +21,4 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
 };
 export default func;
 func.tags = ['tUsdcStrategy'];
+func.skip = async hre => (await hre.getChainId()) !== '137'
