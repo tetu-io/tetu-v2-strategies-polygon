@@ -110,4 +110,37 @@ contract PairBasedStrategyReader {
 
     return 0;
   }
+
+  /// @notice Calculate the amount by which the debt should be reduced to reduce locked-amount-percent below given value
+  /// @param totalAssets Total assets of the strategy, in underlying
+  /// @param isUnderlyingA True if A is underlying
+  /// @param collateralAmountA Total collateral amount in asset A
+  /// @param debtAmountB Total debt amount in asset B
+  /// @param pricesAB Prices of A and B, decimals 18
+  /// @param requiredLockedAmountPercent18  Required value of locked amount percent, decimals 18; 0.03 means 3%
+  /// @return deltaDebtAmountB The amount by which the debt should be reduced, asset B
+  function getAmountToReduceDebt(
+    uint totalAssets,
+    bool isUnderlyingA,
+    uint collateralAmountA,
+    uint debtAmountB,
+    uint[2] memory pricesAB,
+    uint8[2] memory decimalsAB,
+    uint requiredLockedAmountPercent18
+  ) external view returns (uint deltaDebtAmountB) {
+    if (debtAmountB != 0) {
+      uint alpha18 = 1e18 * collateralAmountA * 10**decimalsAB[1] / 10**decimalsAB[0] / debtAmountB;
+      uint indexUnderlying = isUnderlyingA ? 0 : 1;
+      uint lockedPercent18 = 1e18
+        * AppLib.sub0(collateralAmountA * pricesAB[0] / 10**decimalsAB[0], debtAmountB * pricesAB[1] / 10**decimalsAB[1])
+        / (totalAssets * pricesAB[indexUnderlying] / 10**decimalsAB[indexUnderlying]);
+      deltaDebtAmountB = AppLib.sub0(lockedPercent18, requiredLockedAmountPercent18)
+        * totalAssets
+        * pricesAB[indexUnderlying]
+        / 10**decimalsAB[indexUnderlying]
+        / AppLib.sub0(alpha18 * pricesAB[0] / 1e18, pricesAB[1]);
+    }
+
+    return deltaDebtAmountB * 10**decimalsAB[1] / 1e18;
+  }
 }
