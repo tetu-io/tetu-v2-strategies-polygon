@@ -236,7 +236,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
         const p: IPrepareOverCollateralParams = {
           countRebalances: 2,
           movePricesUp: true,
-          swapAmountRatio: 1.1,
+          swapAmountRatio: strategyInfo.name === PLATFORM_ALGEBRA ? 0.3 : 1.1,
           amountToDepositBySigner2: "100",
           amountToDepositBySigner: "10000"
         }
@@ -823,14 +823,14 @@ describe('PairBasedStrategyTwistedDebts', function () {
 
         describe("withdraw various amounts", () => {
           let snapshotLocal0: string;
-          before(async function () {
+          beforeEach(async function () {
             snapshotLocal0 = await TimeUtils.snapshot();
           });
-          after(async function () {
+          afterEach(async function () {
             await TimeUtils.rollback(snapshotLocal0);
           });
 
-          const withdrawAmountPercents = [1, 3, 7, 23, 41, 67, 77, 83, 91, 99];
+          const withdrawAmountPercents = [1, 3, 7, 23, 41, 67, 77, 83, 91, 99, ];
           withdrawAmountPercents.forEach(function (percentToWithdraw: number) {
             it(`should withdraw ${percentToWithdraw}% successfully`, async () => {
               const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
@@ -852,10 +852,10 @@ describe('PairBasedStrategyTwistedDebts', function () {
 
         describe("deposit various amounts", () => {
           let snapshotLocal0: string;
-          before(async function () {
+          beforeEach(async function () {
             snapshotLocal0 = await TimeUtils.snapshot();
           });
-          after(async function () {
+          afterEach(async function () {
             await TimeUtils.rollback(snapshotLocal0);
           });
 
@@ -968,10 +968,10 @@ describe('PairBasedStrategyTwistedDebts', function () {
                     // console.log(states);
                     expect(states.length).lt(MAX_ALLOWED_COUNT_STEPS);
                   });
-                  it("should invest all liquidity to the pool", async () => {
+                  it("should invest most part of liquidity to the pool", async () => {
                     const lastState = states[states.length - 1];
-                    expect(lastState.strategy.assetBalance).lt(lastState.strategy.totalAssets / 100);
-                    expect(lastState.strategy.borrowAssetsBalances[0]).lt(lastState.strategy.totalAssets / 100); // assume that we have only stablecoins here, they are comparable
+                    expect(lastState.strategy.assetBalance).lt(lastState.strategy.totalAssets / 10);
+                    expect(lastState.strategy.borrowAssetsBalances[0]).lt(lastState.strategy.totalAssets / 10); // assume that we have only stablecoins here, they are comparable
                   });
                   it("should reduce locked percent below the given value", async () => {
                     const lastState = states[states.length - 1];

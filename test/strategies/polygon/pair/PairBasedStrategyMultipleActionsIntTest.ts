@@ -256,7 +256,7 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
 
       await b.splitter.connect(b.gov).scheduleStrategies([strategy2.address]);
       await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
-      await b.splitter.connect(b.gov).addStrategies([strategy2.address], [0]);
+      await b.splitter.connect(b.gov).addStrategies([strategy2.address], [0], [Misc.MAX_UINT]);
 
       await ConverterUtils.whitelist([strategy2.address]);
       const profitHolder2 = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy2.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN, MaticAddresses.dQUICK_TOKEN, MaticAddresses.WMATIC_TOKEN,])

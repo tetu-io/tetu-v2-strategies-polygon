@@ -6,7 +6,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "./AppErrors.sol";
 import "./AppLib.sol";
-import "hardhat/console.sol";
 
 /// @notice Support of withdraw iteration plans
 library IterationPlanLib {
@@ -198,9 +197,6 @@ library IterationPlanLib {
 
     v.assetBalance = IERC20(v.asset).balanceOf(address(this)) + p.balanceAdditions[indexAsset];
     v.tokenBalance = IERC20(p.tokens[indexToken]).balanceOf(address(this)) + p.balanceAdditions[indexToken];
-    console.log("v.assetBalance", v.assetBalance);
-    console.log("v.tokenBalance", v.tokenBalance);
-    console.log("requestedAmount", requestedAmount);
 
     if (p.planKind == IterationPlanLib.PLAN_SWAP_ONLY) {
       v.swapLeftoversNeeded = true;
@@ -217,13 +213,9 @@ library IterationPlanLib {
 
         // reverse debt
         (v.debtReverse, v.collateralReverse) = p.converter.getDebtAmountCurrent(address(this), v.token, v.asset, true);
-        console.log("v.debtReverse", v.debtReverse);
-        console.log("v.collateralReverse", v.collateralReverse);
         if (v.debtReverse < AppLib.DUST_AMOUNT_TOKENS) { // there is reverse debt or the reverse debt is dust debt
           // direct debt
           (v.totalDebt, v.totalCollateral) = p.converter.getDebtAmountCurrent(address(this), v.asset, v.token, true);
-          console.log("v.totalDebt", v.totalDebt);
-          console.log("v.totalCollateral", v.totalCollateral);
 
           if (v.totalDebt < AppLib.DUST_AMOUNT_TOKENS) { // there is direct debt or the direct debt is dust debt
             // This is final iteration - we need to swap leftovers and get amounts on balance in proper proportions.
@@ -233,7 +225,6 @@ library IterationPlanLib {
           } else {
             // repay direct debt
             if (p.planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY) {
-              console.log("_buildIterationPlan.1");
               (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanRepaySwapRepay(
                 p,
                 [v.assetBalance, v.tokenBalance],
@@ -258,7 +249,6 @@ library IterationPlanLib {
         } else {
           // repay reverse debt
           if (p.planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY) {
-            console.log("_buildIterationPlan.2");
             (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanRepaySwapRepay(
               p,
               [v.tokenBalance, v.assetBalance],
@@ -313,17 +303,12 @@ library IterationPlanLib {
   ) {
     // use all available tokenB to repay debt and receive as much as possible tokenA
     uint amountToRepay = Math.min(balancesAB[1], totalAB[1]);
-    console.log("_buildPlanRepaySwapRepay.amountToRepay", amountToRepay);
-    console.log("_buildPlanRepaySwapRepay.balancesAB[1]", balancesAB[1]);
-    console.log("_buildPlanRepaySwapRepay.totalBorrowB", totalAB[1]);
 
     uint collateralAmount;
     if (amountToRepay >= AppLib.DUST_AMOUNT_TOKENS) {
       uint swappedAmountOut;
       //
       (collateralAmount, swappedAmountOut) = p.converter.quoteRepay(address(this), p.tokens[idxAB[0]], p.tokens[idxAB[1]], amountToRepay);
-      console.log("_buildPlanRepaySwapRepay.collateralAmount", collateralAmount);
-      console.log("_buildPlanRepaySwapRepay.swappedAmountOut", swappedAmountOut);
       if (collateralAmount > swappedAmountOut) { // SCB-789
         collateralAmount -= swappedAmountOut;
       }
@@ -344,25 +329,12 @@ library IterationPlanLib {
       collateralAmount,
       amountToRepay
     );
-    console.log("_buildPlanRepaySwapRepay.balancesAB[0]", balancesAB[0]);
-    console.log("_buildPlanRepaySwapRepay.balancesAB[1]", balancesAB[1]);
-    console.log("_buildPlanRepaySwapRepay.idxAB[0]", idxAB[0]);
-    console.log("_buildPlanRepaySwapRepay.idxAB[1]", idxAB[1]);
-    console.log("_buildPlanRepaySwapRepay.propB", propB);
-    console.log("_buildPlanRepaySwapRepay.totalCollateralA", totalAB[0]);
-    console.log("_buildPlanRepaySwapRepay.totalBorrowB", totalAB[1]);
-    console.log("_buildPlanRepaySwapRepay.collateralAmount", collateralAmount);
-    console.log("_buildPlanRepaySwapRepay.amountToSwap", amountToSwap);
 
     if (requiredAmountToReduceDebt != 0) {
-      console.log("_buildPlanRepaySwapRepay.requiredAmountToReduceDebt", requiredAmountToReduceDebt);
       // probably it worth to increase amount to swap?
       uint requiredAmountToSwap = requiredAmountToReduceDebt * p.prices[idxAB[1]] * p.decs[idxAB[0]] / p.prices[idxAB[0]] / p.decs[idxAB[1]];
-      console.log("_buildPlanRepaySwapRepay.requiredAmountToSwap", requiredAmountToSwap);
       amountToSwap = Math.max(amountToSwap, requiredAmountToSwap);
-      console.log("_buildPlanRepaySwapRepay.amountToSwap.intermediate", amountToSwap);
       amountToSwap = Math.min(amountToSwap, balancesAB[0] + collateralAmount);
-      console.log("_buildPlanRepaySwapRepay.amountToSwap.final", amountToSwap);
     }
 
     return (idxAB[0] + 1, amountToSwap, idxAB[1] + 1);

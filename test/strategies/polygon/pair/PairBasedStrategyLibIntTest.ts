@@ -144,7 +144,8 @@ describe('PairBasedStrategyLibIntTest', () => {
 
           propNotUnderlying18: 0,
           balanceAdditions: [0, 0],
-          planKind: 0
+          planKind: 0,
+          entryDataParam: 0
         };
       const aggParams = {
         useLiquidator: p.aggregator === Misc.ZERO_ADDRESS,
