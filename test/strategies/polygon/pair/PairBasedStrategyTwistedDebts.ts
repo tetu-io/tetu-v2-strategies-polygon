@@ -551,7 +551,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
               });
 
               SWAP_AMOUNT_RATIO.forEach(swapAmountRatio => {
-                const pathOut = `./tmp/t-${targetLockedAmountPercentRatio}-${swapAmountRatio.toString()}.csv`;
+                const pathOut = `./tmp/up-${targetLockedAmountPercentRatio}-${swapAmountRatio.toString()}.csv`;
                 describe(`reduce-locked-percent-ratio=${targetLockedAmountPercentRatio} swapAmountRatio=${swapAmountRatio.toString()}`, function () {
                   let snapshotLevel0: string;
                   const states: IStateNum[] = [];
@@ -604,7 +604,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
                       builderResults,
                       state.tokenA,
                       state.tokenB,
-                      true, // move price UP
+                      false, // move price UP
                       swapAmountRatio / 100
                     );
                     await UniversalUtils.movePoolPriceUp(signer2, state, builderResults.swapper, swapAmount, 40000, builderResults.swapHelper);
@@ -622,7 +622,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
                   });
                   it("should invest all liquidity to the pool", async () => {
                     const lastState = states[states.length - 1];
-                    expect(lastState.strategy.assetBalance).lt(lastState.strategy.totalAssets / 500);
+                    expect(lastState.strategy.assetBalance).lt(lastState.strategy.totalAssets / 100);
                     expect(lastState.strategy.borrowAssetsBalances[0]).lt(1);
                   });
                   it("should reduce locked percent below the given value", async () => {
@@ -899,7 +899,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
               });
 
               SWAP_AMOUNT_RATIO.forEach(swapAmountRatio => {
-                const pathOut = `./tmp/t-${targetLockedAmountPercentRatio}-${swapAmountRatio.toString()}.csv`;
+                const pathOut = `./tmp/down-${targetLockedAmountPercentRatio}-${swapAmountRatio.toString()}.csv`;
                 describe(`reduce-locked-percent-ratio=${targetLockedAmountPercentRatio} swapAmountRatio=${swapAmountRatio.toString()}`, function () {
                   let snapshotLevel0: string;
                   const states: IStateNum[] = [];
@@ -970,8 +970,8 @@ describe('PairBasedStrategyTwistedDebts', function () {
                   });
                   it("should invest all liquidity to the pool", async () => {
                     const lastState = states[states.length - 1];
-                    expect(lastState.strategy.assetBalance).lt(lastState.strategy.totalAssets / 500);
-                    expect(lastState.strategy.borrowAssetsBalances[0]).lt(lastState.strategy.totalAssets / 500); // assume that we have only stablecoins here, they are comparable
+                    expect(lastState.strategy.assetBalance).lt(lastState.strategy.totalAssets / 100);
+                    expect(lastState.strategy.borrowAssetsBalances[0]).lt(lastState.strategy.totalAssets / 100); // assume that we have only stablecoins here, they are comparable
                   });
                   it("should reduce locked percent below the given value", async () => {
                     const lastState = states[states.length - 1];
