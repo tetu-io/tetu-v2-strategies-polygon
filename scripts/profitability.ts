@@ -305,6 +305,7 @@ async function main() {
           (Number(day.lossCoveredFromInsurance) - Number(day.debtCost)).toString(),
           day.lossCoveredFromRewards,
         ]));
+        rows.push(['\n']);
 
         console.log('\n');
         for (const day of dayHistories) {

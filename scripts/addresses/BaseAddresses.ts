@@ -1,7 +1,8 @@
+/* tslint:disable:variable-name */
 export class BaseAddresses {
     public static GOV_ADDRESS = "0x3f5075195b96B60d7D26b5cDe93b64A6D9bF33e2".toLowerCase()
-    public static TETU_CONVERTER = "0x42De3ffCb38245Bee768E45b3ed556a9214da506".toLowerCase()
-    public static TETU_CONVERTER_PRICE_ORACLE = "0x819cA3aAD59bCfb7AEAB4d7bCd8193AAb1Fb1b42".toLowerCase()
+    public static TETU_CONVERTER = "0x51002Cad5e6FbE3856311f431E1c41c46Acc5D47".toLowerCase()
+    public static TETU_CONVERTER_PRICE_ORACLE = "0x2783E44E629617194F93AB67355028865c9117b4".toLowerCase()
 
     public static TETU_LIQUIDATOR = "0x22e2625F9d8c28CB4BcE944E9d64efb4388ea991".toLowerCase()
     public static TETU_LIQUIDATOR_UNIV3_SWAPPER = "0x00379dD90b2A337C4652E286e4FBceadef940a21".toLowerCase()

@@ -117,7 +117,18 @@ export default {
       goerli: EnvSetup.getEnv().networkScanKey,
       sepolia: EnvSetup.getEnv().networkScanKey,
       polygon: EnvSetup.getEnv().networkScanKeyMatic || EnvSetup.getEnv().networkScanKey,
+      base: EnvSetup.getEnv().networkScanKeyBase || EnvSetup.getEnv().networkScanKey,
     },
+    customChains: [
+      {
+        network: "base",
+        chainId: 8453,
+        urls: {
+          apiURL: "https://api.basescan.org/api",
+          browserURL: "https://basescan.org"
+        }
+      }
+    ]
   },
   verify: {
     etherscan: {
