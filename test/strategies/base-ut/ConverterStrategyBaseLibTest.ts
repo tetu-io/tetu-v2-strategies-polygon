@@ -33,7 +33,6 @@ import {
 } from "../../baseUT/GasLimits";
 import {IERC20Metadata__factory} from "../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
 import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
-import {areAlmostEqual} from "../../baseUT/utils/MathUtils";
 import {HardhatUtils, HARDHAT_NETWORK_ID} from '../../baseUT/utils/HardhatUtils';
 
 /**
@@ -4734,8 +4733,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 .div(parseUnits('1', 18)),
             );
 
-            const ret = areAlmostEqual(totalAmountInTermsCollateral, BigNumber.from('9762660842'));
-            expect(ret).eq(true);
+            expect(totalAmountInTermsCollateral).approximately(9762660842, 100);
           });
         });
       });

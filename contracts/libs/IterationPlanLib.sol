@@ -361,7 +361,7 @@ library IterationPlanLib {
       console.log("_buildPlanRepaySwapRepay.requiredAmountToSwap", requiredAmountToSwap);
       amountToSwap = Math.max(amountToSwap, requiredAmountToSwap);
       console.log("_buildPlanRepaySwapRepay.amountToSwap.intermediate", amountToSwap);
-      amountToSwap = Math.min(amountToSwap, balancesAB[0]);
+      amountToSwap = Math.min(amountToSwap, balancesAB[0] + collateralAmount);
       console.log("_buildPlanRepaySwapRepay.amountToSwap.final", amountToSwap);
     }
 

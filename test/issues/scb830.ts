@@ -24,6 +24,7 @@ import {InjectUtils} from "../baseUT/strategies/InjectUtils";
 import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
 import {Misc} from "../../scripts/utils/Misc";
 import {PairBasedStrategyPrepareStateUtils} from "../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
+import {MockHelper} from "../baseUT/helpers/MockHelper";
 
 describe("Scb830 @skip-on-coverage", () => {
   const BLOCK = 49049236;
@@ -57,6 +58,7 @@ describe("Scb830 @skip-on-coverage", () => {
     const stateParams = {
       mainAssetSymbol: await IERC20Metadata__factory.connect(MaticAddresses.USDC_TOKEN, signer).symbol()
     }
+    const reader = await MockHelper.createPairBasedStrategyReader(signer);
 
     await InjectUtils.injectStrategy(signer, STRATEGY, "UniswapV3ConverterStrategy");
     await InjectUtils.injectTetuConverter(signer);
@@ -75,7 +77,15 @@ describe("Scb830 @skip-on-coverage", () => {
         return states[states.length - 1];
       },
 
-      parseUnits("25000", 6)
+      async () => {
+        const state0 = states.length === 0
+          ? await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault)
+          : states[states.length - 1];
+        const requiredAmountToReduceDebt = await PairBasedStrategyPrepareStateUtils.getRequiredAmountToReduceDebt(
+            signer, state0, reader, REQUIRED_LOCKED_PERCENT, MaticAddresses.USDC_TOKEN
+        );
+        return requiredAmountToReduceDebt.mul(110).div(100);
+      }
     );
   });
 });

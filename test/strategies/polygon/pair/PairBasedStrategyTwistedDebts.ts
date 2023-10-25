@@ -3,7 +3,20 @@ import {expect} from 'chai';
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
-import {BorrowManager, BorrowManager__factory, ConverterController__factory, ConverterStrategyBase__factory, IController__factory, IDebtMonitor, IDebtMonitor__factory, IERC20__factory, IKeeperCallback__factory, IPlatformAdapter__factory, IPoolAdapter__factory,} from '../../../../typechain';
+import {
+  BorrowManager,
+  BorrowManager__factory,
+  ConverterController__factory,
+  ConverterStrategyBase__factory,
+  IController__factory,
+  IDebtMonitor,
+  IDebtMonitor__factory,
+  IERC20__factory,
+  IKeeperCallback__factory,
+  IPlatformAdapter__factory,
+  IPoolAdapter__factory, PairBasedStrategyReader, UniswapV3ConverterStrategy,
+  UniswapV3ConverterStrategy__factory,
+} from '../../../../typechain';
 import {Misc} from "../../../../scripts/utils/Misc";
 import {defaultAbiCoder, formatUnits, parseUnits} from 'ethers/lib/utils';
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
@@ -33,8 +46,17 @@ import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {PairWithdrawByAggUtils} from "../../../baseUT/strategies/pair/PairWithdrawByAggUtils";
 import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
+import {MockHelper} from "../../../baseUT/helpers/MockHelper";
+import {IEventsSet} from "../../../baseUT/strategies/CaptureEvents";
+import {IERC20Metadata__factory} from "../../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
+import {trimDecimals} from "../../../baseUT/utils/MathUtils";
 
-describe('PairBasedStrategyTwistedDebts', function() {
+describe('PairBasedStrategyTwistedDebts', function () {
+  /**
+   * Max allowed count of steps required to reduce locked percent to the given value.
+   * Without calculation of requiredAmountToReduceDebt this value can be very high
+   */
+  const MAX_ALLOWED_COUNT_STEPS = 5;
 
 //region Variables
   let snapshotBefore: string;
@@ -42,6 +64,8 @@ describe('PairBasedStrategyTwistedDebts', function() {
   let signer: SignerWithAddress;
   let signer2: SignerWithAddress;
   let signer3: SignerWithAddress;
+
+  let reader: PairBasedStrategyReader;
 //endregion Variables
 
 //region before, after
@@ -54,6 +78,8 @@ describe('PairBasedStrategyTwistedDebts', function() {
     require("util").inspect.defaultOptions.depth = null;
 
     [signer, signer2, signer3] = await ethers.getSigners();
+
+    reader = await MockHelper.createPairBasedStrategyReader(signer);
   });
 
   after(async function () {
@@ -229,7 +255,7 @@ describe('PairBasedStrategyTwistedDebts', function() {
           await TimeUtils.rollback(snapshot);
         });
 
-        describe("Test set", () => {
+        describe("Test set", function () {
           let snapshotLocal0: string;
           beforeEach(async function () {
             snapshotLocal0 = await TimeUtils.snapshot();
@@ -377,7 +403,7 @@ describe('PairBasedStrategyTwistedDebts', function() {
           }
         });
 
-        describe("withdraw various amounts", () => {
+        describe("withdraw various amounts", function () {
           let snapshotLocal0: string;
           beforeEach(async function () {
             snapshotLocal0 = await TimeUtils.snapshot();
@@ -406,7 +432,7 @@ describe('PairBasedStrategyTwistedDebts', function() {
           });
         })
 
-        describe("deposit various amounts", () => {
+        describe("deposit various amounts", function () {
           let snapshotLocal0: string;
           beforeEach(async function () {
             snapshotLocal0 = await TimeUtils.snapshot();
@@ -507,6 +533,108 @@ describe('PairBasedStrategyTwistedDebts', function() {
             expect(stateLast.pairState?.lastRebalanceNoSwap).eq(0);
           });
         });
+
+        if (strategyInfo.name === PLATFORM_UNIV3) {
+          describe("Rebalance to reduce locked amount percent, the pool has given proportions", function () {
+            const TARGET_LOCKED_AMOUNT_PERCENT_RATIO = [0.01, 0.25];
+            const SWAP_AMOUNT_RATIO = [110, 0.01, 50, 99.95, 100.05];
+            TARGET_LOCKED_AMOUNT_PERCENT_RATIO.forEach(targetLockedAmountPercentRatio => {
+              let currentLockedPercent: number;
+              let targetLockedPercent: number;
+              let uniswapStrategy: UniswapV3ConverterStrategy;
+              before(async function () {
+                const ret = await reader.getLockedUnderlyingAmount(builderResults.strategy.address);
+                const estimatedUnderlyingAmount = +formatUnits(ret.estimatedUnderlyingAmount, builderResults.assetDecimals);
+                const strategyTotalAssets = +formatUnits(ret.totalAssets, builderResults.assetDecimals);
+                currentLockedPercent = estimatedUnderlyingAmount / strategyTotalAssets;
+                targetLockedPercent = currentLockedPercent * targetLockedAmountPercentRatio
+              });
+
+              SWAP_AMOUNT_RATIO.forEach(swapAmountRatio => {
+                const pathOut = `./tmp/t-${targetLockedAmountPercentRatio}-${swapAmountRatio.toString()}.csv`;
+                describe(`reduce-locked-percent-ratio=${targetLockedAmountPercentRatio} swapAmountRatio=${swapAmountRatio.toString()}`, function () {
+                  let snapshotLevel0: string;
+                  const states: IStateNum[] = [];
+
+                  before(async function () {
+                    snapshotLevel0 = await TimeUtils.snapshot();
+                    await makeSwapToPrepareProportionsInPool();
+
+                    const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
+
+                    // estimate amount-to-reduce-debt
+
+                    await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
+                      await builderResults.strategy.connect(await UniversalTestUtils.getAnOperator(builderResults.strategy.address, signer)),
+                      Misc.ZERO_ADDRESS,
+                      lastState => {
+                        return (lastState?.lockedPercent ?? 0) < targetLockedPercent
+                      },
+                      async (title: string, eventsSet: IEventsSet) => {
+                        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault, `step${states.length}`, {eventsSet}));
+                        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, builderResults.stateParams, true);
+                        return states[states.length - 1];
+                      },
+                      async () => {
+                        const state0 = states.length === 0
+                          ? await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault)
+                          : states[states.length - 1];
+                        const requiredAmountToReduceDebt = await PairBasedStrategyPrepareStateUtils.getRequiredAmountToReduceDebt(
+                          signer,
+                          state0,
+                          reader,
+                          targetLockedPercent,
+                          await converterStrategyBase.asset()
+                        );
+                        return requiredAmountToReduceDebt.mul(110).div(100);
+                      }
+                    )
+                  });
+                  after(async function () {
+                    await TimeUtils.rollback(snapshotLevel0);
+                  });
+
+                  async function makeSwapToPrepareProportionsInPool() {
+                    const state = await PackedData.getDefaultState(builderResults.strategy);
+                    uniswapStrategy = await UniswapV3ConverterStrategy__factory.connect(builderResults.strategy.address, signer);
+                    const propNotUnderlying18Before = await uniswapStrategy.getPropNotUnderlying18();
+                    console.log("propNotUnderlying18 before", propNotUnderlying18Before);
+                    const swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
+                      signer,
+                      builderResults,
+                      state.tokenA,
+                      state.tokenB,
+                      true, // move price UP
+                      swapAmountRatio / 100
+                    );
+                    await UniversalUtils.movePoolPriceUp(signer2, state, builderResults.swapper, swapAmount, 40000, builderResults.swapHelper);
+                    const propNotUnderlying18After = await uniswapStrategy.getPropNotUnderlying18();
+                    console.log("propNotUnderlying18 after", propNotUnderlying18After);
+                  }
+
+                  it("should make rebalance using single iteration", async () => {
+                    console.log("propNotUnderlying18", await uniswapStrategy.getPropNotUnderlying18());
+                    console.log("currentLockedPercent", currentLockedPercent);
+                    console.log("targetLockedPercent", targetLockedPercent);
+                    console.log("Count steps", states.length);
+                    // console.log(states);
+                    expect(states.length).lt(MAX_ALLOWED_COUNT_STEPS);
+                  });
+                  it("should invest all liquidity to the pool", async () => {
+                    const lastState = states[states.length - 1];
+                    expect(lastState.strategy.assetBalance).lt(lastState.strategy.totalAssets / 500);
+                    expect(lastState.strategy.borrowAssetsBalances[0]).lt(1);
+                  });
+                  it("should reduce locked percent below the given value", async () => {
+                    const lastState = states[states.length - 1];
+                    expect(lastState.lockedPercent === undefined).eq(false);
+                    expect(lastState.lockedPercent ?? 0).lt(targetLockedPercent);
+                  });
+                })
+              });
+            });
+          });
+        }
       });
     });
   });
@@ -555,139 +683,167 @@ describe('PairBasedStrategyTwistedDebts', function() {
 
       describe(`${strategyInfo.name}`, () => {
         let snapshot: string;
+        let builderResults: IBuilderResults;
         before(async function () {
           snapshot = await TimeUtils.snapshot();
+          builderResults = await prepareStrategy()
         });
         after(async function () {
           await TimeUtils.rollback(snapshot);
         });
 
-        it("should deposit successfully", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+        describe("Test set", function () {
+          let snapshotLocal0: string;
+          beforeEach(async function () {
+            snapshotLocal0 = await TimeUtils.snapshot();
+          });
+          afterEach(async function () {
+            await TimeUtils.rollback(snapshotLocal0);
+          });
 
-          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
-          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+          it("should deposit successfully", async () => {
+            const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
 
-          expect(stateAfter.vault.totalAssets).gt(stateBefore.vault.totalAssets);
-        });
-        it("should withdraw successfully", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+            const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
+            await builderResults.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
+            const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
 
-          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          await b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: 99_000_000});
-          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+            expect(stateAfter.vault.totalAssets).gt(stateBefore.vault.totalAssets);
+          });
+          it("should withdraw successfully", async () => {
+            const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
 
-          expect(stateAfter.user.assetBalance).eq(stateBefore.user.assetBalance + 300);
-        });
-        it("should withdraw-all successfully", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+            const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
+            await builderResults.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: 99_000_000});
+            const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
 
-          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
-          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+            expect(stateAfter.user.assetBalance).eq(stateBefore.user.assetBalance + 300);
+          });
+          it("should withdraw-all successfully", async () => {
+            const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
 
-          console.log('stateBefore', stateBefore);
-          console.log('stateAfter', stateAfter);
+            const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
+            await builderResults.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
+            const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
 
-          expect(stateAfter.user.assetBalance).gt(stateBefore.user.assetBalance);
-          expect(stateBefore.vault.userShares).gt(0);
-          expect(stateAfter.vault.userShares).eq(0);
-        });
-        it("should revert on rebalance", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+            console.log('stateBefore', stateBefore);
+            console.log('stateAfter', stateAfter);
 
-          const needRebalanceBefore = await b.strategy.needRebalance();
-          expect(needRebalanceBefore).eq(false);
+            expect(stateAfter.user.assetBalance).gt(stateBefore.user.assetBalance);
+            expect(stateBefore.vault.userShares).gt(0);
+            expect(stateAfter.vault.userShares).eq(0);
+          });
+          it("should revert on rebalance", async () => {
+            const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
 
-          const platform = await converterStrategyBase.PLATFORM();
-          const expectedErrorMessage = platform === PLATFORM_UNIV3
-            ? "U3S-9 No rebalance needed"
-            : platform === PLATFORM_ALGEBRA
-              ? "AS-9 No rebalance needed"
-              : "KS-9 No rebalance needed";
+            const needRebalanceBefore = await builderResults.strategy.needRebalance();
+            expect(needRebalanceBefore).eq(false);
 
-          await expect(
-            b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000})
-          ).revertedWith(expectedErrorMessage); // NO_REBALANCE_NEEDED
-        });
-        it("should rebalance debts successfully", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+            const platform = await converterStrategyBase.PLATFORM();
+            const expectedErrorMessage = platform === PLATFORM_UNIV3
+              ? "U3S-9 No rebalance needed"
+              : platform === PLATFORM_ALGEBRA
+                ? "AS-9 No rebalance needed"
+                : "KS-9 No rebalance needed";
 
-          const planEntryData = buildEntryData1();
-          const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
+            await expect(
+              builderResults.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000})
+            ).revertedWith(expectedErrorMessage); // NO_REBALANCE_NEEDED
+          });
+          it("should rebalance debts successfully", async () => {
+            const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
 
-          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          await b.strategy.withdrawByAggStep(
-            quote.tokenToSwap,
-            Misc.ZERO_ADDRESS,
-            quote.amountToSwap,
-            "0x",
-            planEntryData,
-            ENTRY_TO_POOL_IS_ALLOWED,
-            {gasLimit: 19_000_000}
-          );
-          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          console.log("stateBefore", stateBefore);
-          console.log("stateAfter", stateAfter);
+            const planEntryData = buildEntryData1();
+            const quote = await builderResults.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
-          expect(stateAfter.strategy.investedAssets).approximately(stateBefore.strategy.investedAssets, 100);
-        });
-        it("should hardwork successfully", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(
-            b.strategy.address,
-            await Misc.impersonate(b.splitter.address)
-          );
+            const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
+            await builderResults.strategy.withdrawByAggStep(
+              quote.tokenToSwap,
+              Misc.ZERO_ADDRESS,
+              quote.amountToSwap,
+              "0x",
+              planEntryData,
+              ENTRY_TO_POOL_IS_ALLOWED,
+              {gasLimit: 19_000_000}
+            );
+            const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
+            console.log("stateBefore", stateBefore);
+            console.log("stateAfter", stateAfter);
 
-          // put additional fee to profit holder bo make isReadyToHardwork returns true
-          await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
+            expect(stateAfter.strategy.investedAssets).approximately(stateBefore.strategy.investedAssets, 100);
+          });
+          it("should hardwork successfully", async () => {
+            const converterStrategyBase = ConverterStrategyBase__factory.connect(
+              builderResults.strategy.address,
+              await Misc.impersonate(builderResults.splitter.address)
+            );
 
-          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          await converterStrategyBase.doHardWork({gasLimit: 19_000_000});
-          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+            // put additional fee to profit holder bo make isReadyToHardwork returns true
+            await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, builderResults.strategy);
 
-          expect(stateAfter.strategy.investedAssets).gte(stateBefore.strategy.investedAssets - 0.001);
-        });
-        it("should make emergency exit successfully", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+            const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
+            await converterStrategyBase.doHardWork({gasLimit: 19_000_000});
+            const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
 
-          await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
-          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+            expect(stateAfter.strategy.investedAssets).gte(stateBefore.strategy.investedAssets - 0.001);
+          });
+          it("should make emergency exit successfully", async () => {
+            const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
 
-          expect(stateAfter.strategy.investedAssets).lt(10);
+            await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
+            const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
+
+            expect(stateAfter.strategy.investedAssets).lt(10);
+          });
+
+          if (strategyInfo.name === PLATFORM_UNIV3) {
+            // requirePayAmountBack implementation is shared for all strategies, we can check it on single strategy only
+            it("should requirePayAmountBack successfully", async () => {
+              const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
+              const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
+
+              // requirePayAmountBack is called by converter inside requireRepay
+              const {checkBefore, checkAfter} = await callRequireRepay(builderResults);
+              expect(checkBefore.length).gt(0, "health wasn't broken");
+              expect(checkAfter.length).lt(checkBefore.length, "health wasn't restored");
+
+              // withdraw all and receive expected amount back
+              await builderResults.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
+              const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
+
+              console.log('stateBefore', stateBefore);
+              console.log('stateAfter', stateAfter);
+
+              expect(stateAfter.user.assetBalance).gt(stateBefore.user.assetBalance);
+              expect(stateBefore.vault.userShares).gt(0);
+              expect(stateAfter.vault.userShares).eq(0);
+            });
+          }
         });
 
         describe("withdraw various amounts", () => {
-          let snapshot2: string;
+          let snapshotLocal0: string;
           before(async function () {
-            snapshot2 = await TimeUtils.snapshot();
+            snapshotLocal0 = await TimeUtils.snapshot();
           });
           after(async function () {
-            await TimeUtils.rollback(snapshot2);
+            await TimeUtils.rollback(snapshotLocal0);
           });
 
           const withdrawAmountPercents = [1, 3, 7, 23, 41, 67, 77, 83, 91, 99];
           withdrawAmountPercents.forEach(function (percentToWithdraw: number) {
             it(`should withdraw ${percentToWithdraw}% successfully`, async () => {
-              const b = await loadFixture(prepareStrategy);
-              const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+              const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
 
-              const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-              const vault = b.vault.connect(signer);
+              const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
+              const vault = builderResults.vault.connect(signer);
               const maxAmountToWithdraw = await vault.maxWithdraw(signer.address);
               const amountToWithdraw = maxAmountToWithdraw.mul(percentToWithdraw).div(100);
               await vault.withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 19_000_000});
-              const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+              const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
 
               expect(stateAfter.user.assetBalance).approximately(
-                stateBefore.user.assetBalance + +formatUnits(amountToWithdraw, b.assetDecimals),
+                stateBefore.user.assetBalance + +formatUnits(amountToWithdraw, builderResults.assetDecimals),
                 1
               );
             });
@@ -695,12 +851,12 @@ describe('PairBasedStrategyTwistedDebts', function() {
         })
 
         describe("deposit various amounts", () => {
-          let snapshot2: string;
+          let snapshotLocal0: string;
           before(async function () {
-            snapshot2 = await TimeUtils.snapshot();
+            snapshotLocal0 = await TimeUtils.snapshot();
           });
           after(async function () {
-            await TimeUtils.rollback(snapshot2);
+            await TimeUtils.rollback(snapshotLocal0);
           });
 
           // borrow-direction is changed on largest amount
@@ -708,14 +864,13 @@ describe('PairBasedStrategyTwistedDebts', function() {
           amountsToDeposit.forEach(function (amountToDeposit: string) {
 
             it(`should deposit ${amountToDeposit} successfully`, async () => {
-              const b = await loadFixture(prepareStrategy);
-              const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+              const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
 
-              const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-              await TokenUtils.getToken(b.asset, signer.address, parseUnits(amountToDeposit, 6));
-              await b.vault.connect(signer).deposit(parseUnits(amountToDeposit, 6), signer.address, {gasLimit: 19_000_000});
-              const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-              StateUtilsNum.saveListStatesToCSVColumns(`./tmp/${strategyInfo.name}-deposit-${amountToDeposit}.csv`, [stateBefore, stateAfter], b.stateParams, true);
+              const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
+              await TokenUtils.getToken(builderResults.asset, signer.address, parseUnits(amountToDeposit, 6));
+              await builderResults.vault.connect(signer).deposit(parseUnits(amountToDeposit, 6), signer.address, {gasLimit: 19_000_000});
+              const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
+              StateUtilsNum.saveListStatesToCSVColumns(`./tmp/${strategyInfo.name}-deposit-${amountToDeposit}.csv`, [stateBefore, stateAfter], builderResults.stateParams, true);
 
               expect(stateAfter.vault.totalAssets).gt(stateBefore.vault.totalAssets, "totalAssets should increase");
 
@@ -728,29 +883,104 @@ describe('PairBasedStrategyTwistedDebts', function() {
         })
 
         if (strategyInfo.name === PLATFORM_UNIV3) {
-          // requirePayAmountBack implementation is shared for all strategies, we can check it on single strategy only
-          it("should requirePayAmountBack successfully", async () => {
+          describe("Rebalance to reduce locked amount percent, the pool has given proportions", function () {
+            const TARGET_LOCKED_AMOUNT_PERCENT_RATIO = [0.01, 0.25];
+            const SWAP_AMOUNT_RATIO = [110, 0.01, 50, 99.95, 100.05];
+            TARGET_LOCKED_AMOUNT_PERCENT_RATIO.forEach(targetLockedAmountPercentRatio => {
+              let currentLockedPercent: number;
+              let targetLockedPercent: number;
+              let uniswapStrategy: UniswapV3ConverterStrategy;
+              before(async function () {
+                const ret = await reader.getLockedUnderlyingAmount(builderResults.strategy.address);
+                const estimatedUnderlyingAmount = +formatUnits(ret.estimatedUnderlyingAmount, builderResults.assetDecimals);
+                const strategyTotalAssets = +formatUnits(ret.totalAssets, builderResults.assetDecimals);
+                currentLockedPercent = estimatedUnderlyingAmount / strategyTotalAssets;
+                targetLockedPercent = currentLockedPercent * targetLockedAmountPercentRatio
+              });
 
-            const b = await loadFixture(prepareStrategy);
+              SWAP_AMOUNT_RATIO.forEach(swapAmountRatio => {
+                const pathOut = `./tmp/t-${targetLockedAmountPercentRatio}-${swapAmountRatio.toString()}.csv`;
+                describe(`reduce-locked-percent-ratio=${targetLockedAmountPercentRatio} swapAmountRatio=${swapAmountRatio.toString()}`, function () {
+                  let snapshotLevel0: string;
+                  const states: IStateNum[] = [];
 
-            const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-            const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+                  before(async function () {
+                    snapshotLevel0 = await TimeUtils.snapshot();
+                    await makeSwapToPrepareProportionsInPool();
 
-            // requirePayAmountBack is called by converter inside requireRepay
-            const {checkBefore, checkAfter} = await callRequireRepay(b);
-            expect(checkBefore.length).gt(0, "health wasn't broken");
-            expect(checkAfter.length).lt(checkBefore.length, "health wasn't restored");
+                    const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
 
-            // withdraw all and receive expected amount back
-            await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
-            const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+                    // estimate amount-to-reduce-debt
 
-            console.log('stateBefore', stateBefore);
-            console.log('stateAfter', stateAfter);
+                    await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
+                      await builderResults.strategy.connect(await UniversalTestUtils.getAnOperator(builderResults.strategy.address, signer)),
+                      Misc.ZERO_ADDRESS,
+                      lastState => {
+                        return (lastState?.lockedPercent ?? 0) < targetLockedPercent
+                      },
+                      async (title: string, eventsSet: IEventsSet) => {
+                        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault, `step${states.length}`, {eventsSet}));
+                        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, builderResults.stateParams, true);
+                        return states[states.length - 1];
+                      },
+                      async () => {
+                        const state0 = states.length === 0
+                          ? await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault)
+                          : states[states.length - 1];
+                        const requiredAmountToReduceDebt = await PairBasedStrategyPrepareStateUtils.getRequiredAmountToReduceDebt(
+                          signer,
+                          state0,
+                          reader,
+                          targetLockedPercent,
+                          await converterStrategyBase.asset()
+                        );
+                        return requiredAmountToReduceDebt.mul(110).div(100);
+                      }
+                    )
+                  });
+                  after(async function () {
+                    await TimeUtils.rollback(snapshotLevel0);
+                  });
 
-            expect(stateAfter.user.assetBalance).gt(stateBefore.user.assetBalance);
-            expect(stateBefore.vault.userShares).gt(0);
-            expect(stateAfter.vault.userShares).eq(0);
+                  async function makeSwapToPrepareProportionsInPool() {
+                    const state = await PackedData.getDefaultState(builderResults.strategy);
+                    uniswapStrategy = await UniswapV3ConverterStrategy__factory.connect(builderResults.strategy.address, signer);
+                    const propNotUnderlying18Before = await uniswapStrategy.getPropNotUnderlying18();
+                    console.log("propNotUnderlying18 before", propNotUnderlying18Before);
+                    const swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
+                      signer,
+                      builderResults,
+                      state.tokenA,
+                      state.tokenB,
+                      true, // move price UP
+                      swapAmountRatio / 100
+                    );
+                    await UniversalUtils.movePoolPriceUp(signer2, state, builderResults.swapper, swapAmount, 40000, builderResults.swapHelper);
+                    const propNotUnderlying18After = await uniswapStrategy.getPropNotUnderlying18();
+                    console.log("propNotUnderlying18 after", propNotUnderlying18After);
+                  }
+
+                  it("should make rebalance using single iteration", async () => {
+                    console.log("propNotUnderlying18", await uniswapStrategy.getPropNotUnderlying18());
+                    console.log("currentLockedPercent", currentLockedPercent);
+                    console.log("targetLockedPercent", targetLockedPercent);
+                    console.log("Count states", states.length);
+                    // console.log(states);
+                    expect(states.length).lt(MAX_ALLOWED_COUNT_STEPS);
+                  });
+                  it("should invest all liquidity to the pool", async () => {
+                    const lastState = states[states.length - 1];
+                    expect(lastState.strategy.assetBalance).lt(lastState.strategy.totalAssets / 500);
+                    expect(lastState.strategy.borrowAssetsBalances[0]).lt(lastState.strategy.totalAssets / 500); // assume that we have only stablecoins here, they are comparable
+                  });
+                  it("should reduce locked percent below the given value", async () => {
+                    const lastState = states[states.length - 1];
+                    expect(lastState.lockedPercent === undefined).eq(false);
+                    expect(lastState.lockedPercent ?? 0).lt(targetLockedPercent);
+                  });
+                })
+              });
+            });
           });
         }
       });

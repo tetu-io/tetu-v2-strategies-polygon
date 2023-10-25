@@ -1,8 +1,7 @@
 import {IBuilderResults, IStrategyBasicInfo} from "./PairBasedStrategyBuilder";
 import {
-  ConverterStrategyBase,
   ConverterStrategyBase__factory,
-  IRebalancingV2Strategy, StrategyBaseV2__factory
+  IRebalancingV2Strategy, PairBasedStrategyReader, StrategyBaseV2__factory
 } from "../../../../typechain";
 import {IDefaultState, PackedData} from "../../utils/PackedData";
 import {BigNumber, BytesLike} from "ethers";
@@ -22,6 +21,7 @@ import {depositToVault, printVaultState} from "../../universalTestUtils/Strategy
 import {CaptureEvents, IEventsSet} from "../CaptureEvents";
 import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY_1} from "../../AppConstants";
 import {UniversalTestUtils} from "../../utils/UniversalTestUtils";
+import {trimDecimals} from "../../utils/MathUtils";
 
 export interface IPrepareOverCollateralParams {
   countRebalances: number;
@@ -218,20 +218,22 @@ export class PairBasedStrategyPrepareStateUtils {
     aggregator: string,
     isWithdrawCompleted: (lastState?: IStateNum) => boolean,
     saveState?: (title: string, eventsState: IEventsSet) => Promise<IStateNum>,
-    requiredAmountToReduceDebt?: BigNumber
+    requiredAmountToReduceDebtCalculator?: () => Promise<BigNumber>
   ) {
     const state = await PackedData.getDefaultState(strategyAsOperator);
 
     let step = 0;
     while (true) {
+      const requiredAmountToReduceDebt: BigNumber = requiredAmountToReduceDebtCalculator
+        ? await requiredAmountToReduceDebtCalculator()
+        : BigNumber.from(0);
+
       const planEntryData = defaultAbiCoder.encode(
         ["uint256", "uint256", "uint256"],
         [
           PLAN_REPAY_SWAP_REPAY_1,
           Misc.MAX_UINT,
-          step === 0 && requiredAmountToReduceDebt
-            ? requiredAmountToReduceDebt
-            : 0
+          requiredAmountToReduceDebt
         ]
       );
 
@@ -410,5 +412,51 @@ export class PairBasedStrategyPrepareStateUtils {
     await converterStrategyBase.connect(operator).setLiquidationThreshold(MaticAddresses.USDT_TOKEN, parseUnits(value, 6));
     await converterStrategyBase.connect(operator).setLiquidationThreshold(MaticAddresses.USDC_TOKEN, parseUnits(value, 6));
     await converterStrategyBase.connect(operator).setLiquidationThreshold(MaticAddresses.DAI_TOKEN, parseUnits(value, 18));
+  }
+
+  static async getRequiredAmountToReduceDebt(
+    signer: SignerWithAddress,
+    state0: IStateNum,
+    reader:PairBasedStrategyReader,
+    targetLockedPercent: number,
+    underlying: string,
+  ): Promise<BigNumber> {
+    const directBorrow = state0.converterDirect.collaterals[0] > 0;
+    const assetIndex = directBorrow ? 0 : 1;
+    const borrowAssetIndex = directBorrow ? 1 : 0;
+    const assetDecimals = await IERC20Metadata__factory.connect(underlying, signer).decimals();
+    const decimalBorrowAsset = await IERC20Metadata__factory.connect(state0.converterDirect.borrowAssets[borrowAssetIndex], signer).decimals();
+
+    if (directBorrow) {
+        const requiredAmountToReduceDebt = await reader.getAmountToReduceDebt(
+            parseUnits(state0.strategy.totalAssets.toString(), assetDecimals),
+            true,
+            parseUnits(state0.converterDirect.collaterals[0].toString(), assetDecimals),
+            parseUnits(state0.converterDirect.amountsToRepay[0].toString(), assetDecimals),
+            [
+                parseUnits(state0.converterDirect.borrowAssetsPrices[0].toString(), 18),
+                parseUnits(state0.converterDirect.borrowAssetsPrices[1].toString(), 18),
+            ],
+            [assetDecimals, decimalBorrowAsset],
+            parseUnits(trimDecimals(targetLockedPercent.toString(), 5), 18)
+        );
+        console.log("requiredAmountToReduceDebt (direct debt)", requiredAmountToReduceDebt);
+        return requiredAmountToReduceDebt;
+    } else {
+        const requiredAmountToReduceDebt = await reader.getAmountToReduceDebt(
+            parseUnits(state0.strategy.totalAssets.toString(), decimalBorrowAsset),
+            false,
+            parseUnits(state0.converterReverse.collaterals[0].toString(), assetDecimals),
+            parseUnits(state0.converterReverse.amountsToRepay[0].toString(), assetDecimals),
+            [
+                parseUnits(state0.converterReverse.borrowAssetsPrices[0].toString(), 18),
+                parseUnits(state0.converterReverse.borrowAssetsPrices[1].toString(), 18),
+            ],
+            [decimalBorrowAsset, assetDecimals],
+            parseUnits(trimDecimals(targetLockedPercent.toString(), 5), 18)
+        );
+        console.log("requiredAmountToReduceDebt (reverse debt)", requiredAmountToReduceDebt);
+        return requiredAmountToReduceDebt;
+    }
   }
 }

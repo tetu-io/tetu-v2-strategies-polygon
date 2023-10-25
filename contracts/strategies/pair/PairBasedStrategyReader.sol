@@ -127,7 +127,7 @@ contract PairBasedStrategyReader {
     uint[2] memory pricesAB,
     uint8[2] memory decimalsAB,
     uint requiredLockedAmountPercent18
-  ) external view returns (uint deltaDebtAmountB) {
+  ) external pure returns (uint deltaDebtAmountB) {
     if (debtAmountB != 0) {
       uint alpha18 = 1e18 * collateralAmountA * 10**decimalsAB[1] / 10**decimalsAB[0] / debtAmountB;
       uint indexUnderlying = isUnderlyingA ? 0 : 1;

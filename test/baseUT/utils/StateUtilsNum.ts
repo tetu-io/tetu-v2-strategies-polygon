@@ -37,6 +37,11 @@ export interface IUniv3SpecificState {
   rebalanceEarned1: BigNumber; // rebalanceResults[1]
 }
 
+export interface IUniv3Values {
+  specificState: IUniv3SpecificState;
+  propNotUnderlying: number;
+}
+
 export interface IUniv3Pool {
   token0: string,
   token1: string,
@@ -128,7 +133,7 @@ export interface IStateNum {
 
   pairCurrentTick?: ILiquidityAmountInTick;
 
-  univ3?: IUniv3SpecificState
+  univ3?: IUniv3Values;
   univ3Pool?: IUniv3Pool;
   events?: ISummaryFromEventsSet;
 }
@@ -203,7 +208,7 @@ export class StateUtilsNum {
     let borrowAssetsAddresses: string[] = [];
 
     let pairState: IPairState | undefined;
-    let univ3SpecificState: IUniv3SpecificState | undefined;
+    let univ3: IUniv3Values | undefined;
     let univ3Pool: IUniv3Pool | undefined;
 
     // Direct borrow: borrow an asset using the underlying as collateral
@@ -300,10 +305,14 @@ export class StateUtilsNum {
         }
 
         if (isUniv3) {
-          const specificState = await PackedData.getSpecificStateUniv3(UniswapV3ConverterStrategy__factory.connect(strategy.address, signer));
-          univ3SpecificState = {
-            rebalanceEarned0: specificState.rebalanceEarned0,
-            rebalanceEarned1: specificState.rebalanceEarned1,
+          const uniswapStrategy = UniswapV3ConverterStrategy__factory.connect(strategy.address, signer);
+          const specificState = await PackedData.getSpecificStateUniv3(uniswapStrategy);
+          univ3 = {
+            specificState: {
+              rebalanceEarned0: specificState.rebalanceEarned0,
+              rebalanceEarned1: specificState.rebalanceEarned1,
+            },
+            propNotUnderlying: +formatUnits(await uniswapStrategy.getPropNotUnderlying18(), 18)
           }
           const pool = await IUniswapV3Pool__factory.connect(state.pool, signer);
           // const slot0 = await pool.slot0();
@@ -415,7 +424,7 @@ export class StateUtilsNum {
 
       pairCurrentTick: currentTick,
 
-      univ3: univ3SpecificState,
+      univ3,
       univ3Pool,
 
       events: await CaptureEvents.getSummaryFromEventsSet(signer, p?.eventsSet),
@@ -592,6 +601,7 @@ export class StateUtilsNum {
 
       'univ3.rebalanceEarned0',
       'univ3.rebalanceEarned1',
+      'univ3.propNotUnderlying',
 
       "pool.token0",
       "pool.token1",
@@ -691,8 +701,9 @@ export class StateUtilsNum {
       item.pairState?.rebalanceTickRange,
       item.pairState?.totalLiquidity,
 
-      item.univ3?.rebalanceEarned0,
-      item.univ3?.rebalanceEarned1,
+      item.univ3?.specificState.rebalanceEarned0,
+      item.univ3?.specificState.rebalanceEarned1,
+      item.univ3?.propNotUnderlying,
 
       item.univ3Pool?.token0,
       item.univ3Pool?.token1,

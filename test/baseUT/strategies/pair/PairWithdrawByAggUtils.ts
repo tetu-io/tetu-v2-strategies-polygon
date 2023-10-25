@@ -23,6 +23,10 @@ export interface IWithdrawParams {
   planEntryData: string;
   entryToPool: number;
   singleIteration: boolean;
+
+  pathOut?: string;
+  states0?: IStateNum[];
+  mockSwapper?: MockSwapper;
 }
 
 export interface IPrepareWithdrawTestParams {
@@ -53,11 +57,18 @@ export interface ICompleteWithdrawTestParams {
 }
 
 export class PairWithdrawByAggUtils {
-  static async makeFullWithdraw(signer: SignerWithAddress, signer2: SignerWithAddress, b: IBuilderResults, p: IWithdrawParams, pathOut: string, states0: IStateNum[], mockSwapper?: MockSwapper): Promise<IListStates> {
+  static async makeFullWithdraw(
+    signer: SignerWithAddress,
+    signer2: SignerWithAddress,
+    b: IBuilderResults,
+    p: IWithdrawParams,
+  ): Promise<IListStates> {
     const state = await PackedData.getDefaultState(b.strategy);
     const strategyAsOperator = b.strategy.connect(b.operator);
 
-    const states = [...states0];
+    const states = p?.states0
+      ? [...p.states0]
+      : [];
 
     let step = 0;
     while (true) {
@@ -95,9 +106,9 @@ export class PairWithdrawByAggUtils {
       console.log("planEntryData", p.planEntryData);
       console.log("ENTRY_TO_POOL_IS_ALLOWED", p.entryToPool);
 
-      if (mockSwapper) {
+      if (p.mockSwapper) {
         // temporary replace swappery by mocked one
-        await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, mockSwapper.address);
+        await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, p.mockSwapper.address);
       }
 
       const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
@@ -121,9 +132,11 @@ export class PairWithdrawByAggUtils {
       console.log(`unfoldBorrows.withdrawByAggStep.FINISH --------------------------------`);
 
       states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `u${++step}`, {eventsSet}));
-      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+      if (p.pathOut) {
+        await StateUtilsNum.saveListStatesToCSVColumns(p?.pathOut, states, b.stateParams, true);
+      }
 
-      if (mockSwapper) {
+      if (p.mockSwapper) {
         // restore original swapper
         await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, b.swapper);
       }
@@ -184,10 +197,10 @@ export class PairWithdrawByAggUtils {
             : p.planKind === PLAN_SWAP_ONLY_2
               ? buildEntryData2(p.propNotUnderlying)
               : "0x",
+        pathOut: p.pathOut,
+        states0: p.states0,
+        mockSwapper: p.mockSwapper
       },
-      p.pathOut,
-      p.states0,
-      p.mockSwapper
     );
 
     return {states};
