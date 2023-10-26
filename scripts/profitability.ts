@@ -16,6 +16,7 @@ import { BigNumber } from 'ethers';
 const whitelistedVaultsForInvesting = ['tUSDC'];
 const SUBGRAPH = 'https://api.thegraph.com/subgraphs/name/a17/tetu-v2?version=pending';
 const CONVERTER = MaticAddresses.TETU_CONVERTER;
+const HISTORY_DAYS = 3;
 
 interface IDebtState {
   tokenACollateral: string;
@@ -79,7 +80,7 @@ async function main() {
 
   const DAY = 60 * 60 * 24;
   const data = await client.query(getStrategiesData((Math.round(Date.now() / 1000 / DAY) * DAY) - DAY *
-    3), {}).toPromise();
+    HISTORY_DAYS), {}).toPromise();
   if (!data?.data?.vaultEntities) {
     console.log('Error fetching from subgraph');
     return;
