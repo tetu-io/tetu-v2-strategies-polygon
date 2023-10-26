@@ -256,6 +256,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   function _makeRequestedAmount(uint amount_, WithdrawUniversalLocal memory v) internal virtual returns ( // it's virtual to simplify unit testing
     uint expectedTotalAssetAmount
   ) {
+    console.log("_makeRequestedAmount.amount_", amount_);
     uint depositorLiquidity = _depositorLiquidity();
 
     // calculate how much liquidity we need to withdraw for getting at least requested amount of the {v.asset}
@@ -279,6 +280,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       emit OnDepositorExit(liquidityAmountToWithdraw, withdrawnAmounts);
     }
 
+    console.log("_makeRequestedAmount.v.balanceBefore", v.balanceBefore);
     // try to receive at least requested amount of the {v.asset} on the balance
     uint expectedBalance = ConverterStrategyBaseLib.makeRequestedAmount(
       v.tokens,

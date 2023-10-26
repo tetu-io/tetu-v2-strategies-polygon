@@ -832,7 +832,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       });
     });
   });
-  describe("State: large user has just exit the strategy @skip-on-coverage", () => {
+  describe("State: large user has just exit the strategy", () => {
     interface IStrategyInfo {
       name: string,
     }
