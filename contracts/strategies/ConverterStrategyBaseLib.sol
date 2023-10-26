@@ -619,7 +619,11 @@ library ConverterStrategyBaseLib {
     liquidator_.liquidateWithRoute(route, amountIn_, slippage_);
     uint balanceAfter = IERC20(tokenOut_).balanceOf(address(this));
 
+    console.log("_liquidateWithRoute.balanceBefore", balanceBefore);
+    console.log("_liquidateWithRoute.balanceAfter", balanceAfter);
+
     require(balanceAfter > balanceBefore, AppErrors.BALANCE_DECREASE);
+    console.log("_liquidateWithRoute.balanceAfter.passed", balanceAfter);
     receivedAmountOut = balanceAfter - balanceBefore;
 
     // Oracle in TetuConverter "knows" only limited number of the assets
@@ -962,18 +966,18 @@ library ConverterStrategyBaseLib {
   ///         If result amount is less than expected, try to close any other available debts (1 repay per block only)
   /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
   /// @param indexAsset_ Index of the given {asset} in {tokens}
-  /// @param requestedAmount Total amount of the given asset that we need to have on balance at the end.
-  ///                        Max uint means attempt to withdraw all possible amount.
+  /// @param requestedBalance Total amount of the given asset that we need to have on balance at the end.
+  ///                         Max uint means attempt to withdraw all possible amount.
   /// @return expectedBalance Expected asset balance after all swaps and repays
   function makeRequestedAmount(
     address[] memory tokens_,
     uint indexAsset_,
     ITetuConverter converter_,
     ITetuLiquidator liquidator_,
-    uint requestedAmount,
+    uint requestedBalance,
     mapping(address => uint) storage liquidationThresholds_
   ) external returns (uint expectedBalance) {
-    console.log("makeRequestedAmount.requestedAmount", requestedAmount);
+    console.log("makeRequestedAmount.requestedAmount", requestedBalance);
     DataSetLocal memory v = DataSetLocal({
       len: tokens_.length,
       converter: converter_,
@@ -982,7 +986,7 @@ library ConverterStrategyBaseLib {
       liquidator: liquidator_
     });
     uint[] memory _liquidationThresholds = _getLiquidationThresholds(liquidationThresholds_, v.tokens, v.len);
-    expectedBalance = _closePositionsToGetAmount(v, _liquidationThresholds, requestedAmount);
+    expectedBalance = _closePositionsToGetAmount(v, _liquidationThresholds, requestedBalance);
   }
   //endregion-------------------------------------------- Make requested amount
 
@@ -990,15 +994,15 @@ library ConverterStrategyBaseLib {
   /// @notice Close debts (if it's allowed) in converter until we don't have {requestedAmount} on balance
   /// @dev We assume here that this function is called before closing any positions in the current block
   /// @param liquidationThresholds Min allowed amounts-out for liquidations
-  /// @param requestedAmount Total amount of the given asset that we need to have on balance at the end.
-  ///                        Max uint means attempt to withdraw all possible amount.
+  /// @param requestedBalance Total amount of the given asset that we need to have on balance at the end.
+  ///                         Max uint means attempt to withdraw all possible amount.
   /// @return expectedBalance Expected asset balance after all swaps and repays
   function closePositionsToGetAmount(
     ITetuConverter converter_,
     ITetuLiquidator liquidator,
     uint indexAsset,
     mapping(address => uint) storage liquidationThresholds,
-    uint requestedAmount,
+    uint requestedBalance,
     address[] memory tokens
   ) external returns (
     uint expectedBalance
@@ -1013,7 +1017,7 @@ library ConverterStrategyBaseLib {
         liquidator: liquidator
       }),
       _getLiquidationThresholds(liquidationThresholds, tokens, len),
-      requestedAmount
+      requestedBalance
     );
   }
 
@@ -1022,18 +1026,18 @@ library ConverterStrategyBaseLib {
   ///      Note: AAVE3 allows to make two repays in a single block, see Aave3SingleBlockTest in TetuConverter
   ///      but it doesn't allow to make borrow and repay in a single block.
   /// @param liquidationThresholds_ Min allowed amounts-out for liquidations
-  /// @param requestedAmount Total amount of the given asset that we need to have on balance at the end.
-  ///                        Max uint means attempt to withdraw all possible amount.
+  /// @param requestedBalance Total amount of the given asset that we need to have on balance at the end.
+  ///                         Max uint means attempt to withdraw all possible amount.
   /// @return expectedBalance Expected asset balance after all swaps and repays
   function _closePositionsToGetAmount(
     DataSetLocal memory d_,
     uint[] memory liquidationThresholds_,
-    uint requestedAmount
+    uint requestedBalance
   ) internal returns (
     uint expectedBalance
   ) {
-    console.log("_closePositionsToGetAmount.requestedAmount", requestedAmount);
-    if (requestedAmount != 0) {
+    console.log("_closePositionsToGetAmount.requestedBalance", requestedBalance);
+    if (requestedBalance != 0) {
       CloseDebtsForRequiredAmountLocal memory v;
       v.asset = d_.tokens[d_.indexAsset];
 
@@ -1049,8 +1053,8 @@ library ConverterStrategyBaseLib {
 
         v.balanceAsset = IERC20(v.asset).balanceOf(address(this));
         v.balanceToken = IERC20(d_.tokens[i]).balanceOf(address(this));
-        console.log("_closePositionsToGetAmount.v.balanceAsset", v.balanceAsset);
-        console.log("_closePositionsToGetAmount.v.balanceToken", v.balanceToken);
+        console.log("_closePositionsToGetAmount.v.balanceAsset", IERC20(v.asset).balanceOf(address(this)));
+        console.log("_closePositionsToGetAmount.v.balanceToken", IERC20(d_.tokens[i]).balanceOf(address(this)));
 
         // Make one or several iterations. Do single swap and single repaying (both are optional) on each iteration.
         // Calculate expectedAmount of received underlying. Swap leftovers at the end even if requestedAmount is 0 at that moment.
@@ -1063,10 +1067,10 @@ library ConverterStrategyBaseLib {
             v.prices,
             v.decs,
             v.balanceAdditions,
-            [0, IterationPlanLib.PLAN_SWAP_REPAY, 0, requestedAmount, d_.indexAsset, i, 0]
+            [0, IterationPlanLib.PLAN_SWAP_REPAY, 0, requestedBalance, d_.indexAsset, i, 0]
           );
           if (v.idxToSwap1 == 0 && v.idxToRepay1 == 0) break;
-          console.log("_closePositionsToGetAmount.amountToSwap", v.amountToSwap);
+          console.log("_closePositionsToGetAmount.amountToSwap.by.plan", v.amountToSwap);
 
           // make swap if necessary
           uint spentAmountIn;
@@ -1084,6 +1088,8 @@ library ConverterStrategyBaseLib {
               false
             );
             console.log("_closePositionsToGetAmount.spentAmountIn", spentAmountIn);
+            console.log("_closePositionsToGetAmount.v.balanceAsset.after.swap", IERC20(v.asset).balanceOf(address(this)));
+            console.log("_closePositionsToGetAmount.v.balanceToken.after.swap", IERC20(d_.tokens[i]).balanceOf(address(this)));
 
             if (indexIn == d_.indexAsset) {
               expectedBalance = expectedBalance > spentAmountIn
@@ -1109,7 +1115,7 @@ library ConverterStrategyBaseLib {
             if (
               (indexBorrow != d_.indexAsset)
               || ( // received amount of asset is not enough, we need next swap-repay cycle
-                (amountToRepay > v.balanceAsset ? amountToRepay - v.balanceAsset : 0) < requestedAmount
+                (amountToRepay > v.balanceAsset ? amountToRepay - v.balanceAsset : 0) < requestedBalance
               )
             ) {
               (uint expectedAmountOut, uint repaidAmountOut, uint amountSendToRepay) = _repayDebt(
@@ -1118,6 +1124,9 @@ library ConverterStrategyBaseLib {
                 d_.tokens[indexBorrow],
                 amountToRepay
               );
+              console.log("_closePositionsToGetAmount.v.balanceAsset.after.repay", IERC20(v.asset).balanceOf(address(this)));
+              console.log("_closePositionsToGetAmount.v.balanceToken.after.repay", IERC20(d_.tokens[i]).balanceOf(address(this)));
+
               console.log("_closePositionsToGetAmount.repaidAmountOut", repaidAmountOut);
               console.log("_closePositionsToGetAmount.amountSendToRepay", amountSendToRepay);
               console.log("_closePositionsToGetAmount.expectedAmountOut", expectedAmountOut);
@@ -1127,7 +1136,11 @@ library ConverterStrategyBaseLib {
                   ? expectedBalance - amountSendToRepay
                   : 0;
               } else if (indexCollateral == d_.indexAsset) {
+                console.log("_closePositionsToGetAmount.indexCollateral == d_.indexAsset", indexCollateral == d_.indexAsset);
+                console.log("_closePositionsToGetAmount.expectedAmountOut", expectedAmountOut);
+                console.log("_closePositionsToGetAmount.spentAmountIn", spentAmountIn);
                 require(expectedAmountOut >= spentAmountIn, AppErrors.BALANCE_DECREASE);
+                console.log("_closePositionsToGetAmount.spentAmountIn.passed", spentAmountIn);
                 if (repaidAmountOut < amountSendToRepay) {
                   // SCB-779: expectedAmountOut was estimated for amountToRepay, but we have paid repaidAmountOut only
                   expectedBalance += expectedAmountOut * repaidAmountOut / amountSendToRepay;
@@ -1145,9 +1158,9 @@ library ConverterStrategyBaseLib {
           console.log("_closePositionsToGetAmount.newBalanceToken", v.newBalanceToken);
 
           if (v.newBalanceAsset > v.balanceAsset) {
-            if (requestedAmount != type(uint).max) {
-              requestedAmount = requestedAmount > v.newBalanceAsset - v.balanceAsset
-                ? requestedAmount - (v.newBalanceAsset - v.balanceAsset)
+            if (requestedBalance != type(uint).max) {
+              requestedBalance = requestedBalance > v.newBalanceAsset - v.balanceAsset
+                ? requestedBalance - (v.newBalanceAsset - v.balanceAsset)
                 : 0;
             } // requestedAmount can be checked for equality to type(uint).max below, we cannot change max value
           }
@@ -1157,7 +1170,7 @@ library ConverterStrategyBaseLib {
           v.balanceToken = v.newBalanceToken;
         } while (!v.exitLoop);
 
-        if (requestedAmount < liquidationThresholds_[d_.indexAsset]) break;
+        if (requestedBalance < liquidationThresholds_[d_.indexAsset]) break;
       }
     }
 
@@ -1188,6 +1201,8 @@ library ConverterStrategyBaseLib {
     // get amount of debt with debt-gap
     (uint needToRepay,) = converter.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset, true);
     amountSendToRepay = Math.min(amountToRepay < needToRepay ? amountToRepay : needToRepay, balanceBefore);
+    console.log("_repayDebt.needToRepay", needToRepay);
+    console.log("_repayDebt.amountSendToRepay", amountSendToRepay);
 
     // get expected amount without debt-gap
     uint swappedAmountOut;

@@ -6,6 +6,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "./AppErrors.sol";
 import "./AppLib.sol";
+import "hardhat/console.sol";
 
 /// @notice Support of withdraw iteration plans
 library IterationPlanLib {
@@ -134,7 +135,7 @@ library IterationPlanLib {
   ///    0: usePoolProportions: 1 - read proportions from the pool through IPoolProportionsProvider(this)
   ///    1: planKind: selected plan, one of PLAN_XXX
   ///    2: propNotUnderlying18: value of not-underlying proportion [0..1e18] if usePoolProportions == 0
-  ///    3: requestedAmount: total amount that should be withdrawn, it can be type(uint).max
+  ///    3: requestedBalance: total amount that should be withdrawn, it can be type(uint).max
   ///    4: indexAsset: index of the underlying in {tokens} array
   ///    5: indexToken: index of the token in {tokens} array. We are going to withdraw the token and convert it to the asset
   ///    6: entryDataParam: required-amount-to-reduce-debt in REPAY-SWAP-REPAY case; zero in other cases
@@ -174,7 +175,7 @@ library IterationPlanLib {
   /// @notice Generate plan for next withdraw iteration. We can do only one swap per iteration.
   ///         In general, we cam make 1) single swap (direct or reverse) and 2) repay
   ///         Swap is required to get required repay-amount OR to swap leftovers on final iteration.
-  /// @param requestedAmount Amount of underlying that we need to get on balance finally.
+  /// @param requestedBalance Amount of underlying that we need to have on balance after executing the plan.
   /// @param indexAsset Index of the underlying in {p.tokens} array
   /// @param indexToken Index of the not-underlying in {p.tokens} array
   /// @return indexToSwapPlus1 1-based index of the token to be swapped; 0 means swap is not required.
@@ -183,7 +184,7 @@ library IterationPlanLib {
   ///                            0 - no repay is required - it means that this is a last step with swapping leftovers.
   function _buildIterationPlan(
     SwapRepayPlanParams memory p,
-    uint requestedAmount,
+    uint requestedBalance,
     uint indexAsset,
     uint indexToken
   ) internal returns (
@@ -201,6 +202,12 @@ library IterationPlanLib {
     if (p.planKind == IterationPlanLib.PLAN_SWAP_ONLY) {
       v.swapLeftoversNeeded = true;
     } else {
+      uint requestedAmount = requestedBalance == type(uint).max
+        ? type(uint).max
+        : AppLib.sub0(requestedBalance, v.assetBalance);
+      requestedAmount = requestedBalance;
+      console.log("_buildIterationPlan.requestedBalance", requestedBalance);
+      console.log("_buildIterationPlan.requestedAmount", requestedAmount);
       if (requestedAmount < p.liquidationThresholds[indexAsset]) {
         // we don't need to repay any debts anymore, but we should swap leftovers
         v.swapLeftoversNeeded = true;
@@ -234,6 +241,7 @@ library IterationPlanLib {
                 p.entryDataParam
               );
             } else {
+              console.log("_buildIterationPlan.requestedAmount.1", requestedAmount);
               (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanForSellAndRepay(
                 requestedAmount,
                 p,
@@ -258,6 +266,7 @@ library IterationPlanLib {
               p.entryDataParam
             );
           } else {
+            console.log("_buildIterationPlan.requestedAmount.2", requestedAmount);
             (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanForSellAndRepay(
               requestedAmount == type(uint).max
                 ? type(uint).max
@@ -445,7 +454,7 @@ library IterationPlanLib {
 
   /// @notice Prepare a plan to swap some amount of collateral to get required repay-amount and make repaying
   ///         1) Sell collateral-asset to get missed amount-to-repay 2) make repay and get more collateral back
-  /// @param requestedAmount Amount of underlying that we need to get on balance finally.
+  /// @param requestedAmount We need to increase balance (of collateral asset) on this amount.
   /// @param totalCollateral Total amount of collateral used in the borrow
   /// @param totalDebt Total amount of debt that should be repaid to receive {totalCollateral}
   /// @param indexCollateral Index of collateral asset in {p.prices}, {p.decs}

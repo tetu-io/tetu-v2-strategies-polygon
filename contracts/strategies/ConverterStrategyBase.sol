@@ -485,12 +485,16 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   /// @return earned Earned amount in terms of {asset}
   /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
+    console.log("_doHardWork._csbs.investedAssets.1", _csbs.investedAssets);
     // ATTENTION! splitter will not cover the loss if it is lower than profit
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
+    console.log("_doHardWork._csbs.investedAssets.2", _csbs.investedAssets);
+    console.log("_doHardWork.investedAssetsNewPrices", investedAssetsNewPrices);
     if (!_preHardWork(reInvest)) {
       // claim rewards and get current asset balance
       uint assetBalance;
       (earned, lost, assetBalance) = _handleRewards();
+      console.log("_doHardWork.assetBalance", assetBalance);
       // re-invest income
       (, uint amountSentToInsurance) = _depositToPoolUniversal(
         reInvest
@@ -505,6 +509,10 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
         investedAssetsNewPrices + assetBalance, // assets in use before deposit
         _csbs.investedAssets + AppLib.balance(baseState.asset) + amountSentToInsurance // assets in use after deposit
       );
+      console.log("_doHardWork.investedAssetsNewPrices", investedAssetsNewPrices);
+      console.log("_doHardWork._csbs.investedAssets", _csbs.investedAssets);
+      console.log("_doHardWork.AppLib.balance(baseState.asset)", AppLib.balance(baseState.asset));
+      console.log("_doHardWork.amountSentToInsurance", amountSentToInsurance);
       _postHardWork();
       emit OnHardWorkEarnedLost(investedAssetsNewPrices, earnedByPrices, earned, lost, earned2, lost2);
       return (earned + earned2, lost + lost2);

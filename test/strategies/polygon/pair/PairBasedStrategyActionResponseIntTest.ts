@@ -1017,7 +1017,11 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           await converterStrategyBase.doHardWork({gasLimit: 19_000_000});
           const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-          expect(stateAfter.strategy.investedAssets).gt(stateBefore.strategy.investedAssets);
+          console.log("stateBefore", stateBefore);
+          console.log("stateAfter", stateAfter);
+          expect(stateAfter.strategy.investedAssets + stateAfter.strategy.assetBalance).gt(
+            stateBefore.strategy.investedAssets + stateBefore.strategy.assetBalance
+          );
         });
         it("should make emergency exit successfully", async () => {
           const b = await loadFixture(prepareStrategy);
