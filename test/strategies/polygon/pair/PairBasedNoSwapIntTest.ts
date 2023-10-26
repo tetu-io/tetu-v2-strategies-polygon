@@ -625,7 +625,7 @@ describe('PairBasedNoSwapIntTest', function() {
                     singleIteration: true,
                     entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
                     planKind: PLAN_REPAY_SWAP_REPAY_1,
-                    pathOut: ptr.pathOut + ".enter-to-poo.csv",
+                    pathOut: ptr.pathOut + ".single.enter-to-pool.csv",
                     states0: ptr.states
                   });
                 }
@@ -698,7 +698,7 @@ describe('PairBasedNoSwapIntTest', function() {
                     singleIteration: true,
                     entryToPool: ENTRY_TO_POOL_DISABLED,
                     planKind: PLAN_REPAY_SWAP_REPAY_1,
-                    pathOut: ptr.pathOut + ".dont-enter-to-poo.csv",
+                    pathOut: ptr.pathOut + ".single.dont-enter-to-pool.liquidator.csv",
                     states0: ptr.states
                   });
                 }
@@ -770,7 +770,7 @@ describe('PairBasedNoSwapIntTest', function() {
                     planKind: PLAN_SWAP_REPAY_0,
                     propNotUnderlying: Number.MAX_SAFE_INTEGER.toString(), // use pool's proportions
                     states0: ptr.states,
-                    pathOut: ptr.pathOut + ".enter-to-pool.csv"
+                    pathOut: ptr.pathOut + ".all.enter-to-pool.csv"
                   });
                 }
 
@@ -811,7 +811,8 @@ describe('PairBasedNoSwapIntTest', function() {
                     entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
                     planKind: PLAN_SWAP_REPAY_0,
                     states0: ptr.states,
-                    pathOut: ptr.pathOut + ".dont-enter-to-pool.csv"
+                    propNotUnderlying: "0",
+                    pathOut: ptr.pathOut + ".all.dont-enter-to-pool.csv"
                   });
                 }
 
@@ -874,7 +875,8 @@ describe('PairBasedNoSwapIntTest', function() {
                     entryToPool: ENTRY_TO_POOL_DISABLED,
                     planKind: PLAN_SWAP_REPAY_0,
                     states0: ptr.states,
-                    pathOut: ptr.pathOut + ".enter-to-pool-liquidator.csv"
+                    propNotUnderlying: "0",
+                    pathOut: ptr.pathOut + ".all.enter-to-pool.liquidator.csv"
                   });
                 }
 
@@ -1142,124 +1144,6 @@ describe('PairBasedNoSwapIntTest', function() {
     });
   });
 
-  describe('Twisted debts', function() {
-    interface IStrategyInfo {
-      name: string,
-    }
-    const strategies: IStrategyInfo[] = [
-      { name: PLATFORM_UNIV3, },
-      { name: PLATFORM_ALGEBRA, },
-      { name: PLATFORM_KYBER, }
-    ];
-    strategies.forEach(function (strategyInfo: IStrategyInfo) {
-      async function prepareStrategy(): Promise<IBuilderResults> {
-        await InjectUtils.injectTetuConverter(signer);
-        await ConverterUtils.disableAaveV2(signer);
-        await InjectUtils.redeployAave3PoolAdapters(signer);
-
-        return PairStrategyFixtures.buildPairStrategyUsdcXXX(
-          strategyInfo.name,
-          signer,
-          signer2,
-          {kyberPid: KYBER_PID_DEFAULT_BLOCK}
-        );
-      }
-
-      describe(`${strategyInfo.name}`, () => {
-        const pathOut = `./tmp/${strategyInfo.name}-full-withdraw-fuse-on.csv`;
-        let snapshot: string;
-        let builderResults: IBuilderResults;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-          builderResults = await prepareTwistedDebts();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
-
-        async function prepareTwistedDebts(): Promise<IBuilderResults> {
-          const b = await prepareStrategy();
-          await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
-            b, {
-              movePricesUp: true,
-              countRebalances: 1,
-              swapAmountRatio: DEFAULT_SWAP_AMOUNT_RATIO,
-              amountToDepositBySigner2: "100",
-              amountToDepositBySigner: "2000"
-            },
-            pathOut,
-            signer,
-            signer2,
-          );
-          // prepare fuse
-          await PairBasedStrategyPrepareStateUtils.prepareFuse(b, true);
-          // enable fuse
-          await b.strategy.connect(signer).rebalanceNoSwaps(true, {gasLimit: 10_000_000});
-
-          return b;
-        }
-
-        describe('Full withdraw when fuse is triggered ON', function () {
-          async function makeWithdrawAll(): Promise<IListStates> {
-            const ptr = await PairWithdrawByAggUtils.prepareWithdrawTest(signer, signer2, builderResults, {
-              movePricesUp: true, // not used here
-              skipOverCollateralStep: true,
-              pathTag: "#full-withdraw-fuse-on"
-            });
-
-            return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
-              singleIteration: false,
-              entryToPool: ENTRY_TO_POOL_DISABLED,
-              planKind: PLAN_SWAP_REPAY_0,
-              propNotUnderlying: "0",
-              states0: ptr.states,
-              pathOut: ptr.pathOut
-            });
-          }
-
-          it("initially should set fuse triggered ON", async () => {
-            const state = await PackedData.getDefaultState(builderResults.strategy);
-            expect(state.fuseStatus > FUSE_OFF_1).eq(true);
-          });
-          it("initially should set withdrawDone = 0", async () => {
-            const state = await PackedData.getDefaultState(builderResults.strategy);
-            expect(state.withdrawDone).eq(0);
-          });
-          it("should not enter to the pool at the end", async () => {
-            const ret = await loadFixture(makeWithdrawAll);
-            const stateLast = ret.states[ret.states.length - 1];
-            expect(stateLast.strategy.liquidity).lt(1000);
-          });
-          it("should set expected investedAssets", async () => {
-            const ret = await loadFixture(makeWithdrawAll);
-            const stateFirst = ret.states[0];
-            const stateLast = ret.states[ret.states.length - 1];
-            expect(stateLast.strategy.investedAssets).lt(1000);
-          });
-          it("should set expected totalAssets", async () => {
-            const ret = await loadFixture(makeWithdrawAll);
-            const uncoveredLoss = StateUtilsNum.getTotalUncoveredLoss(ret.states);
-            const stateFirst = ret.states[0];
-            const stateLast = ret.states[ret.states.length - 1];
-            expect(stateLast.vault.totalAssets + uncoveredLoss).approximately(stateFirst.vault.totalAssets, 100);
-          });
-          it("should set withdrawDone=1 at the end", async () => {
-            const ret = await loadFixture(makeWithdrawAll);
-            const stateFirst = ret.states[0];
-            const stateLast = ret.states[ret.states.length - 1];
-            expect(stateLast.pairState?.withdrawDone).eq(1);
-            expect(stateFirst.pairState?.withdrawDone).eq(0);
-          });
-          it("should set lastRebalanceNoSwap to 0 at the end", async () => {
-            const ret = await loadFixture(makeWithdrawAll);
-            const stateLast = ret.states[ret.states.length - 1];
-            expect(stateLast.pairState?.lastRebalanceNoSwap).eq(0);
-          });
-        });
-      });
-    });
-  });
-
   describe('rebalanceNoSwaps', function() {
     interface IStrategyInfo {
       name: string,
@@ -1268,10 +1152,10 @@ describe('PairBasedNoSwapIntTest', function() {
       depositAmount: string
     }
     const strategies: IStrategyInfo[] = [
+      { name: PLATFORM_ALGEBRA, priceUp: true, countCycles: 2, depositAmount: "5000" },
       { name: PLATFORM_KYBER, priceUp: false, countCycles: 2, depositAmount: "1000" },
       { name: PLATFORM_UNIV3, priceUp: true, countCycles: 3, depositAmount: "100000" },
       { name: PLATFORM_UNIV3, priceUp: false, countCycles: 3, depositAmount: "100000" },
-      { name: PLATFORM_ALGEBRA, priceUp: false, countCycles: 2, depositAmount: "1000" },
     ];
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {

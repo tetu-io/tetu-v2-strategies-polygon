@@ -7,6 +7,7 @@ import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
 import "../interfaces/IConverterStrategyBase.sol";
+import "hardhat/console.sol";
 
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
@@ -254,6 +255,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   function _makeRequestedAmount(uint amount_, WithdrawUniversalLocal memory v) internal virtual returns ( // it's virtual to simplify unit testing
     uint expectedTotalAssetAmount
   ) {
+    console.log("_makeRequestedAmount.amount_", amount_);
     uint depositorLiquidity = _depositorLiquidity();
 
     // calculate how much liquidity we need to withdraw for getting at least requested amount of the {v.asset}
@@ -277,6 +279,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       emit OnDepositorExit(liquidityAmountToWithdraw, withdrawnAmounts);
     }
 
+    console.log("_makeRequestedAmount.v.balanceBefore", v.balanceBefore);
     // try to receive at least requested amount of the {v.asset} on the balance
     uint expectedBalance = ConverterStrategyBaseLib.makeRequestedAmount(
       v.tokens,
@@ -340,6 +343,9 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     uint strategyLoss,
     uint amountSentToInsurance
   ) {
+    console.log("_withdrawUniversal.amount_", amount_);
+    console.log("_withdrawUniversal.earnedByPrices_", earnedByPrices_);
+    console.log("_withdrawUniversal.investedAssets_", investedAssets_);
     // amount to withdraw; we add a little gap to avoid situation "opened debts, no liquidity to pay"
     uint amount = amount_ == type(uint).max
       ? amount_

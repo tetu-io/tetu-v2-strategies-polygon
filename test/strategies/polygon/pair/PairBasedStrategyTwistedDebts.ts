@@ -44,7 +44,10 @@ import {BigNumber} from "ethers";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
-import {PairWithdrawByAggUtils} from "../../../baseUT/strategies/pair/PairWithdrawByAggUtils";
+import {
+  DEFAULT_SWAP_AMOUNT_RATIO,
+  PairWithdrawByAggUtils
+} from "../../../baseUT/strategies/pair/PairWithdrawByAggUtils";
 import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {IEventsSet} from "../../../baseUT/strategies/CaptureEvents";
@@ -208,8 +211,12 @@ describe('PairBasedStrategyTwistedDebts', function () {
 //region Unit tests
   describe("Prices up", () => {
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
+      interface IPrepareStrategyResults {
+        builderResults: IBuilderResults;
+        states: IStateNum[];
+      }
 
-      async function prepareStrategy(): Promise<IBuilderResults> {
+      async function prepareStrategy(): Promise<IPrepareStrategyResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
           strategyInfo.name,
           signer,
@@ -240,16 +247,19 @@ describe('PairBasedStrategyTwistedDebts', function () {
           amountToDepositBySigner2: "100",
           amountToDepositBySigner: "10000"
         }
-        await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(b, p, pathOut, signer, signer2);
-        return b;
+        const listStates = await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(b, p, pathOut, signer, signer2);
+        return {builderResults: b, states: [...states, ...listStates.states]};
       }
 
       describe(`${strategyInfo.name}`, () => {
         let snapshot: string;
         let builderResults: IBuilderResults;
+        let states0: IStateNum[];
         before(async function () {
           snapshot = await TimeUtils.snapshot();
-          builderResults = await prepareStrategy()
+          const ret = await prepareStrategy()
+          builderResults = ret.builderResults;
+          states0 = ret.states;
         });
         after(async function () {
           await TimeUtils.rollback(snapshot);

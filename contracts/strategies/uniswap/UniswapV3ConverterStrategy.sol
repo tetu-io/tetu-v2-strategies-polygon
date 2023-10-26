@@ -214,10 +214,13 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     _rebalanceAfter(tokenAmounts);
     state.pair.lastRebalanceNoSwap = 0;
 
+    console.log("completed", completed);
+    console.log("_isFuseTriggeredOn()", _isFuseTriggeredOn());
     if (completed && _isFuseTriggeredOn()) {
       // full withdraw was completed, we can exclude next calls of withdrawByAggStep
       state.pair.withdrawDone = 1;
     }
+    console.log("state.pair.withdrawDone", state.pair.withdrawDone);
 
     ConverterStrategyBaseLib2.fixTooHighInvestedAssets(baseState.asset, oldTotalAssets, _csbs);
   }

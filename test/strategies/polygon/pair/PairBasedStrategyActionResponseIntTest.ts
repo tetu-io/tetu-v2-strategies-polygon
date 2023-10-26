@@ -93,8 +93,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
       {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
       {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
-      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
-      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN},
+      // todo Uncomment when volatile pairs will be used  {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
+      // todo Uncomment when volatile pairs will be used {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN},
     ];
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
@@ -832,15 +832,15 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       });
     });
   });
-  describe("State: large user has just exit the strategy @skip-on-coverage", () => {
+  describe("State: large user has just exit the strategy", () => {
     interface IStrategyInfo {
       name: string,
     }
 
     const strategies: IStrategyInfo[] = [
+      {name: PLATFORM_KYBER,},
       {name: PLATFORM_UNIV3,},
       {name: PLATFORM_ALGEBRA,},
-      {name: PLATFORM_KYBER,},
     ];
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
