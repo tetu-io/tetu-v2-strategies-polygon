@@ -8,7 +8,6 @@ import {
   BorrowManager__factory,
   ConverterController__factory,
   ConverterStrategyBase__factory,
-  IController__factory,
   IDebtMonitor,
   IDebtMonitor__factory,
   IERC20__factory,
@@ -18,7 +17,7 @@ import {
   UniswapV3ConverterStrategy__factory,
 } from '../../../../typechain';
 import {Misc} from "../../../../scripts/utils/Misc";
-import {defaultAbiCoder, formatUnits, parseUnits} from 'ethers/lib/utils';
+import {formatUnits, parseUnits} from 'ethers/lib/utils';
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
@@ -37,7 +36,6 @@ import {
   ENTRY_TO_POOL_DISABLED,
   ENTRY_TO_POOL_IS_ALLOWED,
   FUSE_OFF_1,
-  PLAN_REPAY_SWAP_REPAY_1,
   PLAN_SWAP_REPAY_0
 } from "../../../baseUT/AppConstants";
 import {BigNumber} from "ethers";
@@ -45,14 +43,11 @@ import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {
-  DEFAULT_SWAP_AMOUNT_RATIO,
   PairWithdrawByAggUtils
 } from "../../../baseUT/strategies/pair/PairWithdrawByAggUtils";
 import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {IEventsSet} from "../../../baseUT/strategies/CaptureEvents";
-import {IERC20Metadata__factory} from "../../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
-import {trimDecimals} from "../../../baseUT/utils/MathUtils";
 
 describe('PairBasedStrategyTwistedDebts', function () {
   /**
@@ -254,12 +249,9 @@ describe('PairBasedStrategyTwistedDebts', function () {
       describe(`${strategyInfo.name}`, () => {
         let snapshot: string;
         let builderResults: IBuilderResults;
-        let states0: IStateNum[];
         before(async function () {
           snapshot = await TimeUtils.snapshot();
-          const ret = await prepareStrategy()
-          builderResults = ret.builderResults;
-          states0 = ret.states;
+          builderResults = (await prepareStrategy()).builderResults;
         });
         after(async function () {
           await TimeUtils.rollback(snapshot);
@@ -724,7 +716,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
             const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
 
             const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
-            await builderResults.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: 99_000_000});
+            await builderResults.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: 8_000_000});
             const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
 
             expect(stateAfter.user.assetBalance).eq(stateBefore.user.assetBalance + 300);
@@ -733,7 +725,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
             const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
 
             const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
-            await builderResults.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
+            await builderResults.vault.connect(signer).withdrawAll({gasLimit: 8_000_000});
             const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
 
             console.log('stateBefore', stateBefore);
@@ -849,7 +841,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
               const vault = builderResults.vault.connect(signer);
               const maxAmountToWithdraw = await vault.maxWithdraw(signer.address);
               const amountToWithdraw = maxAmountToWithdraw.mul(percentToWithdraw).div(100);
-              await vault.withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 19_000_000});
+              await vault.withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 9_000_000});
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
 
               expect(stateAfter.user.assetBalance).approximately(
