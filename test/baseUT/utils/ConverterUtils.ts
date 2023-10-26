@@ -2,7 +2,7 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import { DeployerUtilsLocal } from '../../../scripts/utils/DeployerUtilsLocal';
 import {
-  BorrowManager, BorrowManager__factory,
+  BorrowManager, BorrowManager__factory, ConverterController,
   ConverterController__factory, IBorrowManager,
   IBorrowManager__factory,
   IConverterController__factory,
@@ -131,5 +131,13 @@ export class ConverterUtils {
       await controller.borrowManager(),
       signer
     );
+  }
+
+  public static async allowToConvertByAave3(signer: SignerWithAddress, controller: ConverterController, assetIn: string, assetOut: string) {
+    const governance = await controller.governance();
+    const platformAdapterAddress = await getAaveThreePlatformAdapter(signer);
+    const borrowManagerAddress = await controller.borrowManager();
+    const borrowManagerAsGovernance = IBorrowManager__factory.connect(borrowManagerAddress, await Misc.impersonate(governance),);
+    await borrowManagerAsGovernance.addAssetPairs(platformAdapterAddress, [assetIn], [assetOut]);
   }
 }

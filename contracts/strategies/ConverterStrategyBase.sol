@@ -342,7 +342,9 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     uint strategyLoss,
     uint amountSentToInsurance
   ) {
-    console.log("_withdrawUniversal");
+    console.log("_withdrawUniversal.amount_", amount_);
+    console.log("_withdrawUniversal.earnedByPrices_", earnedByPrices_);
+    console.log("_withdrawUniversal.investedAssets_", investedAssets_);
     // amount to withdraw; we add a little gap to avoid situation "opened debts, no liquidity to pay"
     uint amount = amount_ == type(uint).max
       ? amount_

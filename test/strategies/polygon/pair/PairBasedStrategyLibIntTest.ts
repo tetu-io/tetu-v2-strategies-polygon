@@ -617,9 +617,11 @@ describe('PairBasedStrategyLibIntTest', () => {
         "0x",
         true,
         p.planKind,
-        Array.isArray(p.propNotUnderlying18)
+        [Array.isArray(p.propNotUnderlying18)
           ? Misc.MAX_UINT
-          : parseUnits(p.propNotUnderlying18 || "0", 18)
+          : parseUnits(p.propNotUnderlying18 || "0", 18),
+          0
+        ]
       );
 
       return {

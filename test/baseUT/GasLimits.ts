@@ -54,7 +54,7 @@ export const GAS_BORROW_LIB_04 = 2_159_200;
 export const GAS_BORROW_LIB_05 = 1_626_110;
 export const GAS_BORROW_LIB_06 = 994_657;
 export const GAS_BORROW_LIB_07 = 995_617;
-export const GAS_BORROW_LIB_08 = 1_600_576;
+export const GAS_BORROW_LIB_08 = 1_606_576;
 
 export const GAS_REBALANCE_NO_SWAP = 5_000_000;
 
