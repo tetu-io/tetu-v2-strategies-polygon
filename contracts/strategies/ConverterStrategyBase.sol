@@ -7,7 +7,6 @@ import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
 import "../interfaces/IConverterStrategyBase.sol";
-import "hardhat/console.sol";
 
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
@@ -255,7 +254,6 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   function _makeRequestedAmount(uint amount_, WithdrawUniversalLocal memory v) internal virtual returns ( // it's virtual to simplify unit testing
     uint expectedTotalAssetAmount
   ) {
-    console.log("_makeRequestedAmount.amount_", amount_);
     uint depositorLiquidity = _depositorLiquidity();
 
     // calculate how much liquidity we need to withdraw for getting at least requested amount of the {v.asset}
@@ -279,7 +277,6 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       emit OnDepositorExit(liquidityAmountToWithdraw, withdrawnAmounts);
     }
 
-    console.log("_makeRequestedAmount.v.balanceBefore", v.balanceBefore);
     // try to receive at least requested amount of the {v.asset} on the balance
     uint expectedBalance = ConverterStrategyBaseLib.makeRequestedAmount(
       v.tokens,
@@ -343,9 +340,6 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     uint strategyLoss,
     uint amountSentToInsurance
   ) {
-    console.log("_withdrawUniversal.amount_", amount_);
-    console.log("_withdrawUniversal.earnedByPrices_", earnedByPrices_);
-    console.log("_withdrawUniversal.investedAssets_", investedAssets_);
     // amount to withdraw; we add a little gap to avoid situation "opened debts, no liquidity to pay"
     uint amount = amount_ == type(uint).max
       ? amount_
@@ -485,16 +479,12 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   /// @return earned Earned amount in terms of {asset}
   /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
-    console.log("_doHardWork._csbs.investedAssets.1", _csbs.investedAssets);
     // ATTENTION! splitter will not cover the loss if it is lower than profit
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
-    console.log("_doHardWork._csbs.investedAssets.2", _csbs.investedAssets);
-    console.log("_doHardWork.investedAssetsNewPrices", investedAssetsNewPrices);
     if (!_preHardWork(reInvest)) {
       // claim rewards and get current asset balance
       uint assetBalance;
       (earned, lost, assetBalance) = _handleRewards();
-      console.log("_doHardWork.assetBalance", assetBalance);
       // re-invest income
       (, uint amountSentToInsurance) = _depositToPoolUniversal(
         reInvest
@@ -509,10 +499,6 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
         investedAssetsNewPrices + assetBalance, // assets in use before deposit
         _csbs.investedAssets + AppLib.balance(baseState.asset) + amountSentToInsurance // assets in use after deposit
       );
-      console.log("_doHardWork.investedAssetsNewPrices", investedAssetsNewPrices);
-      console.log("_doHardWork._csbs.investedAssets", _csbs.investedAssets);
-      console.log("_doHardWork.AppLib.balance(baseState.asset)", AppLib.balance(baseState.asset));
-      console.log("_doHardWork.amountSentToInsurance", amountSentToInsurance);
       _postHardWork();
       emit OnHardWorkEarnedLost(investedAssetsNewPrices, earnedByPrices, earned, lost, earned2, lost2);
       return (earned + earned2, lost + lost2);

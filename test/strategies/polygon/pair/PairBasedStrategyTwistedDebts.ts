@@ -434,6 +434,47 @@ describe('PairBasedStrategyTwistedDebts', function () {
           });
         })
 
+        describe("withdraw all by portions", function () {
+          let snapshotLocal0: string;
+          beforeEach(async function () {
+            snapshotLocal0 = await TimeUtils.snapshot();
+          });
+          afterEach(async function () {
+            await TimeUtils.rollback(snapshotLocal0);
+          });
+
+          const withdrawAmountPercents = [11, 23, ];
+          withdrawAmountPercents.forEach(function (percentToWithdraw: number) {
+            it(`should withdraw all by portion ${percentToWithdraw}% successfully`, async () => {
+              const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
+
+              const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
+              const vault = builderResults.vault.connect(signer);
+              const maxAmountToWithdraw = await vault.maxWithdraw(signer.address);
+              const amountToWithdraw = maxAmountToWithdraw.mul(percentToWithdraw).div(100);
+
+              let step = 0;
+              while (true) {
+                console.log(`withdraw all by portions ================ ${step++} =============`)
+                const maxAmount = await vault.maxWithdraw(signer.address);
+                console.log("Max amount:", +formatUnits(maxAmount, builderResults.assetDecimals));
+                if (maxAmount.gt(amountToWithdraw)) {
+                  await vault.withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 9_000_000});
+                } else {
+                  await vault.withdrawAll({gasLimit: 9_000_000});
+                  break;
+                }
+              }
+              const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
+
+              expect(stateAfter.user.assetBalance).approximately(
+                stateBefore.user.assetBalance + +formatUnits(maxAmountToWithdraw, builderResults.assetDecimals),
+                100
+              );
+            });
+          });
+        })
+
         describe("deposit various amounts", function () {
           let snapshotLocal0: string;
           beforeEach(async function () {

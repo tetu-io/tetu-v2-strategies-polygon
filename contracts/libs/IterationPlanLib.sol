@@ -6,7 +6,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "./AppErrors.sol";
 import "./AppLib.sol";
-import "hardhat/console.sol";
 
 /// @notice Support of withdraw iteration plans
 library IterationPlanLib {
@@ -205,9 +204,7 @@ library IterationPlanLib {
       uint requestedAmount = requestedBalance == type(uint).max
         ? type(uint).max
         : AppLib.sub0(requestedBalance, v.assetBalance);
-      requestedAmount = requestedBalance;
-      console.log("_buildIterationPlan.requestedBalance", requestedBalance);
-      console.log("_buildIterationPlan.requestedAmount", requestedAmount);
+
       if (requestedAmount < p.liquidationThresholds[indexAsset]) {
         // we don't need to repay any debts anymore, but we should swap leftovers
         v.swapLeftoversNeeded = true;
@@ -241,7 +238,6 @@ library IterationPlanLib {
                 p.entryDataParam
               );
             } else {
-              console.log("_buildIterationPlan.requestedAmount.1", requestedAmount);
               (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanForSellAndRepay(
                 requestedAmount,
                 p,
@@ -266,7 +262,6 @@ library IterationPlanLib {
               p.entryDataParam
             );
           } else {
-            console.log("_buildIterationPlan.requestedAmount.2", requestedAmount);
             (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanForSellAndRepay(
               requestedAmount == type(uint).max
                 ? type(uint).max
