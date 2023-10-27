@@ -163,7 +163,7 @@ library ConverterStrategyBaseLib {
   /// @notice During SWAP-REPAY cycle we can receive requested amount after SWAP, so, following REPAY wii be skipped.
   ///         But we should prevent situation "zero balance, not zero debts".
   ///         So, it worth to request amount higher (on the given gap) than it's really requested.
-  uint internal constant REQUESTED_BALANCE_GAP = 50_000; // 50%
+  uint internal constant REQUESTED_BALANCE_GAP = 5_000; // 5%
 //endregion--------------------------------------------------- Constants
 
 //region--------------------------------------------------- Events

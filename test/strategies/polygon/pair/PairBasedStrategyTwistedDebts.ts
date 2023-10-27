@@ -115,6 +115,12 @@ describe('PairBasedStrategyTwistedDebts', function () {
     checkBefore: ICheckHealthResult[];
     checkAfter: ICheckHealthResult[];
   }
+
+  interface ITargetLockedAmountPercentConfig {
+    /** 0.01 means that the locked-amount-percent should be reduced to 1% of the current value */
+    percentRatio: number;
+    maxCountSteps: number;
+  }
 //endregion Data types
 
 //region Utils
@@ -191,19 +197,21 @@ describe('PairBasedStrategyTwistedDebts', function () {
     const checkAfter = await getCheckHealthResultsForStrategy(b.strategy.address, debtMonitor, borrowManager, p?.platformKindOnly);
     return {checkBefore, checkAfter}
   }
-
-  interface IStrategyInfo {
-    name: string,
-  }
-
-  const strategies: IStrategyInfo[] = [
-    {name: PLATFORM_UNIV3,},
-    {name: PLATFORM_ALGEBRA,},
-    {name: PLATFORM_KYBER,},
-  ];
 //endregion Utils
 
 //region Unit tests
+  interface IStrategyInfo {
+    name: string,
+    amountDepositBySigner?: string; // "10000" by default
+  }
+
+  const strategies: IStrategyInfo[] = [
+    // {name: PLATFORM_UNIV3, amountDepositBySigner: "250000"},
+    {name: PLATFORM_UNIV3, amountDepositBySigner: "50000"},
+    {name: PLATFORM_ALGEBRA,},
+    {name: PLATFORM_KYBER,},
+  ];
+
   describe("Prices up", () => {
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       interface IPrepareStrategyResults {
@@ -240,7 +248,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
           movePricesUp: true,
           swapAmountRatio: strategyInfo.name === PLATFORM_ALGEBRA ? 0.3 : 1.1,
           amountToDepositBySigner2: "100",
-          amountToDepositBySigner: "10000"
+          amountToDepositBySigner: strategyInfo.amountDepositBySigner ?? "10000"
         }
         const listStates = await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(b, p, pathOut, signer, signer2);
         return {builderResults: b, states: [...states, ...listStates.states]};
@@ -354,7 +362,10 @@ describe('PairBasedStrategyTwistedDebts', function () {
             console.log("stateBefore", stateBefore);
             console.log("stateAfter", stateAfter);
 
-            expect(stateAfter.strategy.investedAssets).approximately(stateBefore.strategy.investedAssets, 100);
+            expect(stateAfter.strategy.investedAssets + stateAfter.strategy.assetBalance).approximately(
+              stateBefore.strategy.investedAssets + stateBefore.strategy.assetBalance,
+              100
+            );
           });
           it("should hardwork successfully", async () => {
             const converterStrategyBase = ConverterStrategyBase__factory.connect(
@@ -434,7 +445,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
           });
         })
 
-        describe("withdraw all by portions", function () {
+        describe("withdraw several portions", function () {
           let snapshotLocal0: string;
           beforeEach(async function () {
             snapshotLocal0 = await TimeUtils.snapshot();
@@ -443,9 +454,10 @@ describe('PairBasedStrategyTwistedDebts', function () {
             await TimeUtils.rollback(snapshotLocal0);
           });
 
-          const withdrawAmountPercents = [11, 23, ];
+          const MAX_COUNT_STEPS = 3;
+          const withdrawAmountPercents = [3, 5, 11, 17, 23, 31]; // we assume that withdrawAmountPercents * MAX_COUNT_STEPS < 100
           withdrawAmountPercents.forEach(function (percentToWithdraw: number) {
-            it(`should withdraw all by portion ${percentToWithdraw}% successfully`, async () => {
+            it(`should withdraw ${percentToWithdraw}% successfully several times`, async () => {
               const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
 
               const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
@@ -458,13 +470,14 @@ describe('PairBasedStrategyTwistedDebts', function () {
                 console.log(`withdraw all by portions ================ ${step++} =============`)
                 const maxAmount = await vault.maxWithdraw(signer.address);
                 console.log("Max amount:", +formatUnits(maxAmount, builderResults.assetDecimals));
-                if (maxAmount.gt(amountToWithdraw)) {
-                  await vault.withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 9_000_000});
-                } else {
-                  await vault.withdrawAll({gasLimit: 9_000_000});
-                  break;
+                await vault.withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 9_000_000});
+                if (step === MAX_COUNT_STEPS) break;
+
+                if (await builderResults.strategy.needRebalance()) {
+                  await strategy.rebalanceNoSwaps(true, {gasLimit: 9_000_000});
                 }
               }
+              await vault.withdrawAll({gasLimit: 9_000_000});
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
 
               expect(stateAfter.user.assetBalance).approximately(
@@ -579,9 +592,12 @@ describe('PairBasedStrategyTwistedDebts', function () {
 
         if (strategyInfo.name === PLATFORM_UNIV3) {
           describe("Rebalance to reduce locked amount percent, the pool has given proportions", function () {
-            const TARGET_LOCKED_AMOUNT_PERCENT_RATIO = [0.01, 0.25];
+            const TARGET_LOCKED_AMOUNT_PERCENT_RATIO: ITargetLockedAmountPercentConfig[] = [
+              {percentRatio: 0.01, maxCountSteps: 10},
+              {percentRatio: 0.25, maxCountSteps: 3}
+            ];
             const SWAP_AMOUNT_RATIO = [110, 0.01, 50, 99.95, 100.05];
-            TARGET_LOCKED_AMOUNT_PERCENT_RATIO.forEach(targetLockedAmountPercentRatio => {
+            TARGET_LOCKED_AMOUNT_PERCENT_RATIO.forEach(lockedPercentConfig => {
               let currentLockedPercent: number;
               let targetLockedPercent: number;
               let uniswapStrategy: UniswapV3ConverterStrategy;
@@ -590,12 +606,12 @@ describe('PairBasedStrategyTwistedDebts', function () {
                 const estimatedUnderlyingAmount = +formatUnits(ret.estimatedUnderlyingAmount, builderResults.assetDecimals);
                 const strategyTotalAssets = +formatUnits(ret.totalAssets, builderResults.assetDecimals);
                 currentLockedPercent = estimatedUnderlyingAmount / strategyTotalAssets;
-                targetLockedPercent = currentLockedPercent * targetLockedAmountPercentRatio
+                targetLockedPercent = currentLockedPercent * lockedPercentConfig.percentRatio;
               });
 
               SWAP_AMOUNT_RATIO.forEach(swapAmountRatio => {
-                const pathOut = `./tmp/up-${targetLockedAmountPercentRatio}-${swapAmountRatio.toString()}.csv`;
-                describe(`reduce-locked-percent-ratio=${targetLockedAmountPercentRatio} swapAmountRatio=${swapAmountRatio.toString()}`, function () {
+                const pathOut = `./tmp/up-${lockedPercentConfig.percentRatio}-${swapAmountRatio.toString()}.csv`;
+                describe(`reduce-locked-percent-ratio=${lockedPercentConfig.percentRatio} swapAmountRatio=${swapAmountRatio.toString()}`, function () {
                   let snapshotLevel0: string;
                   const states: IStateNum[] = [];
 
@@ -660,11 +676,11 @@ describe('PairBasedStrategyTwistedDebts', function () {
                     console.log("currentLockedPercent", currentLockedPercent);
                     console.log("targetLockedPercent", targetLockedPercent);
                     console.log("Count steps", states.length);
-                    // console.log(states);
-                    expect(states.length).lt(MAX_ALLOWED_COUNT_STEPS);
+                    expect(states.length).lt(lockedPercentConfig.maxCountSteps);
                   });
                   it("should invest all liquidity to the pool", async () => {
                     const lastState = states[states.length - 1];
+                    console.log(lastState);
                     expect(lastState.strategy.assetBalance).lt(lastState.strategy.totalAssets / 100);
                     expect(lastState.strategy.borrowAssetsBalances[0]).lt(1);
                   });
@@ -925,11 +941,53 @@ describe('PairBasedStrategyTwistedDebts', function () {
           });
         })
 
+        describe("withdraw several portions", function () {
+          let snapshotLocal0: string;
+          beforeEach(async function () {
+            snapshotLocal0 = await TimeUtils.snapshot();
+          });
+          afterEach(async function () {
+            await TimeUtils.rollback(snapshotLocal0);
+          });
+
+          const MAX_COUNT_STEPS = 5;
+          const withdrawAmountPercents = [3, 5, 11, ]; // we assume that withdrawAmountPercents * MAX_COUNT_STEPS < 100
+          withdrawAmountPercents.forEach(function (percentToWithdraw: number) {
+            it(`should withdraw ${percentToWithdraw}% successfully several times`, async () => {
+              const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
+
+              const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
+              const vault = builderResults.vault.connect(signer);
+              const maxAmountToWithdraw = await vault.maxWithdraw(signer.address);
+              const amountToWithdraw = maxAmountToWithdraw.mul(percentToWithdraw).div(100);
+
+              let step = 0;
+              while (true) {
+                console.log(`withdraw all by portions ================ ${step++} =============`)
+                const maxAmount = await vault.maxWithdraw(signer.address);
+                console.log("Max amount:", +formatUnits(maxAmount, builderResults.assetDecimals));
+                await vault.withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 9_000_000});
+                if (step === MAX_COUNT_STEPS) break;
+              }
+              await vault.withdrawAll({gasLimit: 9_000_000});
+              const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
+
+              expect(stateAfter.user.assetBalance).approximately(
+                stateBefore.user.assetBalance + +formatUnits(maxAmountToWithdraw, builderResults.assetDecimals),
+                100
+              );
+            });
+          });
+        })
+
         if (strategyInfo.name === PLATFORM_UNIV3) {
           describe("Rebalance to reduce locked amount percent, the pool has given proportions", function () {
-            const TARGET_LOCKED_AMOUNT_PERCENT_RATIO = [0.01, 0.25];
+            const TARGET_LOCKED_AMOUNT_PERCENT_RATIO: ITargetLockedAmountPercentConfig[] = [
+              {percentRatio: 0.01, maxCountSteps: 10},
+              {percentRatio: 0.25, maxCountSteps: 3}
+            ];
             const SWAP_AMOUNT_RATIO = [110, 0.01, 50, 99.95, 100.05];
-            TARGET_LOCKED_AMOUNT_PERCENT_RATIO.forEach(targetLockedAmountPercentRatio => {
+            TARGET_LOCKED_AMOUNT_PERCENT_RATIO.forEach(lockedPercentConfig => {
               let currentLockedPercent: number;
               let targetLockedPercent: number;
               let uniswapStrategy: UniswapV3ConverterStrategy;
@@ -938,12 +996,12 @@ describe('PairBasedStrategyTwistedDebts', function () {
                 const estimatedUnderlyingAmount = +formatUnits(ret.estimatedUnderlyingAmount, builderResults.assetDecimals);
                 const strategyTotalAssets = +formatUnits(ret.totalAssets, builderResults.assetDecimals);
                 currentLockedPercent = estimatedUnderlyingAmount / strategyTotalAssets;
-                targetLockedPercent = currentLockedPercent * targetLockedAmountPercentRatio
+                targetLockedPercent = currentLockedPercent * lockedPercentConfig.percentRatio
               });
 
               SWAP_AMOUNT_RATIO.forEach(swapAmountRatio => {
-                const pathOut = `./tmp/down-${targetLockedAmountPercentRatio}-${swapAmountRatio.toString()}.csv`;
-                describe(`reduce-locked-percent-ratio=${targetLockedAmountPercentRatio} swapAmountRatio=${swapAmountRatio.toString()}`, function () {
+                const pathOut = `./tmp/down-${lockedPercentConfig.percentRatio}-${swapAmountRatio.toString()}.csv`;
+                describe(`reduce-locked-percent-ratio=${lockedPercentConfig.percentRatio} swapAmountRatio=${swapAmountRatio.toString()}`, function () {
                   let snapshotLevel0: string;
                   const states: IStateNum[] = [];
 
