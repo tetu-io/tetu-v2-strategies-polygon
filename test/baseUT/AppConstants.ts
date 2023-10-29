@@ -25,3 +25,5 @@ export const FUSE_IDX_UPPER_LIMIT_OFF = 3;
 
 export const PLATFORM_KIND_AAVE2_2 = 2;
 export const PLATFORM_KIND_AAVE3_3 = 3;
+
+export const REQUESTED_BALANCE_GAP = 5_000;

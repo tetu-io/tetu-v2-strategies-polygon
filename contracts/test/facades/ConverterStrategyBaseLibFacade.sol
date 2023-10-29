@@ -150,9 +150,10 @@ contract ConverterStrategyBaseLibFacade {
     uint indexCollateral,
     uint indexBorrowAsset,
     uint balanceBorrowAsset
-  ) external pure returns (
+  ) external view returns (
     uint amountOut
   ) {
+    liquidationThresholds[address(0)]; // hide pure warning
     return IterationPlanLib._getAmountToSell(
       remainingRequestedAmount,
       totalDebt,
