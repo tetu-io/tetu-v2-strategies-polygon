@@ -19,6 +19,8 @@ import {UniversalTestUtils} from "../../test/baseUT/utils/UniversalTestUtils";
 import {MaticAddresses} from "../addresses/MaticAddresses";
 
 export async function strategyBacktest(
+  rpc: string,
+  subgraph: string,
   signer: SignerWithAddress,
   vault: TetuVaultV2,
   strategy: UniswapV3ConverterStrategy,
@@ -102,6 +104,8 @@ export async function strategyBacktest(
   let rebalances = 0;
   let rebalancesDebt = 0;
   const poolTxs = await UniswapV3Utils.getPoolTransactions(
+    rpc,
+    subgraph,
     getAddress(uniswapV3RealPoolAddress),
     backtestStartBlock,
     backtestEndBlock,
@@ -277,8 +281,8 @@ export async function strategyBacktest(
           // sync price in rebalanceDebtSwapPool if needs
           if (rebalanceDebtSwapPool) {
             const price1InPool = await uniswapV3Helper.getPrice(pool.address, tokenB.address)
-            console.log(`___ Price in pool                  : ${formatUnits(price1InPool, tokenBDecimals)}`)
-            console.log(`___ Price in rebalanceDebtSwap pool: ${formatUnits(await uniswapV3Helper.getPrice(rebalanceDebtSwapPool.address, tokenB.address), tokenBDecimals)}`)
+            console.log(`___ Price in pool                  : ${formatUnits(price1InPool, tokenADecimals)}`)
+            console.log(`___ Price in rebalanceDebtSwap pool: ${formatUnits(await uniswapV3Helper.getPrice(rebalanceDebtSwapPool.address, tokenB.address), tokenADecimals)}`)
 
             // sync ticks
             const poolSlot0 = await pool.slot0()

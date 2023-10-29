@@ -9,16 +9,27 @@ import {
   IAave3PriceOracle__factory, IAlgebraPool__factory,
   IBVault__factory,
   IComposableStablePool__factory,
-  ILinearPool__factory, IPool__factory,
+  ILinearPool__factory, IPool__factory, IPriceOracle__factory,
   IUniswapV3Pool__factory
 } from "../../../typechain";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {BigNumber} from "ethers";
+import {BASE_NETWORK_ID, POLYGON_NETWORK_ID} from "../utils/HardhatUtils";
+import {BaseAddresses} from "../../../scripts/addresses/BaseAddresses";
+import {parseUnits} from "ethers/lib/utils";
 
 export class PriceOracleImitatorUtils {
   public static async getPrice(signer: SignerWithAddress, token: string): Promise<BigNumber> {
-    const aave3Oracle = IAave3PriceOracle__factory.connect(MaticAddresses.AAVE3_PRICE_ORACLE, signer);
-    return aave3Oracle.getAssetPrice(token)
+    const chainId = Misc.getChainId()
+    if (chainId === POLYGON_NETWORK_ID) {
+      const aave3Oracle = IAave3PriceOracle__factory.connect(MaticAddresses.AAVE3_PRICE_ORACLE, signer);
+      return aave3Oracle.getAssetPrice(token)
+    } else if (chainId === BASE_NETWORK_ID) {
+      const priceOracle = IPriceOracle__factory.connect(BaseAddresses.TETU_CONVERTER_PRICE_ORACLE, signer)
+      return (await priceOracle.getAssetPrice(token)).div(parseUnits('1', 10))
+    } else {
+      throw new Error(`PriceOracleImitatorUtils.getPrice: unsupported chainId ${chainId}`)
+    }
   }
 
   public static async balancerBoosted(

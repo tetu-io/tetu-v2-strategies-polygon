@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.17;
 
 import "../ConverterStrategyBaseLib.sol";
@@ -12,13 +12,6 @@ import "../pair/PairBasedStrategyLogicLib.sol";
 
 library KyberDebtLib {
   using SafeERC20 for IERC20;
-
-  //region  -------------------------------------------- Constants
-
-  uint public constant SELL_GAP = 100;
-  address internal constant ONEINCH = 0x1111111254EEB25477B68fb85Ed929f73A960582; // 1inch router V5
-  address internal constant OPENOCEAN = 0x6352a56caadC4F1E25CD6c75970Fa768A3304e64; // OpenOceanExchangeProxy
-  //endregion  -------------------------------------------- Constants
 
   //region  -------------------------------------------- Rewards
   function coverLossFromRewards(uint loss, address strategyProfitHolder, address tokenA, address tokenB, address pool) external returns (uint covered) {

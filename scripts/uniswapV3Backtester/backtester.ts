@@ -11,7 +11,6 @@ import {Result} from "./entity/Result";
 import {Task} from "./entity/Task";
 import {Repository} from "typeorm";
 import { Misc } from '../utils/Misc';
-import { reset } from '@nomicfoundation/hardhat-network-helpers';
 import { EnvSetup } from '../utils/EnvSetup';
 
 async function isTaskDone(task: Task, resultRepository: Repository<Result>) {
@@ -269,7 +268,7 @@ async function main() {
   result.rebalances = 0
   await resultRepository.save(result)
 
-  const liquiditySnapshot = await UniswapV3Utils.getPoolLiquiditySnapshot(getAddress(task.pool), task.startBlock, task.config.liquiditySnapshotSurroundingTickSpacings)
+  const liquiditySnapshot = await UniswapV3Utils.getPoolLiquiditySnapshot(EnvSetup.getEnv().maticRpcUrl, getAddress(task.pool), task.startBlock, task.config.liquiditySnapshotSurroundingTickSpacings)
   const signer = (await ethers.getSigners())[0];
   const rebalanceDebtSwapPoolParams: IRebalanceDebtSwapPoolParams = {
     tickLower: -60,

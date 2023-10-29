@@ -32,12 +32,16 @@ export class EnvSetup {
         },
         oneInchApiKey: {
           type: 'string',
-          default: ''
+          default: '',
         },
 
         /////// RPC
 
         maticRpcUrl: {
+          type: 'string',
+        },
+
+        baseRpcUrl: {
           type: 'string',
         },
 
@@ -48,9 +52,18 @@ export class EnvSetup {
           default: 48617049, // 48265751, // 46320827,
         },
 
+        baseForkBlock: {
+          type: 'number',
+          default: 5630000,
+        },
+
         /////// NETWORK EXPLORERS
 
         networkScanKey: {
+          type: 'string',
+        },
+
+        networkScanKeyBase: {
           type: 'string',
         },
 

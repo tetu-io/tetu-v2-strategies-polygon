@@ -16,8 +16,6 @@ import { BigNumber } from 'ethers';
 import { MaticAddresses } from '../addresses/MaticAddresses';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { LendingPlatformKinds } from '../../test/baseUT/converter/ConverterConstants';
-import { reset } from '@nomicfoundation/hardhat-network-helpers';
-import { config as dotEnvConfig } from 'dotenv';
 
 const log: Logger<undefined> = new Logger(logSettings);
 
@@ -60,10 +58,14 @@ export class Misc {
   public static async getBlockTsFromChain(): Promise<number> {
     const signer = (await ethers.getSigners())[0];
     const tools = await DeployerUtilsLocal.getToolsAddresses();
-    const ctr = await DeployerUtils.connectInterface(signer, 'Multicall', tools.multicall) as Multicall;
-    // const ctr = await ethers.getContractAt('Multicall', tools.multicall, signer) as Multicall;
-    const ts = await ctr.getCurrentBlockTimestamp();
-    return ts.toNumber();
+    if (tools.multicall) {
+      const ctr = await DeployerUtils.connectInterface(signer, 'Multicall', tools.multicall) as Multicall;
+      // const ctr = await ethers.getContractAt('Multicall', tools.multicall, signer) as Multicall;
+      const ts = await ctr.getCurrentBlockTimestamp();
+      return ts.toNumber();
+    }
+
+    return (await ethers.provider.getBlock(await ethers.provider.getBlockNumber())).timestamp
   }
 
   public static getChainId() {
@@ -73,6 +75,13 @@ export class Misc {
   public static getChainName() {
     return hre.network.name;
   }
+
+  public static isRealNetwork() {
+    return hre.network.name !== 'hardhat'
+      && hre.network.name !== 'anvil'
+      && hre.network.name !== 'foundry';
+  }
+
 
   public static async getChainConfig() {
     const chainId = Misc.getChainId();
@@ -118,13 +127,15 @@ export class Misc {
   }
 
   public static async wait(blocks: number) {
-    if (hre.network.name === 'hardhat') {
+    if (!Misc.isRealNetwork()) {
       return;
     }
     const start = ethers.provider.blockNumber;
     while (true) {
-      log.info('wait 10sec');
-      await Misc.delay(10000);
+      if (Misc.isRealNetwork()) {
+        log.info('wait 10sec');
+        await Misc.delay(10000);
+      }
       if (ethers.provider.blockNumber >= start + blocks) {
         break;
       }

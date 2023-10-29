@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.17;
 
 /// @notice Utils and constants related to entryKind param of ITetuConverter.findBorrowStrategy

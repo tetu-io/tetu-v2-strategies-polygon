@@ -46,6 +46,7 @@ const openOceanChains = new Map<number, string>([
   [56, 'bsc'],
   [42161, 'arbitrum'],
   [10, 'optimism'],
+  [8453, 'base'],
 ]);
 
 async function quoteOneInch(
@@ -175,7 +176,9 @@ export async function runResolver(
   // console.log('isWithdrawDone', isWithdrawDone)
 
   const percent = r[0].mul(100).div(r[1].isZero() ? BigNumber.from('1') : r[1]).toNumber();
-  // console.log("Locked percent", percent)
+
+  console.log(`Current locked: ${percent}%. Max allowed locked: ${allowedLockedPercent}%`);
+
   if (!isFuseTriggered && percent <= allowedLockedPercent) {
     return {
       canExec: false,

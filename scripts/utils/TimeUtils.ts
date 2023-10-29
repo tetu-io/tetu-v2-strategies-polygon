@@ -50,8 +50,10 @@ export class TimeUtils {
       if (ethers.provider.blockNumber > start) {
         break;
       }
-      console.log('waite mine 10sec');
-      await Misc.delay(10000);
+      if (Misc.isRealNetwork()) {
+        console.log('waite mine 10sec');
+        await Misc.delay(10000);
+      }
     }
   }
 
@@ -74,21 +76,21 @@ export class TimeUtils {
 
   public static async getBlockTime(multicall: Multicall, block?: number | null): Promise<number> {
     if (block) {
-      return (await multicall.getCurrentBlockTimestamp({blockTag: block})).toNumber();
+      return (await multicall.getCurrentBlockTimestamp({ blockTag: block })).toNumber();
     } else {
       return (await multicall.getCurrentBlockTimestamp()).toNumber();
     }
   }
 
   public static async snapshot() {
-    const id = await ethers.provider.send("evm_snapshot", []);
-    console.log("made snapshot", id);
+    const id = await ethers.provider.send('evm_snapshot', []);
+    console.log('made snapshot', id);
     return id;
   }
 
   public static async rollback(id: string) {
-    console.log("restore snapshot", id);
-    return ethers.provider.send("evm_revert", [id]);
+    console.log('restore snapshot', id);
+    return ethers.provider.send('evm_revert', [id]);
   }
 
 }

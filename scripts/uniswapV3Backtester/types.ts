@@ -64,7 +64,7 @@ export interface IContracts {
   vaultFactory: VaultFactory
 
   reader: PairBasedStrategyReader
-  rebalanceDebtSwapPool: UniswapV3Pool
+  rebalanceDebtSwapPool: UniswapV3Pool|undefined
 }
 
 export interface IVaultUniswapV3StrategyInfo {
