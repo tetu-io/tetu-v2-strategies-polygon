@@ -32,9 +32,9 @@ import {PackedData} from "../../../baseUT/utils/PackedData";
 import {BASE_NETWORK_ID, HardhatUtils} from '../../../baseUT/utils/HardhatUtils';
 import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
-import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {BaseAddresses} from "../../../../scripts/addresses/BaseAddresses";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
+import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
 
 // const {expect} = chai;
 chai.use(chaiAsPromised);

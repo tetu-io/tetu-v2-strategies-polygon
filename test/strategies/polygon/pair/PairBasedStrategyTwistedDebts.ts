@@ -474,7 +474,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
                 if (step === MAX_COUNT_STEPS) break;
 
                 if (await builderResults.strategy.needRebalance()) {
-                  await strategy.rebalanceNoSwaps(true, {gasLimit: 9_000_000});
+                  await builderResults.strategy.rebalanceNoSwaps(true, {gasLimit: 9_000_000});
                 }
               }
               await vault.withdrawAll({gasLimit: 9_000_000});
