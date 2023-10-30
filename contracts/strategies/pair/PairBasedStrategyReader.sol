@@ -128,17 +128,20 @@ contract PairBasedStrategyReader {
     uint8[2] memory decimalsAB,
     uint requiredLockedAmountPercent18
   ) external pure returns (uint deltaDebtAmountB) {
-    if (debtAmountB != 0) {
+    if (debtAmountB != 0 && totalAssets != 0) {
       uint alpha18 = 1e18 * collateralAmountA * 10**decimalsAB[1] / 10**decimalsAB[0] / debtAmountB;
       uint indexUnderlying = isUnderlyingA ? 0 : 1;
       uint lockedPercent18 = 1e18
         * AppLib.sub0(collateralAmountA * pricesAB[0] / 10**decimalsAB[0], debtAmountB * pricesAB[1] / 10**decimalsAB[1])
         / (totalAssets * pricesAB[indexUnderlying] / 10**decimalsAB[indexUnderlying]);
-      deltaDebtAmountB = AppLib.sub0(lockedPercent18, requiredLockedAmountPercent18)
-        * totalAssets
-        * pricesAB[indexUnderlying]
-        / 10**decimalsAB[indexUnderlying]
-        / AppLib.sub0(alpha18 * pricesAB[0] / 1e18, pricesAB[1]);
+      uint delta = AppLib.sub0(alpha18 * pricesAB[0] / 1e18, pricesAB[1]);
+      deltaDebtAmountB = delta == 0
+        ? 0 // weird case
+        : AppLib.sub0(lockedPercent18, requiredLockedAmountPercent18)
+          * totalAssets
+          * pricesAB[indexUnderlying]
+          / 10**decimalsAB[indexUnderlying]
+          / delta;
     }
 
     return deltaDebtAmountB * 10**decimalsAB[1] / 1e18;
