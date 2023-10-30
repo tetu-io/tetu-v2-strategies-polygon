@@ -231,7 +231,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
         const state = await PackedData.getDefaultState(univ3Strategy);
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
-        const swapAmount = BigNumber.from(parseUnits('50000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
+        const swapAmount = BigNumber.from(parseUnits('10000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
         await UniversalUtils.makePoolVolume(
           swapUser,
           state,

@@ -54,7 +54,7 @@ export class EnvSetup {
 
         baseForkBlock: {
           type: 'number',
-          default: 5630000,
+          default: 5939287,
         },
 
         /////// NETWORK EXPLORERS
