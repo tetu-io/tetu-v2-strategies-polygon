@@ -160,7 +160,7 @@ library ConverterStrategyBaseLib {
   /// @notice Allow to swap more then required (i.e. 1_000 => +1%) inside {swapToGivenAmount}
   ///         to avoid additional swap if the swap will return amount a bit less than we expected
   uint internal constant OVERSWAP = PRICE_IMPACT_TOLERANCE + _ASSET_LIQUIDATION_SLIPPAGE;
-  /// @notice During SWAP-REPAY cycle we can receive requested amount after SWAP, so, following REPAY wii be skipped.
+  /// @notice During SWAP-REPAY cycle we can receive requested amount after SWAP, so, following REPAY will be skipped.
   ///         But we should prevent situation "zero balance, not zero debts".
   ///         So, it worth to request amount higher (on the given gap) than it's really requested.
   uint internal constant REQUESTED_BALANCE_GAP = 5_000; // 5%

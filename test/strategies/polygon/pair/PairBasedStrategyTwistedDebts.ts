@@ -48,6 +48,7 @@ import {
 import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {IEventsSet} from "../../../baseUT/strategies/CaptureEvents";
+import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 
 describe('PairBasedStrategyTwistedDebts', function () {
   /**
@@ -207,7 +208,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
 
   const strategies: IStrategyInfo[] = [
     // {name: PLATFORM_UNIV3, amountDepositBySigner: "250000"},
-    {name: PLATFORM_UNIV3, amountDepositBySigner: "50000"},
+    {name: PLATFORM_UNIV3, amountDepositBySigner: "25000"},
     {name: PLATFORM_ALGEBRA,},
     {name: PLATFORM_KYBER,},
   ];
@@ -276,11 +277,9 @@ describe('PairBasedStrategyTwistedDebts', function () {
 
           it("should deposit successfully", async () => {
             const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
-
             const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
             await builderResults.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
             const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
-
             expect(stateAfter.vault.totalAssets).gt(stateBefore.vault.totalAssets);
           });
           it("should withdraw successfully", async () => {
