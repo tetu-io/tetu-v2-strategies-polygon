@@ -288,7 +288,9 @@ describe("Scb807-899 @skip-on-coverage", () => {
     const OPERATOR = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
 
     it("rebalanceNoSwaps", async () => {
-
+      // we need to display full objects, so we use util.inspect, see
+      // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
+      require("util").inspect.defaultOptions.depth = null;
       const states: IStateNum[] = [];
 
       if (fs.existsSync(pathOut)) {
@@ -298,6 +300,7 @@ describe("Scb807-899 @skip-on-coverage", () => {
       const saver = async (title: string, e?: IEventsSet) => {
         const state = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, title, {eventsSet: e});
         states.push(state);
+        console.log("state", state);
         StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, {mainAssetSymbol: MaticAddresses.USDC_TOKEN});
       };
 

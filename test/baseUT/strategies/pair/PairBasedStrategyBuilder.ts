@@ -17,10 +17,12 @@ import {MockHelper} from "../../helpers/MockHelper";
 
 /**
  * Kyber PID for most current block
+ * 31.10.2023: pid = 71
  */
 export const KYBER_PID = 54; // 40; // previous value was 21, new one is 40
 /**
  * Kyber PID for most current block
+ * 31.10.2023: pid = 72
  */
 export const KYBER_USDC_DAI_PID = 55; // 42;
 

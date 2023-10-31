@@ -102,6 +102,8 @@ export interface IStateNum {
     borrowAssetsPrices: number[];
     borrowAssets: string[];
     borrowAssetsNames: string[];
+    collateralsByPos?: number[][];
+    amountsToRepayByPos?: number[][];
   };
   converterReverse: {
     collaterals: number[];
@@ -112,6 +114,8 @@ export interface IStateNum {
     borrowAssetsPrices: number[];
     borrowAssets: string[];
     borrowAssetsNames: string[];
+    collateralsByPos?: number[][];
+    amountsToRepayByPos?: number[][];
   };
 
   fuseStatus?: number;
@@ -162,6 +166,8 @@ export interface IBorrowInfo {
   healthFactors: number[][];
   platformAdapters: string[][];
   totalLockedAmountInUnderlying: number;
+  amountsToRepayByPos?: number[][];
+  collateralsByPos?: number[][];
 }
 
 /**
@@ -399,7 +405,9 @@ export class StateUtilsNum {
         platformAdapters: directBorrows.platformAdapters,
         borrowAssetsPrices,
         borrowAssets: borrowAssetsAddresses,
-        borrowAssetsNames
+        borrowAssetsNames,
+        amountsToRepayByPos: directBorrows.amountsToRepayByPos,
+        collateralsByPos: directBorrows.collateralsByPos,
       },
       converterReverse: {
         collaterals: reverseBorrows.collaterals,
@@ -409,7 +417,9 @@ export class StateUtilsNum {
         platformAdapters: reverseBorrows.platformAdapters,
         borrowAssetsPrices,
         borrowAssets: borrowAssetsAddresses,
-        borrowAssetsNames
+        borrowAssetsNames,
+        amountsToRepayByPos: reverseBorrows.amountsToRepayByPos,
+        collateralsByPos: reverseBorrows.collateralsByPos,
       },
 
       fuseStatus: fuseStatusA,
@@ -451,6 +461,8 @@ export class StateUtilsNum {
     const collateralAssetNames: string[] = [];
     const listHealthFactors: number[][] = [];
     const listPlatformAdapters: string[][] = [];
+    const listCollateralsByPos: number[][] = [];
+    const listAmountsToRepayByPos: number[][] = [];
     let lockedAmount = 0;
 
     for (const collateralAsset of collateralAssets) {
@@ -489,11 +501,15 @@ export class StateUtilsNum {
 
         const healthFactors: number[] = [];
         const platformAdapters: string[] = [];
+        const collateralsByPos: number[] = [];
+        const amountsToRepayByPos: number[] = [];
         const positions = await converter.callStatic.getPositions(strategy.address, collateralAsset, borrowAsset);
         for (const position of positions) {
           const poolAdapter = IPoolAdapter__factory.connect(position, signer);
           const status = await poolAdapter.getStatus();
           healthFactors.push(+formatUnits(status.healthFactor18, 18));
+          collateralsByPos.push(+formatUnits(status.collateralAmount, collateralDecimals));
+          amountsToRepayByPos.push(+formatUnits(status.amountToPay, borrowDecimals));
 
           const config = await poolAdapter.getConfig();
           platformAdapters.push(
@@ -502,6 +518,8 @@ export class StateUtilsNum {
         }
         listHealthFactors.push(healthFactors);
         listPlatformAdapters.push(platformAdapters);
+        listCollateralsByPos.push(collateralsByPos);
+        listAmountsToRepayByPos.push(amountsToRepayByPos);
       }
     }
 
@@ -512,7 +530,9 @@ export class StateUtilsNum {
       healthFactors: listHealthFactors,
       platformAdapters: listPlatformAdapters,
       collateralAssetNames,
-      totalLockedAmountInUnderlying: lockedAmount
+      totalLockedAmountInUnderlying: lockedAmount,
+      amountsToRepayByPos: listAmountsToRepayByPos,
+      collateralsByPos: listCollateralsByPos
     }
   }
 
