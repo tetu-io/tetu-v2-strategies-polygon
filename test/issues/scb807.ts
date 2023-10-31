@@ -10,7 +10,7 @@ import {HardhatUtils, POLYGON_NETWORK_ID} from '../baseUT/utils/HardhatUtils';
 import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
 import {PackedData} from "../baseUT/utils/PackedData";
 import {AggregatorUtils} from "../baseUT/utils/AggregatorUtils";
-import {ENTRY_TO_POOL_DISABLED, ENTRY_TO_POOL_IS_ALLOWED, PLAN_SWAP_REPAY} from "../baseUT/AppConstants";
+import {ENTRY_TO_POOL_DISABLED, ENTRY_TO_POOL_IS_ALLOWED, PLAN_SWAP_REPAY_0} from "../baseUT/AppConstants";
 import {IStateNum, StateUtilsNum} from "../baseUT/utils/StateUtilsNum";
 import hre, {ethers} from "hardhat";
 import {CaptureEvents, IEventsSet} from "../baseUT/strategies/CaptureEvents";
@@ -111,7 +111,7 @@ describe("Scb807-899 @skip-on-coverage", () => {
 
       await makeFullWithdraw(strategyAsOperator, {
         entryToPool: ENTRY_TO_POOL_DISABLED,
-        planEntryDataGetter: async () => defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY, 0]),
+        planEntryDataGetter: async () => defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY_0, 0]),
         saveStates: saver
       })
       // await tryWithdrawByAgg(signer, strategy, saver);

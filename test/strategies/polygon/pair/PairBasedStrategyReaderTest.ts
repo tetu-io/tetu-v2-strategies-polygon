@@ -16,6 +16,7 @@ import {IRepayParams} from "../../../baseUT/mocks/TestDataTypes";
 import {setupMockedRepay} from "../../../baseUT/mocks/MockRepayUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {HARDHAT_NETWORK_ID, HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import {facades} from "../../../../typechain/contracts/test";
 
 /**
  * Study noSwap-rebalance.
@@ -29,6 +30,7 @@ describe('PairBasedStrategyReaderTest', function() {
   let converter: MockTetuConverter;
   let usdc: MockToken;
   let wmatic: MockToken;
+  let dai: MockToken;
   let usdt: MockToken;
   let strategy: PairBasedStrategyReaderAccessMock;
   let splitter: MockSplitterVault;
@@ -42,6 +44,7 @@ describe('PairBasedStrategyReaderTest', function() {
     [signer] = await ethers.getSigners();
 
     usdc = await DeployerUtils.deployMockToken(signer, 'USDC', 6);
+    dai = await DeployerUtils.deployMockToken(signer, 'DAI', 18);
     wmatic = await DeployerUtils.deployMockToken(signer, 'WMATIC', 18);
     usdt = await DeployerUtils.deployMockToken(signer, 'USDT', 6);
 
@@ -486,6 +489,164 @@ describe('PairBasedStrategyReaderTest', function() {
           }]
         });
         expect(r.callResult).eq(2);
+      });
+    });
+  });
+
+  describe("getAmountToReduceDebt", () => {
+    interface IParams {
+      collateralAssetA: MockToken;
+      borrowAssetB: MockToken;
+      isUnderlyingA: boolean;
+
+      totalAssets: string;
+      collateralAmountA: string;
+      debtAmountB: string;
+
+      pricesAB: string[];
+      requiredLockedAmountPercent: string
+    }
+
+    interface IResults {
+      deltaDebtAmountB: number;
+    }
+
+    async function getAmountToReduceDebt(p: IParams): Promise<IResults> {
+      const decimalsA = await p.collateralAssetA.decimals();
+      const decimalsB = await p.borrowAssetB.decimals();
+      const decimalsUnderlying = p.isUnderlyingA ? decimalsA : decimalsB;
+      const deltaDebtAmountB = await reader.getAmountToReduceDebt(
+        parseUnits(p.totalAssets, decimalsUnderlying),
+        p.isUnderlyingA,
+        parseUnits(p.collateralAmountA, decimalsA),
+        parseUnits(p.debtAmountB, decimalsB),
+        [
+          parseUnits(p.pricesAB[0], 18),
+          parseUnits(p.pricesAB[1], 18),
+        ],
+        [decimalsA, decimalsB],
+        parseUnits(p.requiredLockedAmountPercent, 18)
+      )
+
+      return {
+        deltaDebtAmountB: +formatUnits(deltaDebtAmountB, decimalsB)
+      }
+    }
+
+    describe("Direct debt", () => {
+      describe("Same prices", () => {
+        it("should return expected amount for usdc:dai", async () => {
+          const {deltaDebtAmountB} = await getAmountToReduceDebt({
+            collateralAssetA: usdc,
+            borrowAssetB: dai,
+            isUnderlyingA: true,
+            collateralAmountA: "400",
+            debtAmountB: "200",
+            pricesAB: ["1", "1"],
+            totalAssets: "800",
+            requiredLockedAmountPercent: "0.03"
+          });
+          expect(deltaDebtAmountB).eq(176); // see getAmountToReduceDebt.xlsx
+        });
+        it("should return expected amount for dai:usdc", async () => {
+          const {deltaDebtAmountB} = await getAmountToReduceDebt({
+            collateralAssetA: dai,
+            borrowAssetB: usdc,
+            isUnderlyingA: true,
+            collateralAmountA: "400",
+            debtAmountB: "200",
+            pricesAB: ["1", "1"],
+            totalAssets: "800",
+            requiredLockedAmountPercent: "0.03"
+          });
+          expect(deltaDebtAmountB).eq(176); // see getAmountToReduceDebt.xlsx
+        });
+      });
+      describe("Different prices", () => {
+        it("should return expected amount for usdc:dai", async () => {
+          const {deltaDebtAmountB} = await getAmountToReduceDebt({
+            collateralAssetA: usdc,
+            borrowAssetB: dai,
+            isUnderlyingA: true,
+            collateralAmountA: "800",
+            debtAmountB: "100",
+            pricesAB: ["0.5", "2"],
+            totalAssets: "1600",
+            requiredLockedAmountPercent: "0.03"
+          });
+          expect(deltaDebtAmountB).eq(176 / 2); // see getAmountToReduceDebt.xlsx
+        });
+        it("should return expected amount for dai:usdc", async () => {
+          const {deltaDebtAmountB} = await getAmountToReduceDebt({
+            collateralAssetA: dai,
+            borrowAssetB: usdc,
+            isUnderlyingA: true,
+            collateralAmountA: "800",
+            debtAmountB: "100",
+            pricesAB: ["0.5", "2"],
+            totalAssets: "1600",
+            requiredLockedAmountPercent: "0.03"
+          });
+          expect(deltaDebtAmountB).eq(176 / 2); // see getAmountToReduceDebt.xlsx
+        });
+      });
+    });
+    describe("Reverse debt", () => {
+      describe("Same prices", () => {
+        it("should return expected amount for usdc:dai", async () => {
+          const {deltaDebtAmountB} = await getAmountToReduceDebt({
+            collateralAssetA: usdc,
+            borrowAssetB: dai,
+            isUnderlyingA: false,
+            collateralAmountA: "400",
+            debtAmountB: "200",
+            pricesAB: ["1", "1"],
+            totalAssets: "800",
+            requiredLockedAmountPercent: "0.03"
+          });
+          expect(deltaDebtAmountB).eq(176); // see getAmountToReduceDebt.xlsx
+        });
+        it("should return expected amount for dai:usdc", async () => {
+          const {deltaDebtAmountB} = await getAmountToReduceDebt({
+            collateralAssetA: dai,
+            borrowAssetB: usdc,
+            isUnderlyingA: false,
+            collateralAmountA: "400",
+            debtAmountB: "200",
+            pricesAB: ["1", "1"],
+            totalAssets: "800",
+            requiredLockedAmountPercent: "0.03"
+          });
+          expect(deltaDebtAmountB).eq(176); // see getAmountToReduceDebt.xlsx
+        });
+      });
+      describe("Different prices", () => {
+        it("should return expected amount for usdc:dai", async () => {
+          const {deltaDebtAmountB} = await getAmountToReduceDebt({
+            collateralAssetA: usdc,
+            borrowAssetB: dai,
+            isUnderlyingA: false,
+            collateralAmountA: "800",
+            debtAmountB: "100",
+            pricesAB: ["0.5", "2"],
+            totalAssets: "400",
+            requiredLockedAmountPercent: "0.03"
+          });
+          expect(deltaDebtAmountB).eq(176 / 2); // see getAmountToReduceDebt.xlsx
+        });
+        it("should return expected amount for dai:usdc", async () => {
+          const {deltaDebtAmountB} = await getAmountToReduceDebt({
+            collateralAssetA: dai,
+            borrowAssetB: usdc,
+            isUnderlyingA: false,
+            collateralAmountA: "800",
+            debtAmountB: "100",
+            pricesAB: ["0.5", "2"],
+            totalAssets: "400",
+            requiredLockedAmountPercent: "0.03"
+          });
+          expect(deltaDebtAmountB).eq(176 / 2); // see getAmountToReduceDebt.xlsx
+        });
       });
     });
   });

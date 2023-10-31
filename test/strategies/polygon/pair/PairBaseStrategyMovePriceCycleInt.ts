@@ -17,9 +17,9 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
-import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
-import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtures";
-import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../../baseUT/strategies/pair/PairBasedStrategyBuilder";
+import {PairStrategyFixtures} from "../../../baseUT/strategies/pair/PairStrategyFixtures";
+import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
@@ -154,9 +154,10 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
             strategyAsOperator,
             p.aggregator,
               () => true, // use single iteration
-            async (stateTitle, eventsSet) => {
+            async (stateTitle, eventsSet): Promise<IStateNum> => {
               states.push(await StateUtilsNum.getState(signer2, signer, converterStrategyBase, b.vault, stateTitle, {eventsSet}));
               await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+              return states[states.length - 1];
             },
           );
 

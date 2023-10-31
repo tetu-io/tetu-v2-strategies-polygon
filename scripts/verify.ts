@@ -5,8 +5,10 @@ async function main() {
   const { deployments } = hre;
 
   await verify('StrategyLib');
+  await verify('StrategyLib2');
   await verify('ConverterStrategyBaseLib', 'contracts/strategies');
   await verify('ConverterStrategyBaseLib2', 'contracts/strategies');
+  await verify('IterationPlanLib', 'contracts/libs');
   await verify('BorrowLib', 'contracts/libs');
   await verify('PairBasedStrategyLib', 'contracts/strategies/pair');
   await verify('PairBasedStrategyLogicLib', 'contracts/strategies/pair');
@@ -25,12 +27,21 @@ async function main() {
   await verify('KyberDebtLib', 'contracts/strategies/kyber');
   await verify('KyberConverterStrategyLogicLib', 'contracts/strategies/kyber');
   await verify('KyberConverterStrategy', 'contracts/strategies/kyber');
+  await verify('RebalanceDebtConfig', 'contracts/tools');
 }
 
 async function verify(name: string, pkg?: string) {
   const { deployments } = hre;
+  let ctr;
+  try {
+    ctr = await deployments.get(name);
+  } catch (e) {}
+  if (!ctr) {
+    return;
+  }
+
   if (pkg) {
-    await VerifyUtils.verifyWithContractName((await deployments.get(name)).address, `${pkg}/${name}.sol:${name}`);
+    await VerifyUtils.verifyWithContractName(ctr.address, `${pkg}/${name}.sol:${name}`);
   } else {
     await VerifyUtils.verify((await deployments.get(name)).address);
   }

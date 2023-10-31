@@ -5,14 +5,14 @@ import {
   IUniswapV3Quoter__factory,
   KyberLib,
   UniswapV3Lib
-} from "../../../typechain";
-import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
-import {UniswapV3LiquidityUtils} from "./univ3/UniswapV3LiquidityUtils";
-import {AlgebraLiquidityUtils} from "./algebra/AlgebraLiquidityUtils";
-import {KyberLiquidityUtils} from "./kyber/KyberLiquidityUtils";
+} from "../../../../typechain";
+import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../AppPlatforms";
+import {UniswapV3LiquidityUtils} from "../univ3/UniswapV3LiquidityUtils";
+import {AlgebraLiquidityUtils} from "../algebra/AlgebraLiquidityUtils";
+import {KyberLiquidityUtils} from "../kyber/KyberLiquidityUtils";
 import {BigNumber} from "ethers";
 import {IBuilderResults, IStrategyBasicInfo} from "./PairBasedStrategyBuilder";
-import {IUniswapV3Pool__factory} from "../../../typechain/factories/contracts/integrations/uniswap";
+import {IUniswapV3Pool__factory} from "../../../../typechain/factories/contracts/integrations/uniswap";
 
 export class PairStrategyLiquidityUtils {
   /**

@@ -128,7 +128,7 @@ describe('ConverterStrategyBaseInternalTests', function() {
       depositorReserves,
     );
 
-    await splitterNotInitialized.addStrategies([strategy.address], [0]);
+    await splitterNotInitialized.addStrategies([strategy.address], [0], [Misc.MAX_UINT]);
     return { strategy, depositorReserves };
   }
 

@@ -11,12 +11,12 @@ import {Misc} from "../../../../scripts/utils/Misc";
 import {formatUnits, parseUnits} from 'ethers/lib/utils';
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
+import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../../baseUT/strategies/pair/PairBasedStrategyBuilder";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
-import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtures";
+import {PairStrategyFixtures} from "../../../baseUT/strategies/pair/PairStrategyFixtures";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
-import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {
@@ -256,7 +256,7 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
 
       await b.splitter.connect(b.gov).scheduleStrategies([strategy2.address]);
       await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
-      await b.splitter.connect(b.gov).addStrategies([strategy2.address], [0]);
+      await b.splitter.connect(b.gov).addStrategies([strategy2.address], [0], [Misc.MAX_UINT]);
 
       await ConverterUtils.whitelist([strategy2.address]);
       const profitHolder2 = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy2.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN, MaticAddresses.dQUICK_TOKEN, MaticAddresses.WMATIC_TOKEN,])

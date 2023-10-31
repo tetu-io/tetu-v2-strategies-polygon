@@ -36,6 +36,8 @@ import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/Co
 import { ToolsAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/ToolsAddresses';
 import { DeployerUtils } from './DeployerUtils';
 import { Misc } from './Misc';
+import {BaseAddresses} from "../addresses/BaseAddresses";
+import {BASE_NETWORK_ID, POLYGON_NETWORK_ID} from "../../test/baseUT/utils/HardhatUtils";
 
 // tslint:disable-next-line:no-var-requires
 const hre = require('hardhat');
@@ -258,8 +260,10 @@ export class DeployerUtilsLocal {
 
   public static async getGovernance() {
     const chainId = Misc.getChainId();
-    if (chainId === 137) {
+    if (chainId === POLYGON_NETWORK_ID) {
       return MaticAddresses.GOV_ADDRESS;
+    } else if (chainId === BASE_NETWORK_ID) {
+      return BaseAddresses.GOV_ADDRESS;
     } else {
       throw Error('No config for ' + chainId);
     }
@@ -288,6 +292,8 @@ export class DeployerUtilsLocal {
     const chainId = Misc.getChainId();
     if (chainId === 137) {
       return MaticAddresses.WMATIC_TOKEN;
+    } else if (chainId === BASE_NETWORK_ID) {
+      return BaseAddresses.WETH_TOKEN;
     } else {
       throw Error('No config for ' + chainId);
     }
@@ -365,9 +371,9 @@ export class DeployerUtilsLocal {
 
     const vaultLogic = await DeployerUtils.deployContract(signer, 'TetuVaultV2');
     const splitterLogic = await DeployerUtils.deployContract(signer, 'StrategySplitterV2');
-    await factory.connect(await Misc.impersonate('0xcc16d636dd05b52ff1d8b9ce09b09bc62b11412b'))
+    await factory/*.connect(await Misc.impersonate('0xcc16d636dd05b52ff1d8b9ce09b09bc62b11412b'))*/
       .setVaultImpl(vaultLogic.address);
-    await factory.connect(await Misc.impersonate('0xcc16d636dd05b52ff1d8b9ce09b09bc62b11412b'))
+    await factory/*.connect(await Misc.impersonate('0xcc16d636dd05b52ff1d8b9ce09b09bc62b11412b'))*/
       .setSplitterImpl(splitterLogic.address);
 
     await RunHelper.runAndWait(() => factory.createVault(

@@ -145,7 +145,7 @@ library UniswapV3DebtLib {
       profitToCover,
       totalAssets,
       splitter,
-  liquidationThresholdsAB,
+      liquidationThresholdsAB,
       prop0 * BorrowLib.SUM_PROPORTIONS / (prop0 + prop1)
     );
     (pairState.lowerTick, pairState.upperTick) = (newLowerTick, newUpperTick);

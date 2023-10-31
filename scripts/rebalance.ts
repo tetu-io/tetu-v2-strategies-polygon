@@ -31,7 +31,11 @@ import { formatUnits } from 'ethers/lib/utils';
 const MAX_ERROR_LENGTH = 1000;
 const DELAY_BETWEEN_NSRS = 60;
 const DELAY_AFTER_NSR = 10;
-const DELAY_NEED_NSR_CONFIRM = 300;
+// delay for NSR call
+// if we will call it too often and too quick we will lose on short price falls in a pool
+// this delay should be ~average time for arbitragers rebalance the pool across networks
+// prev value 300(5min) leaded to probably higher loss, move back to this value if 30min works bad
+const DELAY_NEED_NSR_CONFIRM = 1800;
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -63,9 +67,9 @@ const argv = require('yargs/yargs')()
 async function main() {
   console.log('Strategies NSR and debt rebalancer');
 
-  if (!['localhost', 'matic'].includes(hre.network.name)) {
+  if (!['localhost', 'matic', 'base'].includes(hre.network.name)) {
     console.log('Unsupported network', hre.network.name);
-    console.log('Only localhost and matic networks supported');
+    console.log('Only localhost, matic and base networks supported');
     process.exit(-1);
   }
 

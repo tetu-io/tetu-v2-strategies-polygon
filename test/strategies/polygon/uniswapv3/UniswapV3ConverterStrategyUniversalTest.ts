@@ -33,7 +33,7 @@ import {PackedData} from "../../../baseUT/utils/PackedData";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
-import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 // const {expect} = chai;

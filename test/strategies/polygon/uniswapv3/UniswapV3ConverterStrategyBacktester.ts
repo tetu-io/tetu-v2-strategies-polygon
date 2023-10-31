@@ -22,6 +22,8 @@ import { EnvSetup } from '../../../../scripts/utils/EnvSetup';
 const hre = require("hardhat");
 
 describe('UmiswapV3 converter strategy backtester', function() {
+  const SUBGRAPH = 'https://api.thegraph.com/subgraphs/name/ianlapham/uniswap-v3-polygon'
+
   // ==== backtest config ====
   const backtestStartBlock = 46760000; // Aug-26-2023 02:31:23 AM +UTC
   // const backtestEndBlock = 46900000; // Aug-29-2023 02:49:50 PM +UTC - fuse on hardhwork
@@ -188,8 +190,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
 
   // signers
   let signer: SignerWithAddress;
-  let user: SignerWithAddress;
-  
+
   let backtestResult: IBacktestResult;
 
   if (EnvSetup.getEnv().disableBacktesting) {
@@ -204,9 +205,10 @@ describe('UmiswapV3 converter strategy backtester', function() {
 
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
-    [signer, user] = await ethers.getSigners();
+    [signer] = await ethers.getSigners();
 
     liquiditySnapshot = await UniswapV3Utils.getPoolLiquiditySnapshot(
+        EnvSetup.getEnv().maticRpcUrl,
       getAddress(params.pool),
       backtestStartBlock,
       params.liquiditySnapshotSurroundingTickSpacings,
@@ -221,7 +223,54 @@ describe('UmiswapV3 converter strategy backtester', function() {
       params.poolFee,
       params.tickRange,
       params.rebalanceTickRange,
-      rebalanceDebtSwapPoolParams
+      rebalanceDebtSwapPoolParams,
+        [
+          {
+            address: MaticAddresses.USDC_TOKEN,
+            name: 'USDC',
+            decimals: 6,
+          },
+          {
+            address: MaticAddresses.WETH_TOKEN,
+            name: 'WETH',
+            decimals: 18,
+          },
+          {
+            address: MaticAddresses.WMATIC_TOKEN,
+            name: 'WMATIC',
+            decimals: 18,
+          },
+          {
+            address: MaticAddresses.DAI_TOKEN,
+            name: 'DAI',
+            decimals: 18,
+          },
+          {
+            address: MaticAddresses.USDT_TOKEN,
+            name: 'USDT',
+            decimals: 6,
+          },
+          {
+            address: MaticAddresses.miMATIC_TOKEN,
+            name: 'miMATIC',
+            decimals: 18,
+          },
+          {
+            address: MaticAddresses.WBTC_TOKEN,
+            name: 'WBTC',
+            decimals: 8,
+          },
+          {
+            address: MaticAddresses.wstETH_TOKEN,
+            name: 'wstETH',
+            decimals: 18,
+          },
+          {
+            address: MaticAddresses.MaticX_TOKEN,
+            name: 'MaticX',
+            decimals: 18,
+          },
+        ]
     )
 
     await contracts.strategy.setFuseThresholds([
@@ -256,6 +305,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
 
   it('Backtesting', async function() {
     backtestResult = await strategyBacktest(
+      EnvSetup.getEnv().maticRpcUrl,
+      SUBGRAPH,
       signer,
       contracts.vault,
       contracts.strategy,

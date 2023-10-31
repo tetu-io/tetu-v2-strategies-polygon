@@ -50,6 +50,8 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
   before(async function() {
     await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
+    // await HardhatUtils.switchToMostCurrentBlock();
+
     snapshotBefore = await TimeUtils.snapshot();
 
     [signer, signer2, signer3] = await ethers.getSigners();
@@ -295,7 +297,10 @@ describe('UniswapV3ConverterStrategyTests', function() {
       expect(await strategy3.isReadyToHardWork()).eq(false);
     });
 
-    it('Hardwork test for reverse tokens order pool', async() => {
+    /**
+     * Currently USDC-WMATIC pool is not used, so the test is skipped.
+     */
+    it.skip('Hardwork test for reverse tokens order pool', async() => {
       const platformVoter = await DeployerUtilsLocal.impersonate(await controller.platformVoter());
       await strategy2.connect(platformVoter).setCompoundRatio(100000); // 100%
       const state = await PackedData.getDefaultState(strategy2);

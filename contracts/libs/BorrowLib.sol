@@ -361,6 +361,9 @@ library BorrowLib {
     uint amountDebtA,
     uint repayAllowed
   ) internal {
+    // repayAllowed cannot be zero here because of requires in _rebalanceAssets, but it's safer to check it once more
+    require(repayAllowed != 0, AppErrors.TOO_DEEP_RECURSION_BORROW_LIB);
+
     // we need to get {requiredAmountB}
     // we don't know exact amount to repay
     // but we are sure that amount {requiredAmountB ===> requiredAmountA} would be more than required

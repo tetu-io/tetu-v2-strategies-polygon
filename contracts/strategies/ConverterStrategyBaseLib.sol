@@ -160,6 +160,10 @@ library ConverterStrategyBaseLib {
   /// @notice Allow to swap more then required (i.e. 1_000 => +1%) inside {swapToGivenAmount}
   ///         to avoid additional swap if the swap will return amount a bit less than we expected
   uint internal constant OVERSWAP = PRICE_IMPACT_TOLERANCE + _ASSET_LIQUIDATION_SLIPPAGE;
+  /// @notice During SWAP-REPAY cycle we can receive requested amount after SWAP, so, following REPAY will be skipped.
+  ///         But we should prevent situation "zero balance, not zero debts".
+  ///         So, it worth to request amount higher (on the given gap) than it's really requested.
+  uint internal constant REQUESTED_BALANCE_GAP = 5_000; // 5%
 //endregion--------------------------------------------------- Constants
 
 //region--------------------------------------------------- Events
@@ -961,15 +965,15 @@ library ConverterStrategyBaseLib {
   ///         If result amount is less than expected, try to close any other available debts (1 repay per block only)
   /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
   /// @param indexAsset_ Index of the given {asset} in {tokens}
-  /// @param requestedAmount Total amount of the given asset that we need to have on balance at the end.
-  ///                        Max uint means attempt to withdraw all possible amount.
+  /// @param requestedBalance Total amount of the given asset that we need to have on balance at the end.
+  ///                         Max uint means attempt to withdraw all possible amount.
   /// @return expectedBalance Expected asset balance after all swaps and repays
   function makeRequestedAmount(
     address[] memory tokens_,
     uint indexAsset_,
     ITetuConverter converter_,
     ITetuLiquidator liquidator_,
-    uint requestedAmount,
+    uint requestedBalance,
     mapping(address => uint) storage liquidationThresholds_
   ) external returns (uint expectedBalance) {
     DataSetLocal memory v = DataSetLocal({
@@ -980,13 +984,7 @@ library ConverterStrategyBaseLib {
       liquidator: liquidator_
     });
     uint[] memory _liquidationThresholds = _getLiquidationThresholds(liquidationThresholds_, v.tokens, v.len);
-    uint balance = IERC20(v.tokens[v.indexAsset]).balanceOf(address(this));
-    if (requestedAmount != type(uint).max) {
-      requestedAmount = requestedAmount > balance
-        ? requestedAmount - balance
-        : 0;
-    }
-    expectedBalance = _closePositionsToGetAmount(v, _liquidationThresholds, requestedAmount);
+    expectedBalance = _closePositionsToGetAmount(v, _liquidationThresholds, requestedBalance);
   }
   //endregion-------------------------------------------- Make requested amount
 
@@ -994,15 +992,15 @@ library ConverterStrategyBaseLib {
   /// @notice Close debts (if it's allowed) in converter until we don't have {requestedAmount} on balance
   /// @dev We assume here that this function is called before closing any positions in the current block
   /// @param liquidationThresholds Min allowed amounts-out for liquidations
-  /// @param requestedAmount Requested amount of main asset that should be added to the current balance.
-  ///                        Pass type(uint).max to request all.
+  /// @param requestedBalance Total amount of the given asset that we need to have on balance at the end.
+  ///                         Max uint means attempt to withdraw all possible amount.
   /// @return expectedBalance Expected asset balance after all swaps and repays
   function closePositionsToGetAmount(
     ITetuConverter converter_,
     ITetuLiquidator liquidator,
     uint indexAsset,
     mapping(address => uint) storage liquidationThresholds,
-    uint requestedAmount,
+    uint requestedBalance,
     address[] memory tokens
   ) external returns (
     uint expectedBalance
@@ -1017,21 +1015,31 @@ library ConverterStrategyBaseLib {
         liquidator: liquidator
       }),
       _getLiquidationThresholds(liquidationThresholds, tokens, len),
-      requestedAmount
+      requestedBalance
     );
   }
 
+  /// @notice Close debts (if it's allowed) in converter until we don't have {requestedAmount} on balance
   /// @dev Implements {IterationPlanLib.PLAN_SWAP_REPAY} only
   ///      Note: AAVE3 allows to make two repays in a single block, see Aave3SingleBlockTest in TetuConverter
   ///      but it doesn't allow to make borrow and repay in a single block.
+  /// @param liquidationThresholds_ Min allowed amounts-out for liquidations
+  /// @param requestedBalance Total amount of the given asset that we need to have on balance at the end.
+  ///                         Max uint means attempt to withdraw all possible amount.
+  /// @return expectedBalance Expected asset balance after all swaps and repays
   function _closePositionsToGetAmount(
     DataSetLocal memory d_,
     uint[] memory liquidationThresholds_,
-    uint requestedAmount
+    uint requestedBalance
   ) internal returns (
     uint expectedBalance
   ) {
-    if (requestedAmount != 0) {
+    if (requestedBalance != 0) {
+      //let's get a bit more amount on balance to prevent situation "zero balance, not-zero debts"
+      if (requestedBalance != type(uint).max) {
+        requestedBalance = requestedBalance * (COMPOUND_DENOMINATOR + REQUESTED_BALANCE_GAP) / COMPOUND_DENOMINATOR;
+      }
+
       CloseDebtsForRequiredAmountLocal memory v;
       v.asset = d_.tokens[d_.indexAsset];
 
@@ -1058,7 +1066,7 @@ library ConverterStrategyBaseLib {
             v.prices,
             v.decs,
             v.balanceAdditions,
-            [0, IterationPlanLib.PLAN_SWAP_REPAY, 0, requestedAmount, d_.indexAsset, i]
+            [0, IterationPlanLib.PLAN_SWAP_REPAY, 0, requestedBalance, d_.indexAsset, i, 0]
           );
           if (v.idxToSwap1 == 0 && v.idxToRepay1 == 0) break;
 
@@ -1084,6 +1092,14 @@ library ConverterStrategyBaseLib {
                 : 0;
             } else if (indexOut == d_.indexAsset) {
               expectedBalance += spentAmountIn * v.prices[i] * v.decs[d_.indexAsset] / v.prices[d_.indexAsset] / v.decs[i];
+
+              // if we already received enough amount on balance, we can avoid additional actions
+              // to avoid high gas consumption in the cases like SCB-787
+              uint balanceAsset = IERC20(v.asset).balanceOf(address(this));
+              if (balanceAsset + liquidationThresholds_[d_.indexAsset] > requestedBalance) {
+                v.balanceAsset = balanceAsset;
+                break;
+              }
             }
           }
 
@@ -1093,58 +1109,38 @@ library ConverterStrategyBaseLib {
             uint indexCollateral = indexBorrow == d_.indexAsset ? i : d_.indexAsset;
             uint amountToRepay = IERC20(d_.tokens[indexBorrow]).balanceOf(address(this));
 
-            // repay can be made only if we haven't received requested amount after swap
-            // we cannot relay on amount that was planned to get after swap, so idxToRepay1 != 0 here
-            // but if swapped amount actually was enough, we should avoid additional repay to avoid high gas consumption
-            // in the cases like SCB-787
+            (uint expectedAmountOut, uint repaidAmountOut, uint amountSendToRepay) = _repayDebt(
+              d_.converter,
+              d_.tokens[indexCollateral],
+              d_.tokens[indexBorrow],
+              amountToRepay
+            );
 
-            if (
-              (indexBorrow != d_.indexAsset)
-              || ( // received amount of asset is not enough, we need next swap-repay cycle
-                (amountToRepay > v.balanceAsset ? amountToRepay - v.balanceAsset : 0) < requestedAmount
-              )
-            ) {
-              (uint expectedAmountOut, uint repaidAmountOut, uint amountSendToRepay) = _repayDebt(
-                d_.converter,
-                d_.tokens[indexCollateral],
-                d_.tokens[indexBorrow],
-                amountToRepay
-              );
-
-              if (indexBorrow == d_.indexAsset) {
-                expectedBalance = expectedBalance > amountSendToRepay
-                  ? expectedBalance - amountSendToRepay
-                  : 0;
-              } else if (indexCollateral == d_.indexAsset) {
-                require(expectedAmountOut >= spentAmountIn, AppErrors.BALANCE_DECREASE);
-                if (repaidAmountOut < amountSendToRepay) {
-                  // SCB-779: expectedAmountOut was estimated for amountToRepay, but we have paid repaidAmountOut only
-                  expectedBalance += expectedAmountOut * repaidAmountOut / amountSendToRepay;
-                } else {
-                  expectedBalance += expectedAmountOut;
-                }
+            if (indexBorrow == d_.indexAsset) {
+              expectedBalance = expectedBalance > amountSendToRepay
+                ? expectedBalance - amountSendToRepay
+                : 0;
+            } else if (indexCollateral == d_.indexAsset) {
+              require(expectedAmountOut >= spentAmountIn, AppErrors.BALANCE_DECREASE);
+              if (repaidAmountOut < amountSendToRepay) {
+                // SCB-779: expectedAmountOut was estimated for amountToRepay, but we have paid repaidAmountOut only
+                expectedBalance += expectedAmountOut * repaidAmountOut / amountSendToRepay;
+              } else {
+                expectedBalance += expectedAmountOut;
               }
             }
           }
 
-          // update balances and requestedAmount
+          // update balances
           v.newBalanceAsset = IERC20(v.asset).balanceOf(address(this));
           v.newBalanceToken = IERC20(d_.tokens[i]).balanceOf(address(this));
-
-          if (v.newBalanceAsset > v.balanceAsset) {
-            if (requestedAmount != type(uint).max) {
-              requestedAmount = requestedAmount > v.newBalanceAsset - v.balanceAsset
-                ? requestedAmount - (v.newBalanceAsset - v.balanceAsset)
-                : 0;
-            } // requestedAmount can be checked for equality to type(uint).max below, we cannot change max value
-          }
 
           v.exitLoop = (v.balanceAsset == v.newBalanceAsset && v.balanceToken == v.newBalanceToken);
           v.balanceAsset = v.newBalanceAsset;
           v.balanceToken = v.newBalanceToken;
         } while (!v.exitLoop);
 
-        if (requestedAmount < liquidationThresholds_[d_.indexAsset]) break;
+        if (v.balanceAsset + liquidationThresholds_[d_.indexAsset] > requestedBalance) break;
       }
     }
 

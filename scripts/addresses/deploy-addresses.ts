@@ -1,4 +1,5 @@
 import { MaticAddresses } from './MaticAddresses';
+import { BaseAddresses } from "./BaseAddresses";
 
 export const deployAddresses = {
   deployer: 0,
@@ -60,11 +61,20 @@ export const deployAddresses = {
   },
   CONVERTER_ADDRESS: {
     "hardhat": MaticAddresses.TETU_CONVERTER,
-    "matic": MaticAddresses.TETU_CONVERTER
+    "matic": MaticAddresses.TETU_CONVERTER,
+    "base": BaseAddresses.TETU_CONVERTER,
   },
   UNISWAPV3_USDC_USDT_100: {
     "hardhat": MaticAddresses.UNISWAPV3_USDC_USDT_100,
     "matic": MaticAddresses.UNISWAPV3_USDC_USDT_100
+  },
+  UNISWAPV3_BASE_USDC_USDbC_100: {
+    "hardhat": BaseAddresses.UNISWAPV3_USDC_USDbC_100,
+    "base": BaseAddresses.UNISWAPV3_USDC_USDbC_100
+  },
+  UNISWAPV3_BASE_DAI_USDbC_100: {
+    "hardhat": BaseAddresses.UNISWAPV3_DAI_USDbC_100,
+    "base": BaseAddresses.UNISWAPV3_DAI_USDbC_100
   },
   UNISWAPV3_USDC_MIMATIC_100: {
     "hardhat": MaticAddresses.UNISWAPV3_USDC_miMATIC_100,
@@ -85,6 +95,10 @@ export const deployAddresses = {
   SPLITTER_USDC_ADDRESS: {
     "hardhat": "0xA31cE671A0069020F7c87ce23F9cAAA7274C794c",
     "matic": "0xA31cE671A0069020F7c87ce23F9cAAA7274C794c"
+  },
+  SPLITTER_USDbC_ADDRESS: {
+    "hardhat": "0xA01ac87f8Fc03FA2c497beFB24C74D538958DAbA",
+    "base": "0xA01ac87f8Fc03FA2c497beFB24C74D538958DAbA"
   },
   SPLITTER_WMATIC_ADDRESS: {
     "hardhat": "0x645C823F09AA9aD886CfaA551BB2a29c5973804c",

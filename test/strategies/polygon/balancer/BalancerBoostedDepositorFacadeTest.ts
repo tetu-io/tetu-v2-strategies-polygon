@@ -14,7 +14,7 @@ import {
 import { Misc } from '../../../../scripts/utils/Misc';
 import { BigNumber } from 'ethers';
 import { expect } from 'chai';
-import { areAlmostEqual, differenceInPercentsLessThan } from '../../../baseUT/utils/MathUtils';
+import { differenceInPercentsLessThan } from '../../../baseUT/utils/MathUtils';
 import { BalanceUtils } from '../../../baseUT/utils/BalanceUtils';
 import { controlGasLimitsEx } from '../../../../scripts/utils/GasLimitUtils';
 import {
@@ -409,7 +409,7 @@ describe.skip('BalancerBoostedDepositorFacadeTest', function() {
             console.log('DAI', r.amountsConsumedOut[0], r.balancesAfter[0].sub(r.balancesBefore[0]));
 
             expect(balanceGaugeBefore).eq(0)
-            expect(areAlmostEqual(r.liquidityOut, balanceGaugeAfter)).eq(true)
+            expect(r.liquidityOut).approximately(balanceGaugeAfter, 100);
             expect(r.amountsConsumedOut.length).eq(3)
             expect(r.amountsConsumedOut[0]).gt(0)
             expect(r.amountsConsumedOut[1]).gt(0)
