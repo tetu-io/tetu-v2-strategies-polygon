@@ -16,7 +16,7 @@ import { BigNumber } from 'ethers';
 const whitelistedVaultsForInvesting = ['tUSDC'];
 const SUBGRAPH = 'https://api.thegraph.com/subgraphs/name/a17/tetu-v2?version=pending';
 const CONVERTER = MaticAddresses.TETU_CONVERTER;
-const HISTORY_DAYS = 3;
+const HISTORY_DAYS = 7;
 
 interface IDebtState {
   tokenACollateral: string;
