@@ -470,13 +470,16 @@ describe('PairBasedStrategyTwistedDebts', function () {
                 const maxAmount = await vault.maxWithdraw(signer.address);
                 console.log("Max amount:", +formatUnits(maxAmount, builderResults.assetDecimals));
                 await vault.withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 9_000_000});
-                if (step === MAX_COUNT_STEPS) break;
 
                 if (await builderResults.strategy.needRebalance()) {
+                  console.log("rebalance");
                   await builderResults.strategy.rebalanceNoSwaps(true, {gasLimit: 9_000_000});
                 }
+
+                if (step === MAX_COUNT_STEPS) break;
               }
-              await vault.withdrawAll({gasLimit: 9_000_000});
+              console.log("withdrawAll");
+              await vault.withdrawAll({gasLimit: 19_000_000});
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
 
               expect(stateAfter.user.assetBalance).approximately(
@@ -966,6 +969,12 @@ describe('PairBasedStrategyTwistedDebts', function () {
                 const maxAmount = await vault.maxWithdraw(signer.address);
                 console.log("Max amount:", +formatUnits(maxAmount, builderResults.assetDecimals));
                 await vault.withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 9_000_000});
+
+                if (await builderResults.strategy.needRebalance()) {
+                  console.log("rebalance");
+                  await builderResults.strategy.rebalanceNoSwaps(true, {gasLimit: 9_000_000});
+                }
+
                 if (step === MAX_COUNT_STEPS) break;
               }
               await vault.withdrawAll({gasLimit: 9_000_000});

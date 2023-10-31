@@ -40,7 +40,7 @@ import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/pai
 chai.use(chaiAsPromised);
 
 
-describe('UniswapV3ConverterStrategyUniversalTest', async () => {
+describe('UniswapV3ConverterStrategyUniversalBaseTest', async () => {
 
   // [asset, pool, tickRange, rebalanceTickRange]
   const targets: [string, string, number, number][] = [
