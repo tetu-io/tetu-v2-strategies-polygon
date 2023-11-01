@@ -208,11 +208,13 @@ contract PairBasedStrategyReader {
   ) public view returns (uint deltaDebtAmountB) {
     if (debtAmountB != 0 && totalAssets != 0) {
       uint alpha18 = 1e18 * collateralAmountA * decsAB[1] / decsAB[0] / debtAmountB;
+
       uint indexUnderlying = isUnderlyingA ? 0 : 1;
       uint lockedPercent18 = 1e18
         * AppLib.sub0(collateralAmountA * pricesAB[0] / decsAB[0], debtAmountB * pricesAB[1] / decsAB[1])
         / (totalAssets * pricesAB[indexUnderlying] / decsAB[indexUnderlying]);
       uint delta = AppLib.sub0(alpha18 * pricesAB[0] / 1e18, pricesAB[1]);
+
       deltaDebtAmountB = delta == 0
         ? 0 // weird case
         : AppLib.sub0(lockedPercent18, requiredLockedAmountPercent * 1e16)

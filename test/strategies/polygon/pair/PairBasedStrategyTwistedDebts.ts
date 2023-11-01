@@ -595,7 +595,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
         if (strategyInfo.name === PLATFORM_UNIV3) {
           describe("Rebalance to reduce locked amount percent, the pool has given proportions", function () {
             const TARGET_LOCKED_AMOUNT_PERCENT_RATIO: ITargetLockedAmountPercentConfig[] = [
-              {percentRatio: 0.01, maxCountSteps: 10},
+              {percentRatio: 0.05, maxCountSteps: 10},
               {percentRatio: 0.25, maxCountSteps: 3}
             ];
             const SWAP_AMOUNT_RATIO = [110, 0.01, 50, 99.95, 100.05];
@@ -607,7 +607,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
                 const ret = await reader.getLockedUnderlyingAmount(builderResults.strategy.address);
                 const estimatedUnderlyingAmount = +formatUnits(ret.estimatedUnderlyingAmount, builderResults.assetDecimals);
                 const strategyTotalAssets = +formatUnits(ret.totalAssets, builderResults.assetDecimals);
-                currentLockedPercent = estimatedUnderlyingAmount / strategyTotalAssets;
+                currentLockedPercent = estimatedUnderlyingAmount / strategyTotalAssets * 100;
                 targetLockedPercent = currentLockedPercent * lockedPercentConfig.percentRatio;
               });
 
@@ -637,16 +637,26 @@ describe('PairBasedStrategyTwistedDebts', function () {
                         return states[states.length - 1];
                       },
                       async () => {
-                        const state0 = states.length === 0
-                          ? await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault)
-                          : states[states.length - 1];
-                        const requiredAmountToReduceDebt = await PairBasedStrategyPrepareStateUtils.getRequiredAmountToReduceDebt(
-                          signer,
-                          state0,
+                        // const state0 = states.length === 0
+                        //   ? await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault)
+                        //   : states[states.length - 1];
+                        const requiredAmountToReduceDebt = await PairBasedStrategyPrepareStateUtils.getAmountToReduceDebtForStrategy(
+                          builderResults.strategy.address,
                           reader,
                           targetLockedPercent,
-                          await converterStrategyBase.asset()
                         );
+                        // const requiredAmountToReduceDebt2 = await PairBasedStrategyPrepareStateUtils.getRequiredAmountToReduceDebt(
+                        //   signer,
+                        //   state0,
+                        //   reader,
+                        //   targetLockedPercent,
+                        //   await converterStrategyBase.asset()
+                        // );
+                        // console.log("state0", state0);
+                        // console.log("currentLockedPercent", currentLockedPercent);
+                        // console.log("targetLockedPercent", targetLockedPercent);
+                        // console.log("requiredAmountToReduceDebt", requiredAmountToReduceDebt);
+                        // console.log("requiredAmountToReduceDebt2", requiredAmountToReduceDebt2);
                         return requiredAmountToReduceDebt.mul(110).div(100);
                       }
                     )
@@ -991,7 +1001,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
         if (strategyInfo.name === PLATFORM_UNIV3) {
           describe("Rebalance to reduce locked amount percent, the pool has given proportions", function () {
             const TARGET_LOCKED_AMOUNT_PERCENT_RATIO: ITargetLockedAmountPercentConfig[] = [
-              {percentRatio: 0.01, maxCountSteps: 10},
+              {percentRatio: 0.05, maxCountSteps: 10},
               {percentRatio: 0.25, maxCountSteps: 3}
             ];
             const SWAP_AMOUNT_RATIO = [110, 0.01, 50, 99.95, 100.05];
@@ -1003,8 +1013,8 @@ describe('PairBasedStrategyTwistedDebts', function () {
                 const ret = await reader.getLockedUnderlyingAmount(builderResults.strategy.address);
                 const estimatedUnderlyingAmount = +formatUnits(ret.estimatedUnderlyingAmount, builderResults.assetDecimals);
                 const strategyTotalAssets = +formatUnits(ret.totalAssets, builderResults.assetDecimals);
-                currentLockedPercent = estimatedUnderlyingAmount / strategyTotalAssets;
-                targetLockedPercent = currentLockedPercent * lockedPercentConfig.percentRatio
+                currentLockedPercent = estimatedUnderlyingAmount / strategyTotalAssets * 100;
+                targetLockedPercent = currentLockedPercent * lockedPercentConfig.percentRatio;
               });
 
               SWAP_AMOUNT_RATIO.forEach(swapAmountRatio => {
@@ -1033,16 +1043,21 @@ describe('PairBasedStrategyTwistedDebts', function () {
                         return states[states.length - 1];
                       },
                       async () => {
-                        const state0 = states.length === 0
-                          ? await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault)
-                          : states[states.length - 1];
-                        const requiredAmountToReduceDebt = await PairBasedStrategyPrepareStateUtils.getRequiredAmountToReduceDebt(
-                          signer,
-                          state0,
+                        // const state0 = states.length === 0
+                        //   ? await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault)
+                        //   : states[states.length - 1];
+                        const requiredAmountToReduceDebt = await PairBasedStrategyPrepareStateUtils.getAmountToReduceDebtForStrategy(
+                          builderResults.strategy.address,
                           reader,
                           targetLockedPercent,
-                          await converterStrategyBase.asset()
                         );
+                        // const requiredAmountToReduceDebt = await PairBasedStrategyPrepareStateUtils.getRequiredAmountToReduceDebt(
+                        //   signer,
+                        //   state0,
+                        //   reader,
+                        //   targetLockedPercent,
+                        //   await converterStrategyBase.asset()
+                        // );
                         return requiredAmountToReduceDebt.mul(110).div(100);
                       }
                     )

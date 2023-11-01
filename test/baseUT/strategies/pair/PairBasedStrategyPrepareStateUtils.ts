@@ -414,6 +414,14 @@ export class PairBasedStrategyPrepareStateUtils {
     await converterStrategyBase.connect(operator).setLiquidationThreshold(MaticAddresses.DAI_TOKEN, parseUnits(value, 18));
   }
 
+  static async getAmountToReduceDebtForStrategy(
+    strategy: string,
+    reader: PairBasedStrategyReader,
+    targetLockedPercent: number,
+  ): Promise<BigNumber> {
+    return reader.getAmountToReduceDebtForStrategy(strategy,  Math.max(1, Math.round(targetLockedPercent)));
+  }
+
   static async getRequiredAmountToReduceDebt(
     signer: SignerWithAddress,
     state0: IStateNum,
@@ -437,8 +445,8 @@ export class PairBasedStrategyPrepareStateUtils {
                 parseUnits(state0.converterDirect.borrowAssetsPrices[0].toString(), 18),
                 parseUnits(state0.converterDirect.borrowAssetsPrices[1].toString(), 18),
             ],
-            [assetDecimals, decimalBorrowAsset],
-            parseUnits(trimDecimals(targetLockedPercent.toString(), 5), 18)
+            [parseUnits("1", assetDecimals), parseUnits("1", decimalBorrowAsset)],
+            Math.max(1, Math.round(targetLockedPercent))
         );
         console.log("requiredAmountToReduceDebt (direct debt)", requiredAmountToReduceDebt);
         return requiredAmountToReduceDebt;
@@ -452,8 +460,8 @@ export class PairBasedStrategyPrepareStateUtils {
                 parseUnits(state0.converterReverse.borrowAssetsPrices[0].toString(), 18),
                 parseUnits(state0.converterReverse.borrowAssetsPrices[1].toString(), 18),
             ],
-            [decimalBorrowAsset, assetDecimals],
-            parseUnits(trimDecimals(targetLockedPercent.toString(), 5), 18)
+            [parseUnits("1", decimalBorrowAsset), parseUnits("1", assetDecimals)],
+            Math.max(1, Math.round(targetLockedPercent))
         );
         console.log("requiredAmountToReduceDebt (reverse debt)", requiredAmountToReduceDebt);
         return requiredAmountToReduceDebt;

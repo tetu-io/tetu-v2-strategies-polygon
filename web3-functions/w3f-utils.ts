@@ -219,14 +219,14 @@ export async function runResolver(
   const PLAN_SWAP_REPAY = 0;
   const PLAN_REPAY_SWAP_REPAY = 1;
 
-  const requiredLockedAmountPercent18 = isFuseTriggered
+  const requiredAmountToReduceDebt = isFuseTriggered
     ? BigNumber.from(0)
     : await reader.getAmountToReduceDebtForStrategy(strategyAddress, allowedLockedPercent) as BigNumber;
 
   const planEntryData = !isFuseTriggered
     ? defaultAbiCoder.encode(
       ['uint256', 'uint256', 'uint256'],
-      [PLAN_REPAY_SWAP_REPAY, MAX_UINT, requiredLockedAmountPercent18],
+      [PLAN_REPAY_SWAP_REPAY, MAX_UINT, requiredAmountToReduceDebt],
     )
     : defaultAbiCoder.encode(
       ['uint256', 'uint256'],
