@@ -10,6 +10,7 @@ contract PairBasedStrategyReaderAccessMock is IPairBasedStrategyReaderAccess {
   address internal _splitter;
   address internal _tokenA;
   address internal _tokenB;
+  address internal _asset;
   uint internal _totalAssets;
   uint[] internal _nums;
 
@@ -35,6 +36,10 @@ contract PairBasedStrategyReaderAccessMock is IPairBasedStrategyReaderAccess {
     _nums = nums_;
   }
 
+  function setAsset(address asset_) external {
+    _asset = asset_;
+  }
+
   function converter() external view returns (address) {
     return _converter;
   }
@@ -45,6 +50,10 @@ contract PairBasedStrategyReaderAccessMock is IPairBasedStrategyReaderAccess {
 
   function totalAssets() external view returns (uint) {
     return _totalAssets;
+  }
+
+  function asset() external view returns (address) {
+    return _asset;
   }
 
   /// @notice Returns the current state of the contract

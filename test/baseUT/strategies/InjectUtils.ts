@@ -71,6 +71,20 @@ export class InjectUtils {
     await controllerAsGov.upgradeProxy([strategyProxy]);
   }
 
+  static async injectStrategyWithDeployedLogic(signer: SignerWithAddress, strategyProxy: string, newLogic: string) {
+    const controller = ControllerV2__factory.connect(
+      await ConverterStrategyBase__factory.connect(strategyProxy, signer).controller(),
+      signer
+    );
+    const governance = await controller.governance();
+    const controllerAsGov = controller.connect(await Misc.impersonate(governance));
+
+    await controllerAsGov.removeProxyAnnounce(strategyProxy);
+    await controllerAsGov.announceProxyUpgrade([strategyProxy], [newLogic]);
+    await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
+    await controllerAsGov.upgradeProxy([strategyProxy]);
+  }
+
   /** Disable currently deployed pool/platform adapters for AAVE3, deploy and register new versions */
   static async redeployAave3PoolAdapters(signer: SignerWithAddress) {
     const tetuConverter = getConverterAddress();
