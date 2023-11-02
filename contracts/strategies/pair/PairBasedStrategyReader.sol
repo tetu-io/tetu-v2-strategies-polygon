@@ -205,7 +205,7 @@ contract PairBasedStrategyReader {
     uint[2] memory pricesAB,
     uint[2] memory decsAB,
     uint requiredLockedAmountPercent
-  ) public view returns (uint deltaDebtAmountB) {
+  ) public pure returns (uint deltaDebtAmountB) {
     if (debtAmountB != 0 && totalAssets != 0) {
       uint alpha18 = 1e18 * collateralAmountA * decsAB[1] / decsAB[0] / debtAmountB;
 

@@ -121,6 +121,11 @@ describe('PairBasedStrategyTwistedDebts', function () {
     /** 0.01 means that the locked-amount-percent should be reduced to 1% of the current value */
     percentRatio: number;
     maxCountSteps: number;
+
+    /** Bad case: try to multiple requiredAmountToReduceDebt on the given number */
+    useTooHugeAmount?: number; // 1 by default
+    /** It's enough to run the test with the given params only 1 time - so all embedded foreach must use 1 item only */
+    singleIterationOnly?: boolean; // false by default
   }
 //endregion Data types
 
@@ -595,8 +600,9 @@ describe('PairBasedStrategyTwistedDebts', function () {
         if (strategyInfo.name === PLATFORM_UNIV3) {
           describe("Rebalance to reduce locked amount percent, the pool has given proportions", function () {
             const TARGET_LOCKED_AMOUNT_PERCENT_RATIO: ITargetLockedAmountPercentConfig[] = [
+              {percentRatio: 0.25, maxCountSteps: 3, useTooHugeAmount: 100, singleIterationOnly: true},
               {percentRatio: 0.05, maxCountSteps: 10},
-              {percentRatio: 0.25, maxCountSteps: 3}
+              {percentRatio: 0.25, maxCountSteps: 3},
             ];
             const SWAP_AMOUNT_RATIO = [110, 0.01, 50, 99.95, 100.05];
             TARGET_LOCKED_AMOUNT_PERCENT_RATIO.forEach(lockedPercentConfig => {
@@ -612,96 +618,102 @@ describe('PairBasedStrategyTwistedDebts', function () {
               });
 
               SWAP_AMOUNT_RATIO.forEach(swapAmountRatio => {
-                const pathOut = `./tmp/up-${lockedPercentConfig.percentRatio}-${swapAmountRatio.toString()}.csv`;
-                describe(`reduce-locked-percent-ratio=${lockedPercentConfig.percentRatio} swapAmountRatio=${swapAmountRatio.toString()}`, function () {
-                  let snapshotLevel0: string;
-                  const states: IStateNum[] = [];
+                if (!lockedPercentConfig.singleIterationOnly || swapAmountRatio === SWAP_AMOUNT_RATIO[0]) {
+                  const pathOut = `./tmp/up-${lockedPercentConfig.percentRatio}-${swapAmountRatio.toString()}.csv`;
+                  describe(`reduce-locked-percent-ratio=${lockedPercentConfig.percentRatio} swapAmountRatio=${swapAmountRatio.toString()}`, function () {
+                    let snapshotLevel0: string;
+                    const states: IStateNum[] = [];
 
-                  before(async function () {
-                    snapshotLevel0 = await TimeUtils.snapshot();
-                    await makeSwapToPrepareProportionsInPool();
+                    before(async function () {
+                      snapshotLevel0 = await TimeUtils.snapshot();
+                      await makeSwapToPrepareProportionsInPool();
 
-                    const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
+                      const converterStrategyBase = ConverterStrategyBase__factory.connect(builderResults.strategy.address, signer);
 
-                    // estimate amount-to-reduce-debt
+                      // estimate amount-to-reduce-debt
 
-                    await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
-                      await builderResults.strategy.connect(await UniversalTestUtils.getAnOperator(builderResults.strategy.address, signer)),
-                      Misc.ZERO_ADDRESS,
-                      lastState => {
-                        return (lastState?.lockedPercent ?? 0) < targetLockedPercent
-                      },
-                      async (title: string, eventsSet: IEventsSet) => {
-                        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault, `step${states.length}`, {eventsSet}));
-                        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, builderResults.stateParams, true);
-                        return states[states.length - 1];
-                      },
-                      async () => {
-                        // const state0 = states.length === 0
-                        //   ? await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault)
-                        //   : states[states.length - 1];
-                        const requiredAmountToReduceDebt = await PairBasedStrategyPrepareStateUtils.getAmountToReduceDebtForStrategy(
-                          builderResults.strategy.address,
-                          reader,
-                          targetLockedPercent,
-                        );
-                        // const requiredAmountToReduceDebt2 = await PairBasedStrategyPrepareStateUtils.getRequiredAmountToReduceDebt(
-                        //   signer,
-                        //   state0,
-                        //   reader,
-                        //   targetLockedPercent,
-                        //   await converterStrategyBase.asset()
-                        // );
-                        // console.log("state0", state0);
-                        // console.log("currentLockedPercent", currentLockedPercent);
-                        // console.log("targetLockedPercent", targetLockedPercent);
-                        // console.log("requiredAmountToReduceDebt", requiredAmountToReduceDebt);
-                        // console.log("requiredAmountToReduceDebt2", requiredAmountToReduceDebt2);
-                        return requiredAmountToReduceDebt.mul(110).div(100);
-                      }
-                    )
-                  });
-                  after(async function () {
-                    await TimeUtils.rollback(snapshotLevel0);
-                  });
+                      await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
+                        await builderResults.strategy.connect(await UniversalTestUtils.getAnOperator(builderResults.strategy.address, signer)),
+                        Misc.ZERO_ADDRESS,
+                        lastState => {
+                          return (lastState?.lockedPercent ?? 0) < targetLockedPercent
+                        },
+                        async (title: string, eventsSet: IEventsSet) => {
+                          states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault, `step${states.length}`, {eventsSet}));
+                          StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, builderResults.stateParams, true);
+                          return states[states.length - 1];
+                        },
+                        async () => {
+                          const requiredAmountToReduceDebt = await PairBasedStrategyPrepareStateUtils.getAmountToReduceDebtForStrategy(
+                            builderResults.strategy.address,
+                            reader,
+                            targetLockedPercent,
+                          );
+                          // const state0 = states.length === 0
+                          //   ? await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault)
+                          //   : states[states.length - 1];
+                          // const requiredAmountToReduceDebt2 = await PairBasedStrategyPrepareStateUtils.getRequiredAmountToReduceDebt(
+                          //   signer,
+                          //   state0,
+                          //   reader,
+                          //   targetLockedPercent,
+                          //   await converterStrategyBase.asset()
+                          // );
+                          // console.log("state0", state0);
+                          // console.log("currentLockedPercent", currentLockedPercent);
+                          // console.log("targetLockedPercent", targetLockedPercent);
+                          // console.log("requiredAmountToReduceDebt", requiredAmountToReduceDebt);
+                          // console.log("requiredAmountToReduceDebt2", requiredAmountToReduceDebt2);
+                          if (lockedPercentConfig.useTooHugeAmount) {
+                            return requiredAmountToReduceDebt.mul(lockedPercentConfig.useTooHugeAmount);
+                          } else {
+                            return requiredAmountToReduceDebt.mul(110).div(100);
+                          }
+                        }
+                      )
+                    });
+                    after(async function () {
+                      await TimeUtils.rollback(snapshotLevel0);
+                    });
 
-                  async function makeSwapToPrepareProportionsInPool() {
-                    const state = await PackedData.getDefaultState(builderResults.strategy);
-                    uniswapStrategy = await UniswapV3ConverterStrategy__factory.connect(builderResults.strategy.address, signer);
-                    const propNotUnderlying18Before = await uniswapStrategy.getPropNotUnderlying18();
-                    console.log("propNotUnderlying18 before", propNotUnderlying18Before);
-                    const swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
-                      signer,
-                      builderResults,
-                      state.tokenA,
-                      state.tokenB,
-                      false, // move price UP
-                      swapAmountRatio / 100
-                    );
-                    await UniversalUtils.movePoolPriceUp(signer2, state, builderResults.swapper, swapAmount, 40000, builderResults.swapHelper);
-                    const propNotUnderlying18After = await uniswapStrategy.getPropNotUnderlying18();
-                    console.log("propNotUnderlying18 after", propNotUnderlying18After);
-                  }
+                    async function makeSwapToPrepareProportionsInPool() {
+                      const state = await PackedData.getDefaultState(builderResults.strategy);
+                      uniswapStrategy = await UniswapV3ConverterStrategy__factory.connect(builderResults.strategy.address, signer);
+                      const propNotUnderlying18Before = await uniswapStrategy.getPropNotUnderlying18();
+                      console.log("propNotUnderlying18 before", propNotUnderlying18Before);
+                      const swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
+                        signer,
+                        builderResults,
+                        state.tokenA,
+                        state.tokenB,
+                        false, // move price UP
+                        swapAmountRatio / 100
+                      );
+                      await UniversalUtils.movePoolPriceUp(signer2, state, builderResults.swapper, swapAmount, 40000, builderResults.swapHelper);
+                      const propNotUnderlying18After = await uniswapStrategy.getPropNotUnderlying18();
+                      console.log("propNotUnderlying18 after", propNotUnderlying18After);
+                    }
 
-                  it("should make rebalance using single iteration", async () => {
-                    console.log("propNotUnderlying18", await uniswapStrategy.getPropNotUnderlying18());
-                    console.log("currentLockedPercent", currentLockedPercent);
-                    console.log("targetLockedPercent", targetLockedPercent);
-                    console.log("Count steps", states.length);
-                    expect(states.length).lt(lockedPercentConfig.maxCountSteps);
-                  });
-                  it("should invest all liquidity to the pool", async () => {
-                    const lastState = states[states.length - 1];
-                    console.log(lastState);
-                    expect(lastState.strategy.assetBalance).lt(lastState.strategy.totalAssets / 100);
-                    expect(lastState.strategy.borrowAssetsBalances[0]).lt(1);
-                  });
-                  it("should reduce locked percent below the given value", async () => {
-                    const lastState = states[states.length - 1];
-                    expect(lastState.lockedPercent === undefined).eq(false);
-                    expect(lastState.lockedPercent ?? 0).lt(targetLockedPercent);
-                  });
-                })
+                    it("should make rebalance using single iteration", async () => {
+                      console.log("propNotUnderlying18", await uniswapStrategy.getPropNotUnderlying18());
+                      console.log("currentLockedPercent", currentLockedPercent);
+                      console.log("targetLockedPercent", targetLockedPercent);
+                      console.log("Count steps", states.length);
+                      expect(states.length).lt(lockedPercentConfig.maxCountSteps);
+                    });
+                    it("should invest all liquidity to the pool", async () => {
+                      const lastState = states[states.length - 1];
+                      console.log(lastState);
+                      expect(lastState.strategy.assetBalance).lt(lastState.strategy.totalAssets / 100);
+                      expect(lastState.strategy.borrowAssetsBalances[0]).lt(1);
+                    });
+                    it("should reduce locked percent below the given value", async () => {
+                      const lastState = states[states.length - 1];
+                      expect(lastState.lockedPercent === undefined).eq(false);
+                      expect(lastState.lockedPercent ?? 0).lt(targetLockedPercent);
+                    });
+                  })
+                }
               });
             });
           });
