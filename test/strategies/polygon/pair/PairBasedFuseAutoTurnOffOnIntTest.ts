@@ -320,7 +320,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
 
         await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
-        await InjectUtils.redeployAave3PoolAdapters(signer);
+        // await InjectUtils.redeployAave3PoolAdapters(signer);
 
         await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
         return b;

@@ -808,7 +808,7 @@ describe("ConverterStrategyBaseInt", () => {
       before(async function () {
         snapshotRoot = await TimeUtils.snapshot();
         await InjectUtils.injectTetuConverter(signer);
-        await InjectUtils.redeployAave3PoolAdapters(signer);
+        // await InjectUtils.redeployAave3PoolAdapters(signer);
       });
       after(async function () {
         await TimeUtils.rollback(snapshotRoot);
