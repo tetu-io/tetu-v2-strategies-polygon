@@ -107,7 +107,7 @@ export class PairWithdrawByAggUtils {
       console.log("ENTRY_TO_POOL_IS_ALLOWED", p.entryToPool);
 
       if (p.mockSwapper) {
-        // temporary replace swappery by mocked one
+        // temporary replace swapper by mocked one
         await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, p.mockSwapper.address);
       }
 

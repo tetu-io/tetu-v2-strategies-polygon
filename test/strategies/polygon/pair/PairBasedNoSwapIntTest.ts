@@ -932,7 +932,6 @@ describe('PairBasedNoSwapIntTest', function() {
     let snapshotLocal: string;
     before(async function() {
       snapshotLocal = await TimeUtils.snapshot();
-      await HardhatUtils.switchToMostCurrentBlock(); // 1inch works on current block only
 
       // we need to display full objects, so we use util.inspect, see
       // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
@@ -976,7 +975,7 @@ describe('PairBasedNoSwapIntTest', function() {
         );
       })
 
-      async function prepareStrategy(useMockSwapper?: boolean): Promise<IBuilderResults> {
+      async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
           strategyInfo.name,
           signer,
@@ -1005,7 +1004,7 @@ describe('PairBasedNoSwapIntTest', function() {
           before(async function () {
             snapshot = await TimeUtils.snapshot();
 
-            builderResults = await prepareStrategy(true);
+            builderResults = await prepareStrategy();
           });
           after(async function () {
             await TimeUtils.rollback(snapshot);
