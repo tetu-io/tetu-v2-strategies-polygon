@@ -18,7 +18,7 @@ import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/
 import {PairStrategyFixtures} from "../../../baseUT/strategies/pair/PairStrategyFixtures";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
-import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import {HardhatUtils, POLYGON_NETWORK_ID} from "../../../baseUT/utils/HardhatUtils";
 import {
   FUSE_IDX_LOWER_LIMIT_OFF,
   FUSE_IDX_LOWER_LIMIT_ON,
@@ -46,6 +46,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
 
   //region before, after
   before(async function () {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     snapshotBefore = await TimeUtils.snapshot();
     [signer, signer2] = await ethers.getSigners();
   })
@@ -209,18 +210,19 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       }
 
       describe(`${strategyInfo.name}`, () => {
+        let snapshot: string;
+        let builderResults: IBuilderResults;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+
+          builderResults = await prepareStrategy();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
         describe("Use liquidator", () => {
           describe('Move tokenB prices up, down', function () {
-            let snapshot: string;
-            let builderResults: IBuilderResults;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-
-              builderResults = await prepareStrategy();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
             async function makeTest(): Promise<IMovePriceResults> {
               const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-up-down.csv`;
               return movePriceUpDown(builderResults,{
@@ -248,16 +250,6 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
             });
           });
           describe('Move tokenB prices down, up', function () {
-            let snapshot: string;
-            let builderResults: IBuilderResults;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-
-              builderResults = await prepareStrategy();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
             async function makeTest(): Promise<IMovePriceResults> {
               const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-down-up.csv`;
               return movePriceUpDown(builderResults,{
@@ -327,18 +319,19 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       }
 
       describe(`${strategyInfo.name}`, () => {
+        let snapshot: string;
+        let builderResults: IBuilderResults;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+
+          builderResults = await prepareStrategy();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
         describe("Use liquidator", () => {
           describe('Move tokenB prices up, down', function () {
-            let snapshot: string;
-            let builderResults: IBuilderResults;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-
-              builderResults = await prepareStrategy();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
             async function makeTest(): Promise<IMovePriceResults> {
               const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-up-down.csv`;
               return movePriceUpDown(builderResults,{
@@ -361,16 +354,6 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
             });
           });
           describe('Move tokenB prices down, up', function () {
-            let snapshot: string;
-            let builderResults: IBuilderResults;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-
-              builderResults = await prepareStrategy();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
             async function makeTest(): Promise<IMovePriceResults> {
               const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-down-up.csv`;
               return movePriceUpDown(builderResults,{

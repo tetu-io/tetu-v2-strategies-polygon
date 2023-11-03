@@ -32,7 +32,7 @@ import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 /**
  * Try to make several actions one by one
  */
-describe('PairBasedStrategyMultipleActionsIntTest', function() {
+describe('PairBasedStrategyMultipleActionsIntTest @skip-on-coverage', function() {
 
 //region Variables
   let snapshotBefore: string;
@@ -235,8 +235,6 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
      */
     async function prepareStrategy(): Promise<IPrepareResults> {
       const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(PLATFORM_UNIV3, signer, signer2);
-
-      const defaultState = await PackedData.getDefaultState(b.strategy);
 
       // deploy second strategy
       const strategy2 = UniswapV3ConverterStrategy__factory.connect(

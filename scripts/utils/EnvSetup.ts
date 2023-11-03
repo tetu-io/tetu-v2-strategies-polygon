@@ -49,7 +49,7 @@ export class EnvSetup {
 
         maticForkBlock: {
           type: 'number',
-          default: 48617049, // 48265751, // 46320827,
+          default: 49480727, // 48617049, // 48265751, // 46320827,
         },
 
         baseForkBlock: {

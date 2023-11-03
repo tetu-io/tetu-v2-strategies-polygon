@@ -29,11 +29,11 @@ export const KYBER_USDC_DAI_PID = 72; // 42;
 /**
  * Kyber PID for default block
  */
-export const KYBER_PID_DEFAULT_BLOCK = 54; // 40;
+export const KYBER_PID_DEFAULT_BLOCK = 71; // 54; // 40;
 /**
  * Kyber PID for default block
  */
-export const KYBER_USDC_DAI_PID_DEFAULT_BLOCK = 55; // 42;
+export const KYBER_USDC_DAI_PID_DEFAULT_BLOCK = 72; // 55; // 42;
 
 
 export interface IBuilderParams {
