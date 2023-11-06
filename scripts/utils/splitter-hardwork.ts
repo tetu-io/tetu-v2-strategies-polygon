@@ -1,4 +1,4 @@
-import { IStrategyV2__factory, StrategySplitterV2__factory } from '../../typechain';
+import {IRebalancingV2Strategy__factory, IStrategyV2__factory, StrategySplitterV2__factory} from '../../typechain';
 import { ethers } from 'hardhat';
 import { RunHelper } from './RunHelper';
 import { txParams2 } from '../../deploy_constants/deploy-helpers';
@@ -30,16 +30,26 @@ export async function splitterHardWork(splitterAdr: string) {
 
       if (sinceLastHw > HW_DELAY) {
 
-        const strategyName = await IStrategyV2__factory.connect(strategyAdr, provider).strategySpecificName();
+        const iStrategy = IStrategyV2__factory.connect(strategyAdr, provider)
+        const iRebalancingStrategy = IRebalancingV2Strategy__factory.connect(strategyAdr, provider)
+        const defaultState = await iRebalancingStrategy.getDefaultState()
+        const isFuseTriggered =
+          defaultState[2][1].toString() === '2'
+          || defaultState[2][1].toString() === '3'
+          || defaultState[2][2].toString() === '2'
+          || defaultState[2][2].toString() === '3';
+        const strategyName = await iStrategy.strategySpecificName();
 
-        console.log('>>> DO HARD WORK FOR STRATEGY', strategyName);
-        const tp = await txParams2();
-        await RunHelper.runAndWaitAndSpeedUp(
-          provider,
-          () => splitter.doHardWorkForStrategy(strategyAdr, true, { ...tp, gasLimit: 15_000_000 }),
-          false,
-          true,
-        );
+        if (!isFuseTriggered) {
+          console.log('>>> DO HARD WORK FOR STRATEGY', strategyName);
+          const tp = await txParams2();
+          await RunHelper.runAndWaitAndSpeedUp(
+            provider,
+            () => splitter.doHardWorkForStrategy(strategyAdr, true, { ...tp, gasLimit: 15_000_000 }),
+            false,
+            true,
+          );
+        }
 
       }
 
