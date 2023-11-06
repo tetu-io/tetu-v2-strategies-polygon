@@ -103,7 +103,7 @@ async function main() {
         const splitter = await TetuVaultV2__factory.connect(vault, ethers.provider).splitter();
 
         // #### DO HARD WORK ####
-        await splitterHardWork(splitter);
+        // await splitterHardWork(splitter);
 
         const splitterContract = StrategySplitterV2__factory.connect(splitter, ethers.provider);
         const strategies = await splitterContract.allStrategies();
