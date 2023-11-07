@@ -55,6 +55,16 @@ export class Misc {
     log.info('>>>' + text, ((Date.now() - start) / 1000).toFixed(1), 'sec');
   }
 
+  public static getSubgraphUrl() {
+    if(hre.network.config.chainId === 137) {
+      return 'https://api.thegraph.com/subgraphs/name/tetu-io/tetu-v2';
+    } else if(hre.network.config.chainId === 8453) {
+      return 'https://api.thegraph.com/subgraphs/name/tetu-io/tetu-v2-base';
+    } else {
+      throw new Error('Unknown net ' + hre.network.config.chainId);
+    }
+  }
+
   public static async getBlockTsFromChain(): Promise<number> {
     const signer = (await ethers.getSigners())[0];
     const tools = await DeployerUtilsLocal.getToolsAddresses();

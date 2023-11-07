@@ -3,7 +3,6 @@ import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { getApr } from './uniswapV3Backtester/strategyBacktest';
 import { writeFileSyncRestoreFolder } from '../test/baseUT/utils/FileUtils';
 import fs, { writeFileSync } from 'fs';
-import { MaticAddresses } from './addresses/MaticAddresses';
 import { ethers } from 'hardhat';
 import {
   IPairBasedDefaultStateProvider__factory,
@@ -12,10 +11,11 @@ import {
 } from '../typechain';
 import { JsonRpcProvider } from '@ethersproject/providers/src.ts/json-rpc-provider';
 import { BigNumber } from 'ethers';
+import { Misc } from './utils/Misc';
+import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 
-const whitelistedVaultsForInvesting = ['tUSDC'];
-const SUBGRAPH = 'https://api.thegraph.com/subgraphs/name/a17/tetu-v2?version=pending';
-const CONVERTER = MaticAddresses.TETU_CONVERTER;
+const whitelistedVaultsForInvesting = ['tUSDC', 'tUSDbC'];
+const SUBGRAPH = Misc.getSubgraphUrl();
 const HISTORY_DAYS = 7;
 
 interface IDebtState {
@@ -38,8 +38,8 @@ async function getDebtState(
     tokenBCollateral: '0',
     tokenBDebt: '0',
   };
-
-  const converter = ITetuConverter__factory.connect(CONVERTER, provider);
+  const tools = Addresses.getTools();
+  const converter = ITetuConverter__factory.connect(tools.converter, provider);
 
   const rAB = await converter.getDebtAmountStored(strategyAddress, tokenA, tokenB, false, { blockTag: block });
   const rBA = await converter.getDebtAmountStored(strategyAddress, tokenB, tokenA, false, { blockTag: block });
@@ -54,7 +54,9 @@ async function main() {
   console.log('Tetu V2 strategies profitability');
 
   const provider = ethers.provider;
-  const liquidator = ITetuLiquidator__factory.connect(MaticAddresses.TETU_LIQUIDATOR, provider);
+  const tools = Addresses.getTools();
+
+  const liquidator = ITetuLiquidator__factory.connect(tools.liquidator, provider);
 
   const pathOut = `./tmp/profitability/${Date.now()}.csv`;
   const headers = [
@@ -81,6 +83,7 @@ async function main() {
   const DAY = 60 * 60 * 24;
   const data = await client.query(getStrategiesData((Math.round(Date.now() / 1000 / DAY) * DAY) - DAY *
     HISTORY_DAYS), {}).toPromise();
+  // console.log(data.data)
   if (!data?.data?.vaultEntities) {
     console.log('Error fetching from subgraph');
     return;
