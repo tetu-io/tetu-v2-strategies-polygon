@@ -36,10 +36,13 @@ export async function splitterHardWork(splitterAdr: string) {
         if (isReadyToHardWork) {
           const strategyName = await iStrategy.strategySpecificName();
           console.log('>>> DO HARD WORK FOR STRATEGY', strategyName);
+
+          const gas = await splitter.estimateGas.doHardWorkForStrategy(strategyAdr, true);
+
           const tp = await txParams2();
           await RunHelper.runAndWaitAndSpeedUp(
             provider,
-            () => splitter.doHardWorkForStrategy(strategyAdr, true, { ...tp, gasLimit: 15_000_000 }),
+            () => splitter.doHardWorkForStrategy(strategyAdr, true, { ...tp, gasLimit: gas.mul(2) }),
             false,
             true,
           );
