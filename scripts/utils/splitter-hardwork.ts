@@ -6,6 +6,7 @@ import { sendMessageToTelegram } from '../telegram/tg-sender';
 
 // make HW a bit early for avoid excess spendings on gelato
 const HW_DELAY = 60 * 60 * 11;
+const LAST_ERRORS = new Map<string, number>();
 
 export async function splitterHardWork(splitterAdr: string) {
   try {
@@ -28,7 +29,9 @@ export async function splitterHardWork(splitterAdr: string) {
       const now = Math.floor(Date.now() / 1000);
       const sinceLastHw = now - lastHW;
 
-      if (sinceLastHw > HW_DELAY) {
+      const lastError = LAST_ERRORS.get(strategyAdr.toLowerCase()) ?? 0;
+
+      if (sinceLastHw > HW_DELAY && (lastError + 60 * 60 * 8) < now) {
 
         const iStrategy = IStrategyV2__factory.connect(strategyAdr, provider);
         const isReadyToHardWork = await iStrategy.isReadyToHardWork();
@@ -37,15 +40,20 @@ export async function splitterHardWork(splitterAdr: string) {
           const strategyName = await iStrategy.strategySpecificName();
           console.log('>>> DO HARD WORK FOR STRATEGY', strategyName);
 
-          const gas = await splitter.estimateGas.doHardWorkForStrategy(strategyAdr, true);
+          try {
+            const gas = await splitter.estimateGas.doHardWorkForStrategy(strategyAdr, true);
 
-          const tp = await txParams2();
-          await RunHelper.runAndWaitAndSpeedUp(
-            provider,
-            () => splitter.doHardWorkForStrategy(strategyAdr, true, { ...tp, gasLimit: gas.mul(2) }),
-            false,
-            true,
-          );
+            const tp = await txParams2();
+            await RunHelper.runAndWaitAndSpeedUp(
+              provider,
+              () => splitter.doHardWorkForStrategy(strategyAdr, true, { ...tp, gasLimit: gas.mul(2) }),
+              false,
+              true,
+            );
+          } catch (e) {
+            LAST_ERRORS.set(strategyAdr.toLowerCase(), now);
+            throw e;
+          }
         }
 
       }

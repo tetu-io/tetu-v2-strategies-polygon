@@ -5,6 +5,7 @@ import { writeFileSyncRestoreFolder } from '../test/baseUT/utils/FileUtils';
 import fs, { writeFileSync } from 'fs';
 import { ethers } from 'hardhat';
 import {
+  IERC20__factory, IERC20Metadata__factory,
   IPairBasedDefaultStateProvider__factory,
   ITetuConverter__factory,
   ITetuLiquidator__factory,
@@ -64,6 +65,8 @@ async function main() {
     'Date',
     'Real APR',
     'TVL',
+    'tokenA Balance',
+    'tokenB Balance',
     'Claimed fees(without covered by profit)',
     'Claimed rewards(without covered by profit)',
     'Covered by profit',
@@ -99,6 +102,8 @@ async function main() {
           .getDefaultState();
         const tokenA = defaultState.addr[0];
         const tokenB = defaultState.addr[1];
+        const tokenADecimals = await IERC20Metadata__factory.connect(tokenA, provider).decimals();
+        const tokenBDecimals = await IERC20Metadata__factory.connect(tokenB, provider).decimals();
 
         let debtState: IDebtState | undefined = undefined;
 
@@ -112,6 +117,8 @@ async function main() {
           lossCoveredFromInsurance: string
           lossCoveredFromRewards: string
           debtCost: string
+          tokenABalance: string
+          tokenBBalance: string
           lastHistory: {
             time: number
             tvl: string
@@ -150,6 +157,8 @@ async function main() {
               lossCoveredFromInsurance: '0',
               lossCoveredFromRewards: '0',
               debtCost: '0',
+              tokenABalance: formatUnits(await IERC20__factory.connect(tokenA, provider).balanceOf(strategy.id), tokenADecimals),
+              tokenBBalance: formatUnits(await IERC20__factory.connect(tokenB, provider).balanceOf(strategy.id), tokenBDecimals),
             });
 
             if (dayIndex > 0) {
@@ -248,6 +257,8 @@ async function main() {
             dayHistories[dayIndex].lastHistory = history;
           }
 
+
+
           if (debtState === undefined) {
             debtState = await getDebtState(strategy.id, tokenA, tokenB, history.block + 1, provider);
           } else {
@@ -299,6 +310,8 @@ async function main() {
           day.day,
           '' + day.realApr,
           day.lastHistory.tvl,
+          day.tokenABalance,
+          day.tokenBBalance,
           day.feesClaimed,
           day.rewardsClaimed,
           day.profitCovered,
