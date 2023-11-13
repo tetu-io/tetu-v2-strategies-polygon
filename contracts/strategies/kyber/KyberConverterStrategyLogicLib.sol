@@ -58,7 +58,6 @@ library KyberConverterStrategyLogicLib {
 
     bool fuseStatusChangedAB;
     PairBasedStrategyLib.FuseStatus fuseStatusAB;
-    uint coveredByRewards;
 
     uint poolPrice;
     uint poolPriceAdjustment;
@@ -562,28 +561,18 @@ library KyberConverterStrategyLogicLib {
       uint loss;
       (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmountsPair(v.converter, totalAssets_, v.tokenA, v.tokenB, v.liquidationThresholdsAB);
       if (loss != 0) {
-        v.coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
+        _coverLoss(splitter, loss);
       }
-      emit Rebalanced(loss, profitToCover, v.coveredByRewards);
+      emit Rebalanced(loss, profitToCover, 0);
     }
 
     return tokenAmounts;
   }
 
   /// @notice Try to cover loss from rewards then cover remain loss from insurance.
-  function _coverLoss(address splitter, uint loss, address profitHolder, address tokenA, address tokenB, address pool) internal returns (
-    uint coveredByRewards
-  ){
-    if (loss != 0) {
-      coveredByRewards = KyberDebtLib.coverLossFromRewards(loss, profitHolder, tokenA, tokenB, pool);
-      uint notCovered = loss - coveredByRewards;
-      if (notCovered != 0) {
-        ConverterStrategyBaseLib2.coverLossAndCheckResults(splitter, 0, notCovered);
-      }
-      emit CoverLoss(loss, coveredByRewards);
-    }
-
-    return coveredByRewards;
+  function _coverLoss(address splitter, uint loss) internal {
+    ConverterStrategyBaseLib2.coverLossAndCheckResults(splitter, 0, loss);
+    emit CoverLoss(loss, 0);
   }
 
   /// @notice Initialize {v} by state values
@@ -646,11 +635,10 @@ library KyberConverterStrategyLogicLib {
     (completed, tokenAmounts, loss) = PairBasedStrategyLogicLib.withdrawByAggStep(addr_, values_, swapData, planEntryData, tokens, liquidationThresholds);
 
     // cover loss
-    uint coveredByRewards;
     if (loss != 0) {
-      coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, tokens[0], tokens[1], address(pool));
+      _coverLoss(splitter, loss);
     }
-    emit RebalancedDebt(loss, values_[1], coveredByRewards);
+    emit RebalancedDebt(loss, values_[1], 0);
 
     if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
       || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
