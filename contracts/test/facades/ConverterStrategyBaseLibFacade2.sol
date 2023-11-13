@@ -4,14 +4,32 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "../../strategies/ConverterStrategyBaseLib2.sol";
+import "../../libs/BookkeeperLib.sol";
 
 /// @notice Provide public access to internal functions of ConverterStrategyBaseLib2
 contract ConverterStrategyBaseLibFacade2 {
   mapping(address => uint) private liquidationThresholds;
   IStrategyV3.BaseState private baseState;
+  IConverterStrategyBase.ConverterStrategyBaseState private _csbs;
 
   function setLiquidationThreshold(address asset, uint values) external {
     liquidationThresholds[asset] = values;
+  }
+
+  function setCsbs(
+    uint investedAssets,
+    ITetuConverter converter,
+    uint reinvestThresholdPercent,
+    int debtToInsurance
+  ) external {
+    _csbs.investedAssets = investedAssets;
+    _csbs.converter = converter;
+    _csbs.reinvestThresholdPercent = reinvestThresholdPercent;
+    _csbs.debtToInsurance = debtToInsurance;
+  }
+
+  function getCsb() external view returns (IConverterStrategyBase.ConverterStrategyBaseState memory) {
+    return _csbs;
   }
 
   function getExpectedWithdrawnAmounts(
@@ -59,7 +77,9 @@ contract ConverterStrategyBaseLibFacade2 {
     uint indexAsset,
     ITetuConverter converter_
   ) external returns (
-    uint amountOut
+    uint amountOut,
+    uint[] memory prices,
+    uint[] memory decs
   ) {
     return ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amountsOut, indexAsset, converter_);
   }
@@ -142,7 +162,7 @@ contract ConverterStrategyBaseLibFacade2 {
     uint lossToCover,
     uint lossUncovered
   ) {
-    return ConverterStrategyBaseLib2.getSafeLossToCover(loss, totalAssets_);
+    return BookkeeperLib.getSafeLossToCover(loss, totalAssets_);
   }
 
   function setBaseState(
@@ -193,20 +213,23 @@ contract ConverterStrategyBaseLibFacade2 {
   function coverLossAfterPriceChanging(
     uint investedAssetsBefore,
     uint investedAssetsAfter,
+    int increaseToDebt,
     address asset,
     address splitter
   ) external returns (uint earned) {
     baseState.asset = asset;
     baseState.splitter = splitter;
-    return ConverterStrategyBaseLib2.coverLossAfterPriceChanging(
+    return BookkeeperLib.coverLossAfterPriceChanging(
+      _csbs,
       investedAssetsBefore,
       investedAssetsAfter,
+      increaseToDebt,
       baseState
     );
   }
 
-  function _coverLossAndCheckResults(address splitter, uint earned, uint lossToCover) external {
-    ConverterStrategyBaseLib2._coverLossAndCheckResults(splitter, earned, lossToCover);
+  function _coverLossAndCheckResults(address splitter, uint lossToCover, int debtToInsuranceInc) external {
+    BookkeeperLib._coverLossAndCheckResults(_csbs, splitter, lossToCover, debtToInsuranceInc);
   }
 
   function sendProfitGetAssetBalance(

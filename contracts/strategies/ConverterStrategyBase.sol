@@ -7,6 +7,7 @@ import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
 import "../interfaces/IConverterStrategyBase.sol";
+import "../libs/BookkeeperLib.sol";
 
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
@@ -513,15 +514,21 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   /// @notice Updates cached _investedAssets to actual value
   /// @dev Should be called after deposit / withdraw / claim; virtual - for ut
   function _updateInvestedAssets() internal returns (uint investedAssetsOut) {
-    investedAssetsOut = _calcInvestedAssets();
+    (address[] memory tokens, uint indexAsset) = _getTokens(baseState.asset);
+    (investedAssetsOut,,) = _calcInvestedAssets(tokens, indexAsset);
     _csbs.investedAssets = investedAssetsOut;
   }
 
   /// @notice Calculate amount we will receive when we withdraw all from pool
   /// @dev This is writable function because we need to update current balances in the internal protocols.
-  /// @return Invested asset amount under control (in terms of {asset})
-  function _calcInvestedAssets() internal returns (uint) {
-    (address[] memory tokens, uint indexAsset) = _getTokens(baseState.asset);
+  /// @return amountOut Invested asset amount under control (in terms of {asset})
+  /// @return prices Asset prices in USD, decimals 18
+  /// @return decs 10**decimals
+  function _calcInvestedAssets(address[] memory tokens, uint indexAsset) internal returns (
+    uint amountOut,
+    uint[] memory prices,
+    uint[] memory decs
+  ) {
     uint liquidity = _depositorLiquidity();
     return ConverterStrategyBaseLib2.calcInvestedAssets(
       tokens,
@@ -533,22 +540,32 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     );
   }
 
-  function calcInvestedAssets() external returns (uint) {
+  function calcInvestedAssets() external returns (uint investedAssetsOut) {
     StrategyLib2.onlyOperators(controller());
-    return _calcInvestedAssets();
+    (address[] memory tokens, uint indexAsset) = _getTokens(baseState.asset);
+    (investedAssetsOut,,) = _calcInvestedAssets(tokens, indexAsset);
   }
 
   /// @notice Calculate profit/loss happened because of price changing. Try to cover the loss, send the profit to the insurance
   /// @param updateInvestedAssetsAmount_ If false - just return current value of invested assets
   /// @return investedAssetsOut Updated value of {_investedAssets}
   /// @return earnedOut Profit that was received because of price changes. It should be sent back to insurance.
-  ///                   It's to dangerous to get this to try to get this amount here because of the problem "borrow-repay is not allowed in a single block"
+  ///                   It's too dangerous to try to get this amount here because of the problem "borrow-repay is not allowed in a single block"
   ///                   So, we need to handle it in the caller code.
   function _fixPriceChanges(bool updateInvestedAssetsAmount_) internal returns (uint investedAssetsOut, uint earnedOut) {
     if (updateInvestedAssetsAmount_) {
       uint investedAssetsBefore = _csbs.investedAssets;
-      investedAssetsOut = _updateInvestedAssets();
-      earnedOut = ConverterStrategyBaseLib2.coverLossAfterPriceChanging(investedAssetsBefore, investedAssetsOut, baseState);
+
+      (address[] memory tokens, uint indexAsset) = _getTokens(baseState.asset);
+      uint[] memory prices;
+      uint[] memory decs;
+
+      (investedAssetsOut, prices, decs) = _calcInvestedAssets(tokens, indexAsset);
+      _csbs.investedAssets = investedAssetsOut;
+
+      int increaseToDebt = BookkeeperLib.getIncreaseToDebt(tokens, indexAsset, prices, decs, _csbs.converter);
+
+      earnedOut = BookkeeperLib.coverLossAfterPriceChanging(_csbs, investedAssetsBefore, investedAssetsOut, increaseToDebt, baseState);
     } else {
       investedAssetsOut = _csbs.investedAssets;
       earnedOut = 0;

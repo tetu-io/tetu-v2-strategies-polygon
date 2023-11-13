@@ -137,6 +137,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
     uint[] memory tokenAmounts = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
+      _csbs,
       state.pair,
       [address(_csbs.converter), address(AppLib._getLiquidator(_controller))],
       oldTotalAssets,
@@ -202,6 +203,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     uint[] memory tokenAmounts;
 
     (completed, tokenAmounts) = UniswapV3ConverterStrategyLogicLib.withdrawByAggStep(
+      _csbs,
       [tokenToSwap_, aggregator_, controller(), address(_csbs.converter), baseState.splitter],
       [amountToSwap_, profitToCover, oldTotalAssets, entryToPool],
       swapData,

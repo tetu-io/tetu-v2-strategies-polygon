@@ -19,6 +19,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
+import "../../libs/BookkeeperLib.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -33,9 +34,6 @@ library UniswapV3ConverterStrategyLogicLib {
   event Rebalanced(uint loss, uint profitToCover, uint coveredByRewards);
   event RebalancedDebt(uint loss, uint profitToCover, uint coveredByRewards);
   event UniV3FeesClaimed(uint fee0, uint fee1);
-  /// @param loss Total amount of loss
-  /// @param coveredByRewards Part of the loss covered by rewards
-  event CoverLoss(uint loss, uint coveredByRewards);
   //endregion ------------------------------------------------ Events
 
   //region ------------------------------------------------ Data types
@@ -399,6 +397,7 @@ library UniswapV3ConverterStrategyLogicLib {
   /// @param checkNeedRebalance_ True if the function should ensure that the rebalance is required
   /// @return tokenAmounts Token amounts for deposit. If length == 0 - rebalance wasn't made and no deposit is required.
   function rebalanceNoSwaps(
+    IConverterStrategyBase.ConverterStrategyBaseState storage csbs,
     PairBasedStrategyLogicLib.PairState storage pairState,
     address[2] calldata converterLiquidator,
     uint totalAssets_,
@@ -431,19 +430,12 @@ library UniswapV3ConverterStrategyLogicLib {
       uint loss;
       (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmountsPair(v.converter, totalAssets_, v.tokenA, v.tokenB, v.liquidationThresholdsAB);
       if (loss != 0) {
-        _coverLoss(splitter, loss);
+        BookkeeperLib.coverLossAndCheckResults(csbs, splitter, loss);
       }
       emit Rebalanced(loss, profitToCover, 0);
     }
 
     return tokenAmounts;
-  }
-
-  /// @notice Cover loss from insurance
-  /// @param loss Amount of loss to cover, must be != 0
-  function _coverLoss(address splitter, uint loss) internal {
-    ConverterStrategyBaseLib2.coverLossAndCheckResults(splitter, 0, loss);
-    emit CoverLoss(loss, 0);
   }
 
   /// @notice Initialize {v} by state values
@@ -486,6 +478,7 @@ library UniswapV3ConverterStrategyLogicLib {
   /// @return completed All debts were closed, leftovers were swapped to proper proportions
   /// @return tokenAmountsOut Amounts to be deposited to pool. This array is empty if no deposit allowed/required.
   function withdrawByAggStep(
+    IConverterStrategyBase.ConverterStrategyBaseState storage csbs,
     address[5] calldata addr_,
     uint[4] calldata values_,
     bytes memory swapData,
@@ -515,7 +508,7 @@ library UniswapV3ConverterStrategyLogicLib {
 
     // cover loss
     if (loss != 0) {
-      _coverLoss(splitter, loss);
+      BookkeeperLib.coverLossAndCheckResults(csbs, splitter, loss);
     }
     emit RebalancedDebt(loss, values_[1], 0);
 
