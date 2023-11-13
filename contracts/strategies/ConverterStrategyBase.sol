@@ -7,7 +7,6 @@ import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
 import "../interfaces/IConverterStrategyBase.sol";
-import "../libs/BookkeeperLib.sol";
 
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
@@ -515,16 +514,17 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   /// @dev Should be called after deposit / withdraw / claim; virtual - for ut
   function _updateInvestedAssets() internal returns (uint investedAssetsOut) {
     (address[] memory tokens, uint indexAsset) = _getTokens(baseState.asset);
-    (investedAssetsOut,,) = _calcInvestedAssets(tokens, indexAsset);
+    (investedAssetsOut,,) = _calcInvestedAssets(tokens, indexAsset, true);
     _csbs.investedAssets = investedAssetsOut;
   }
 
   /// @notice Calculate amount we will receive when we withdraw all from pool
   /// @dev This is writable function because we need to update current balances in the internal protocols.
+  /// @param makeCheckpoint_ True - call IAccountant.checkpoint in the converter
   /// @return amountOut Invested asset amount under control (in terms of {asset})
   /// @return prices Asset prices in USD, decimals 18
   /// @return decs 10**decimals
-  function _calcInvestedAssets(address[] memory tokens, uint indexAsset) internal returns (
+  function _calcInvestedAssets(address[] memory tokens, uint indexAsset, bool makeCheckpoint_) internal returns (
     uint amountOut,
     uint[] memory prices,
     uint[] memory decs
@@ -536,14 +536,15 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
         ? new uint[](tokens.length)
         : _depositorQuoteExit(liquidity),
       indexAsset,
-      _csbs.converter
+      _csbs.converter,
+      makeCheckpoint_
     );
   }
 
   function calcInvestedAssets() external returns (uint investedAssetsOut) {
     StrategyLib2.onlyOperators(controller());
     (address[] memory tokens, uint indexAsset) = _getTokens(baseState.asset);
-    (investedAssetsOut,,) = _calcInvestedAssets(tokens, indexAsset);
+    (investedAssetsOut,,) = _calcInvestedAssets(tokens, indexAsset, true);
   }
 
   /// @notice Calculate profit/loss happened because of price changing. Try to cover the loss, send the profit to the insurance
@@ -560,12 +561,12 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       uint[] memory prices;
       uint[] memory decs;
 
-      (investedAssetsOut, prices, decs) = _calcInvestedAssets(tokens, indexAsset);
+      (investedAssetsOut, prices, decs) = _calcInvestedAssets(tokens, indexAsset, false);
       _csbs.investedAssets = investedAssetsOut;
 
-      int increaseToDebt = BookkeeperLib.getIncreaseToDebt(tokens, indexAsset, prices, decs, _csbs.converter);
+      int increaseToDebt = ConverterStrategyBaseLib2.getIncreaseToDebt(tokens, indexAsset, prices, decs, _csbs.converter);
 
-      earnedOut = BookkeeperLib.coverLossAfterPriceChanging(_csbs, investedAssetsBefore, investedAssetsOut, increaseToDebt, baseState);
+      earnedOut = ConverterStrategyBaseLib2.coverLossAfterPriceChanging(_csbs, investedAssetsBefore, investedAssetsOut, increaseToDebt, baseState);
     } else {
       investedAssetsOut = _csbs.investedAssets;
       earnedOut = 0;

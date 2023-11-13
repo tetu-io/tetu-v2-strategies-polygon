@@ -7,7 +7,6 @@ import "./KyberStrategyErrors.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/lib/StringLib.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
-import "../../libs/BookkeeperLib.sol";
 
 library KyberConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -560,7 +559,7 @@ library KyberConverterStrategyLogicLib {
       uint loss;
       (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmountsPair(v.converter, totalAssets_, v.tokenA, v.tokenB, v.liquidationThresholdsAB);
       if (loss != 0) {
-        BookkeeperLib.coverLossAndCheckResults(csbs, splitter, loss);
+        ConverterStrategyBaseLib2.coverLossAndCheckResults(csbs, splitter, loss);
       }
       emit Rebalanced(loss, profitToCover, 0);
     }
@@ -618,10 +617,8 @@ library KyberConverterStrategyLogicLib {
     bool completed,
     uint[] memory tokenAmountsOut
   ) {
-    address splitter = addr_[4];
     uint entryToPool = values_[3];
     address[2] memory tokens = [pairState.tokenA, pairState.tokenB];
-    IPool pool = IPool(pairState.pool);
 
     // Calculate amounts to be deposited to pool, calculate loss, fix profitToCover
     uint[] memory tokenAmounts;
@@ -630,7 +627,11 @@ library KyberConverterStrategyLogicLib {
 
     // cover loss
     if (loss != 0) {
-      BookkeeperLib.coverLossAndCheckResults(csbs, splitter, loss);
+      ConverterStrategyBaseLib2.coverLossAndCheckResults(
+        csbs,
+        addr_[4], // splitter
+        loss
+      );
     }
     emit RebalancedDebt(loss, values_[1], 0);
 
@@ -638,7 +639,12 @@ library KyberConverterStrategyLogicLib {
       || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
     ) {
       // We are going to enter to the pool: update lowerTick and upperTick, initialize tokenAmountsOut
-      (pairState.lowerTick, pairState.upperTick) = KyberDebtLib._calcNewTickRange(pool, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
+      (pairState.lowerTick, pairState.upperTick) = KyberDebtLib._calcNewTickRange(
+        IPool(pairState.pool),
+        pairState.lowerTick,
+        pairState.upperTick,
+        pairState.tickSpacing
+      );
       tokenAmountsOut = tokenAmounts;
     }
 

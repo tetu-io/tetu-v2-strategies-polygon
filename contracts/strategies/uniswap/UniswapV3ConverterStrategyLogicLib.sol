@@ -19,7 +19,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
-import "../../libs/BookkeeperLib.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -430,7 +429,7 @@ library UniswapV3ConverterStrategyLogicLib {
       uint loss;
       (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmountsPair(v.converter, totalAssets_, v.tokenA, v.tokenB, v.liquidationThresholdsAB);
       if (loss != 0) {
-        BookkeeperLib.coverLossAndCheckResults(csbs, splitter, loss);
+        ConverterStrategyBaseLib2.coverLossAndCheckResults(csbs, splitter, loss);
       }
       emit Rebalanced(loss, profitToCover, 0);
     }
@@ -489,10 +488,8 @@ library UniswapV3ConverterStrategyLogicLib {
     bool completed,
     uint[] memory tokenAmountsOut
   ) {
-    address splitter = addr_[4];
     uint entryToPool = values_[3];
     address[2] memory tokens = [pairState.tokenA, pairState.tokenB];
-    IUniswapV3Pool pool = IUniswapV3Pool(pairState.pool);
 
     // Calculate amounts to be deposited to pool, calculate loss, fix profitToCover
     uint[] memory tokenAmounts;
@@ -508,7 +505,11 @@ library UniswapV3ConverterStrategyLogicLib {
 
     // cover loss
     if (loss != 0) {
-      BookkeeperLib.coverLossAndCheckResults(csbs, splitter, loss);
+      ConverterStrategyBaseLib2.coverLossAndCheckResults(
+        csbs,
+        addr_[4],
+        loss
+      );
     }
     emit RebalancedDebt(loss, values_[1], 0);
 
@@ -517,7 +518,7 @@ library UniswapV3ConverterStrategyLogicLib {
     ) {
       // We are going to enter to the pool: update lowerTick and upperTick, initialize tokenAmountsOut
       (pairState.lowerTick, pairState.upperTick) = UniswapV3DebtLib._calcNewTickRange(
-        pool,
+        IUniswapV3Pool(pairState.pool),
         pairState.lowerTick,
         pairState.upperTick,
         pairState.tickSpacing

@@ -9,7 +9,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/lib/StringLib.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
-import "../../libs/BookkeeperLib.sol";
 
 library AlgebraConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -550,7 +549,7 @@ library AlgebraConverterStrategyLogicLib {
       (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmountsPair(v.converter, totalAssets_, v.tokenA, v.tokenB, v.liquidationThresholdsAB);
 
       if (loss != 0) {
-        BookkeeperLib.coverLossAndCheckResults(csbs, splitter, loss);
+        ConverterStrategyBaseLib2.coverLossAndCheckResults(csbs, splitter, loss);
       }
       emit Rebalanced(loss, profitToCover, 0);
     }
@@ -608,10 +607,7 @@ library AlgebraConverterStrategyLogicLib {
     bool completed,
     uint[] memory tokenAmountsOut
   ) {
-    address splitter = addr_[4];
-    uint entryToPool = values_[3];
     address[2] memory tokens = [pairState.tokenA, pairState.tokenB];
-    IAlgebraPool pool = IAlgebraPool(pairState.pool);
 
     // Calculate amounts to be deposited to pool, calculate loss, fix profitToCover
     uint[] memory tokenAmounts;
@@ -620,15 +616,25 @@ library AlgebraConverterStrategyLogicLib {
 
     // cover loss
     if (loss != 0) {
-      BookkeeperLib.coverLossAndCheckResults(csbs, splitter, loss);
+      ConverterStrategyBaseLib2.coverLossAndCheckResults(
+        csbs,
+        addr_[4], // splitter
+        loss
+      );
     }
     emit RebalancedDebt(loss, values_[1], 0);
 
-    if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
-      || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
+    // uint entryToPool = values_[3];
+    if (values_[3] == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
+      || (values_[3] == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
     ) {
       // We are going to enter to the pool: update lowerTick and upperTick, initialize tokenAmountsOut
-      (pairState.lowerTick, pairState.upperTick) = AlgebraDebtLib._calcNewTickRange(pool, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
+      (pairState.lowerTick, pairState.upperTick) = AlgebraDebtLib._calcNewTickRange(
+        IAlgebraPool(pairState.pool),
+        pairState.lowerTick,
+        pairState.upperTick,
+        pairState.tickSpacing
+      );
       tokenAmountsOut = tokenAmounts;
     }
 

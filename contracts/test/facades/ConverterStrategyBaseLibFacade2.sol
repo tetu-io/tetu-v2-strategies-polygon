@@ -4,7 +4,6 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "../../strategies/ConverterStrategyBaseLib2.sol";
-import "../../libs/BookkeeperLib.sol";
 
 /// @notice Provide public access to internal functions of ConverterStrategyBaseLib2
 contract ConverterStrategyBaseLibFacade2 {
@@ -75,13 +74,14 @@ contract ConverterStrategyBaseLibFacade2 {
     address[] memory tokens,
     uint[] memory amountsOut,
     uint indexAsset,
-    ITetuConverter converter_
+    ITetuConverter converter_,
+    bool makeCheckout_
   ) external returns (
     uint amountOut,
     uint[] memory prices,
     uint[] memory decs
   ) {
-    return ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amountsOut, indexAsset, converter_);
+    return ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amountsOut, indexAsset, converter_, makeCheckout_);
   }
 
   function registerIncome(uint assetBefore, uint assetAfter) external pure returns (uint earned, uint lost) {
@@ -162,7 +162,7 @@ contract ConverterStrategyBaseLibFacade2 {
     uint lossToCover,
     uint lossUncovered
   ) {
-    return BookkeeperLib.getSafeLossToCover(loss, totalAssets_);
+    return ConverterStrategyBaseLib2._getSafeLossToCover(loss, totalAssets_);
   }
 
   function setBaseState(
@@ -219,7 +219,7 @@ contract ConverterStrategyBaseLibFacade2 {
   ) external returns (uint earned) {
     baseState.asset = asset;
     baseState.splitter = splitter;
-    return BookkeeperLib.coverLossAfterPriceChanging(
+    return ConverterStrategyBaseLib2.coverLossAfterPriceChanging(
       _csbs,
       investedAssetsBefore,
       investedAssetsAfter,
@@ -229,7 +229,7 @@ contract ConverterStrategyBaseLibFacade2 {
   }
 
   function _coverLossAndCheckResults(address splitter, uint lossToCover, int debtToInsuranceInc) external {
-    BookkeeperLib._coverLossAndCheckResults(_csbs, splitter, lossToCover, debtToInsuranceInc);
+    ConverterStrategyBaseLib2._coverLossAndCheckResults(_csbs, splitter, lossToCover, debtToInsuranceInc);
   }
 
   function sendProfitGetAssetBalance(
