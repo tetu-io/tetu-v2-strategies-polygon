@@ -17,6 +17,7 @@ import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../interfaces/IConverterStrategyBase.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IAccountant.sol";
+import "hardhat/console.sol";
 
 /// @notice Continuation of ConverterStrategyBaseLib (workaround for size limits)
 library ConverterStrategyBaseLib2 {
@@ -70,7 +71,7 @@ library ConverterStrategyBaseLib2 {
   /// @param lossToCover Amount of loss that should be covered
   /// @param debtToInsuranceInc The amount by which the debt to insurance increases
   /// @param amountCovered Actually covered amount of loss. If amountCovered < lossToCover => the insurance is not enough
-  event CoverLoss(uint lossToCover, int debtToInsuranceInc, uint amountCovered);
+  event OnCoverLoss(uint lossToCover, int debtToInsuranceInc, uint amountCovered);
 
   /// @notice Compensation of losses is not carried out completely because loss amount exceeds allowed max
   event UncoveredLoss(uint lossCovered, uint lossUncovered, uint investedAssetsBefore, uint investedAssetsAfter);
@@ -558,7 +559,9 @@ library ConverterStrategyBaseLib2 {
       }
     }
 
+    console.log("makeCheckpoint_.1");
     if (makeCheckpoint_) {
+      console.log("makeCheckpoint_.2");
       _callCheckpoint(tokens, converter_);
     }
 
@@ -697,6 +700,8 @@ library ConverterStrategyBaseLib2 {
     int increaseToDebt,
     IStrategyV3.BaseState storage baseState
   ) external returns (uint earned) {
+    console.log("coverLossAfterPriceChanging.investedAssetsBefore", investedAssetsBefore);
+    console.log("coverLossAfterPriceChanging.investedAssetsAfter", investedAssetsAfter);
 
     uint lost;
     if (investedAssetsAfter > investedAssetsBefore) {
@@ -711,10 +716,13 @@ library ConverterStrategyBaseLib2 {
     }
 
     if (lost != 0) {
+      console.log("coverLossAfterPriceChanging.lost", lost);
       (uint lossToCover, uint lossUncovered) = _getSafeLossToCover(
         lost,
         investedAssetsAfter + IERC20(baseState.asset).balanceOf(address(this)) // totalAssets
       );
+      console.log("coverLossAfterPriceChanging.lossToCover", lossToCover);
+      console.log("coverLossAfterPriceChanging.lossUncovered", lossUncovered);
       // in the case "lossToCover < loss" we reduce both amounts "from prices" and "from debts" proportionally
       _coverLossAndCheckResults(csbs, baseState.splitter, lossToCover, increaseToDebt * int(lossToCover) / int(lost));
 
@@ -763,7 +771,7 @@ library ConverterStrategyBaseLib2 {
       emit NotEnoughInsurance(lossToCover - delta);
     }
 
-    emit CoverLoss(lossToCover, debtToInsuranceInc, delta);
+    emit OnCoverLoss(lossToCover, debtToInsuranceInc, delta);
   }
 
   /// @notice Cut loss-value to safe value that doesn't produce revert inside splitter

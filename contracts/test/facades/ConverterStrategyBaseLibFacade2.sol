@@ -27,6 +27,10 @@ contract ConverterStrategyBaseLibFacade2 {
     _csbs.debtToInsurance = debtToInsurance;
   }
 
+  function setDebtToInsurance(int debtToInsurance_) external {
+    _csbs.debtToInsurance = debtToInsurance_;
+  }
+
   function getCsb() external view returns (IConverterStrategyBase.ConverterStrategyBaseState memory) {
     return _csbs;
   }

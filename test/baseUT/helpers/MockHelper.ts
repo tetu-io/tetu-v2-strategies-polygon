@@ -3,7 +3,9 @@ import {
   BalancerBoostedDepositorFacade,
   BalancerLogicLibFacade,
   BorrowLibFacade,
-  ConverterStrategyBaseLibFacade, ConverterStrategyBaseLibFacade2, IterationPlanLibFacade,
+  ConverterStrategyBaseLibFacade,
+  ConverterStrategyBaseLibFacade2,
+  IterationPlanLibFacade,
   MockController,
   MockConverterStrategy,
   MockConverterStrategy__factory,
@@ -19,7 +21,13 @@ import {
   UniswapV3LibFacade,
   PairBasedStrategyReader,
   UniswapV3ConverterStrategyLogicLibFacade,
-  MockUniswapV3Pool, PairBasedStrategyLogicLibFacade, AppLibFacade, SwapHelper, MockAggregator, MockSwapper,
+  MockUniswapV3Pool,
+  PairBasedStrategyLogicLibFacade,
+  AppLibFacade,
+  SwapHelper,
+  MockAggregator,
+  MockSwapper,
+  MockAccountant,
 } from '../../../typechain';
 import { DeployerUtils } from '../../../scripts/utils/DeployerUtils';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
@@ -191,5 +199,9 @@ export class MockHelper {
 
   public static async createMockSwapper(signer: SignerWithAddress, priceOracle: string, token0: string, token1: string): Promise<MockSwapper> {
     return (await DeployerUtils.deployContract(signer, 'MockSwapper', priceOracle, token0, token1)) as MockSwapper;
+  }
+
+  public static async createMockAccountant(signer: SignerWithAddress): Promise<MockAccountant> {
+    return (await DeployerUtils.deployContract(signer, 'MockAccountant')) as MockAccountant;
   }
 }

@@ -238,7 +238,10 @@ library ConverterStrategyBaseLib {
     uint toInsurance
   );
 
-  event OnPayDebtToInsurance(int debtToInsuranceBefore, int debtToInsuraneAfter);
+  event OnPayDebtToInsurance(
+    int debtToInsuranceBefore,
+    int debtToInsuraneAfter
+  );
 //endregion---------------------------------------------------  Events
 
 //region--------------------------------------------------- Borrow and close positions
