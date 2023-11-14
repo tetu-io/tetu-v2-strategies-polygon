@@ -246,4 +246,16 @@ contract ConverterStrategyBaseLibFacade2 {
   ) {
     return ConverterStrategyBaseLib2.sendProfitGetAssetBalance(theAsset_, balanceTheAsset_, investedAssets_, earnedByPrices_, baseState);
   }
+
+  function getIncreaseToDebt(
+    address[] memory tokens,
+    uint indexAsset,
+    uint[] memory prices,
+    uint[] memory decs,
+    ITetuConverter converter
+  ) external returns (
+    int increaseToDebt
+  ) {
+    return ConverterStrategyBaseLib2.getIncreaseToDebt(tokens, indexAsset, prices, decs, converter);
+  }
 }

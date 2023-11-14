@@ -14,7 +14,7 @@ contract MockAccountant {
   }
 
   function getCheckpointResults() external view returns (address[] memory ) {
-    console.log("len tokens 2", _tokensPassed.length);
+    console.log("len tokens 2", _tokensPassed.length, address(this));
     return _tokensPassed;
   }
 
@@ -26,11 +26,8 @@ contract MockAccountant {
     uint[] memory deltaLosses
   ) {
     console.log("checkpoint");
-    console.log("len tokens", tokens_.length);
-    _tokensPassed = new address[](tokens_.length);
-    for (uint i = 0; i < tokens_.length; ++i) {
-      _tokensPassed[i] = tokens_[i];
-    }
+    console.log("len tokens", tokens_.length, address(this));
+    _tokensPassed = tokens_;
     return (_deltaGains, _deltaLosses);
   }
 }

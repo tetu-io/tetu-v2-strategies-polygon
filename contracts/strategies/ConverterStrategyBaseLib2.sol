@@ -658,6 +658,7 @@ library ConverterStrategyBaseLib2 {
 //endregion------------------------------------- calcInvestedAssets
 
 //region ------------------------------------------------------- Bookkeeper logic
+  /// @notice Make checkpoint (it's writable function) and calculate total cost of the deltas in terms of the {asset}
   /// @param tokens Full list of tokens that can be used as collateral/borrow asset by the current strategy
   /// @param indexAsset Index of the underlying in {tokens}
   /// @return increaseToDebt Total increase-to-debt since previous checkpoint [in underlying]
@@ -674,7 +675,7 @@ library ConverterStrategyBaseLib2 {
     (uint[] memory deltaGains, uint[] memory deltaLosses) = a.checkpoint(tokens);
 
     uint len = tokens.length;
-    for (uint i; i < len; ++i) {
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (i == indexAsset) {
         increaseToDebt -= int(deltaGains[i]);
         increaseToDebt += int(deltaLosses[i]);
@@ -700,34 +701,26 @@ library ConverterStrategyBaseLib2 {
     int increaseToDebt,
     IStrategyV3.BaseState storage baseState
   ) external returns (uint earned) {
-    console.log("coverLossAfterPriceChanging.investedAssetsBefore", investedAssetsBefore);
-    console.log("coverLossAfterPriceChanging.investedAssetsAfter", investedAssetsAfter);
-
-    uint lost;
     if (investedAssetsAfter > investedAssetsBefore) {
       earned = investedAssetsAfter - investedAssetsBefore;
-      if (increaseToDebt > 0) {
-        earned = AppLib.sub0(earned, uint(increaseToDebt));
-      } else {
-        earned += uint(-increaseToDebt);
+      if (increaseToDebt != 0) {
+        // Earned amount will be send to the insurance later
+        // probably it can be reduced by same limitations as {lost} amount below
+        // and so, it will be necessary to decrease increaseToDebt proportionally
+        // For simplicity, we increase debtToInsurance on full increaseToDebt always
+        csbs.debtToInsurance += increaseToDebt;
       }
     } else {
-      lost = investedAssetsBefore - investedAssetsAfter;
-    }
+      uint lost = investedAssetsBefore - investedAssetsAfter;
+      if (lost != 0) {
+        uint totalAsset = investedAssetsAfter + IERC20(baseState.asset).balanceOf(address(this));
+        (uint lossToCover, uint lossUncovered) = _getSafeLossToCover(lost, totalAsset);
+        // in the case "lossToCover < loss" we reduce both amounts "from prices" and "from debts" proportionally
+        _coverLossAndCheckResults(csbs, baseState.splitter, lossToCover, increaseToDebt * int(lossToCover) / int(lost));
 
-    if (lost != 0) {
-      console.log("coverLossAfterPriceChanging.lost", lost);
-      (uint lossToCover, uint lossUncovered) = _getSafeLossToCover(
-        lost,
-        investedAssetsAfter + IERC20(baseState.asset).balanceOf(address(this)) // totalAssets
-      );
-      console.log("coverLossAfterPriceChanging.lossToCover", lossToCover);
-      console.log("coverLossAfterPriceChanging.lossUncovered", lossUncovered);
-      // in the case "lossToCover < loss" we reduce both amounts "from prices" and "from debts" proportionally
-      _coverLossAndCheckResults(csbs, baseState.splitter, lossToCover, increaseToDebt * int(lossToCover) / int(lost));
-
-      if (lossUncovered != 0) {
-        emit UncoveredLoss(lossToCover, lossUncovered, investedAssetsBefore, investedAssetsAfter);
+        if (lossUncovered != 0) {
+          emit UncoveredLoss(lossToCover, lossUncovered, investedAssetsBefore, investedAssetsAfter);
+        }
       }
     }
 
@@ -761,7 +754,9 @@ library ConverterStrategyBaseLib2 {
     ISplitter(splitter).coverPossibleStrategyLoss(0, lossToCover);
     uint balanceAfter = IERC20(asset).balanceOf(vault);
 
-    csbs.debtToInsurance += debtToInsuranceInc;
+    if (debtToInsuranceInc != 0) {
+      csbs.debtToInsurance += debtToInsuranceInc;
+    }
 
     uint delta = balanceAfter > balanceBefore
       ? balanceAfter - balanceBefore
