@@ -412,7 +412,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   function recycleAccess(address[] memory tokens, uint[] memory amounts) external {
     ConverterStrategyBaseLib.recycle(
       baseState,
-      _csbs.converter,
+      _csbs,
       _depositorPoolAssets(),
       controller(),
       liquidationThresholds,

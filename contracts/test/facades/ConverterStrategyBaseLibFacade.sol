@@ -179,31 +179,12 @@ contract ConverterStrategyBaseLibFacade {
     return ConverterStrategyBaseLib._sendTokensToForwarder(controller_, splitter_, tokens_, amounts_, thresholds_);
   }
 
-  function _recycle(
-    ITetuConverter converter_,
-    address asset,
-    uint compoundRatio,
-    address[] memory tokens,
-    ITetuLiquidator liquidator,
-    uint[] memory thresholds,
-    address[] memory rewardTokens,
-    uint[] memory rewardAmounts,
-    uint performanceFee
-  ) external returns (
+  function _recycle(ConverterStrategyBaseLib.RecycleParams memory p) external returns (
     uint[] memory amountsToForward,
-    uint amountToPerformanceAndInsurance
+    uint amountToPerformanceAndInsurance,
+    int debtToInsuranceOut
   ) {
-    return ConverterStrategyBaseLib._recycle(
-      converter_,
-      asset,
-      compoundRatio,
-      tokens,
-      liquidator,
-      thresholds,
-      rewardTokens,
-      rewardAmounts,
-      performanceFee
-    );
+    return ConverterStrategyBaseLib._recycle(p);
   }
 
   function getTokenAmounts(

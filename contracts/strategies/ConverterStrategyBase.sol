@@ -435,7 +435,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     if (rewardTokens_.length != 0) {
       ConverterStrategyBaseLib.recycle(
         baseState,
-        _csbs.converter,
+        _csbs,
         _depositorPoolAssets(),
         controller(),
         liquidationThresholds,

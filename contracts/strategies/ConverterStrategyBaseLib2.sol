@@ -67,7 +67,10 @@ library ConverterStrategyBaseLib2 {
     int increaseToDebt
   );
 
-  event CoverLoss(uint loss);
+  /// @param lossToCover Amount of loss that should be covered
+  /// @param debtToInsuranceInc The amount by which the debt to insurance increases
+  /// @param amountCovered Actually covered amount of loss. If amountCovered < lossToCover => the insurance is not enough
+  event CoverLoss(uint lossToCover, int debtToInsuranceInc, uint amountCovered);
 
   /// @notice Compensation of losses is not carried out completely because loss amount exceeds allowed max
   event UncoveredLoss(uint lossCovered, uint lossUncovered, uint investedAssetsBefore, uint investedAssetsAfter);
@@ -759,6 +762,8 @@ library ConverterStrategyBaseLib2 {
     if (delta < lossToCover) {
       emit NotEnoughInsurance(lossToCover - delta);
     }
+
+    emit CoverLoss(lossToCover, debtToInsuranceInc, delta);
   }
 
   /// @notice Cut loss-value to safe value that doesn't produce revert inside splitter

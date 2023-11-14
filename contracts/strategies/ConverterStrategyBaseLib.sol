@@ -15,6 +15,7 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../libs/IterationPlanLib.sol";
+import "../interfaces/IConverterStrategyBase.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -144,6 +145,35 @@ library ConverterStrategyBaseLib {
     uint toInsurance;
     uint[] amountsToForward;
     uint[] thresholds;
+    int debtToInsuranceCurrent;
+    int debtToInsuranceUpdated;
+    address splitter;
+  }
+
+  /// @notice Input params for _recycle
+  struct RecycleParams {
+    ITetuConverter converter;
+    ITetuLiquidator liquidator;
+    address splitter;
+
+    /// @notice Underlying asset
+    address asset;
+    /// @notice Compound ration in the range [0...COMPOUND_DENOMINATOR]
+    uint compoundRatio;
+    /// @notice tokens received from {_depositorPoolAssets}
+    address[] tokens;
+    /// @notice Liquidation thresholds for rewards tokens
+    uint[] thresholds;
+    /// @notice Full list of reward tokens received from tetuConverter and depositor
+    address[] rewardTokens;
+    /// @notice Amounts of {rewardTokens_}; we assume, there are no zero amounts here
+    uint[] rewardAmounts;
+    /// @notice Performance fee in the range [0...FEE_DENOMINATOR]
+    uint performanceFee;
+    /// @notice Current debt to the insurance [in underlying]
+    int debtToInsurance;
+    /// @notice Liquidation threshold for the {asset}
+    uint assetThreshold;
   }
 //endregion--------------------------------------------------- Data types
 
@@ -207,6 +237,8 @@ library ConverterStrategyBaseLib {
     uint toPerf,
     uint toInsurance
   );
+
+  event OnPayDebtToInsurance(int debtToInsuranceBefore, int debtToInsuraneAfter);
 //endregion---------------------------------------------------  Events
 
 //region--------------------------------------------------- Borrow and close positions
@@ -648,7 +680,7 @@ library ConverterStrategyBaseLib {
   /// @param rewardAmounts_ Amounts of {rewardTokens_}; we assume, there are no zero amounts here
   function recycle(
     IStrategyV3.BaseState storage baseState,
-    ITetuConverter converter,
+    IConverterStrategyBase.ConverterStrategyBaseState memory csbs,
     address[] memory tokens,
     address controller,
     mapping(address => uint) storage liquidationThresholds,
@@ -660,32 +692,40 @@ library ConverterStrategyBaseLib {
     v.compoundRatio = baseState.compoundRatio;
     v.performanceFee = baseState.performanceFee;
     v.thresholds = _getLiquidationThresholds(liquidationThresholds, rewardTokens_, rewardTokens_.length);
+    v.debtToInsuranceCurrent = csbs.debtToInsurance;
+    v.splitter = baseState.splitter;
 
-    (v.amountsToForward, v.amountPerf) = _recycle(
-      converter,
-      v.asset,
-      v.compoundRatio,
-      tokens,
-      AppLib._getLiquidator(controller),
-      v.thresholds,
-      rewardTokens_,
-      rewardAmounts_,
-      v.performanceFee
-    );
+    (v.amountsToForward, v.amountPerf, v.debtToInsuranceUpdated) = _recycle(RecycleParams({
+      converter: csbs.converter,
+      liquidator: AppLib._getLiquidator(controller),
+      asset: v.asset,
+      compoundRatio: v.compoundRatio,
+      tokens: tokens,
+      thresholds: v.thresholds,
+      rewardTokens: rewardTokens_,
+      rewardAmounts: rewardAmounts_,
+      performanceFee: v.performanceFee,
+      debtToInsurance: v.debtToInsuranceCurrent,
+      splitter: v.splitter,
+      assetThreshold: AppLib._getLiquidationThreshold(liquidationThresholds[v.asset])
+    }));
 
-    address splitter = baseState.splitter;
+    if (v.debtToInsuranceCurrent != v.debtToInsuranceUpdated) {
+      csbs.debtToInsurance = v.debtToInsuranceUpdated;
+      emit OnPayDebtToInsurance(v.debtToInsuranceCurrent, v.debtToInsuranceUpdated);
+    }
 
     // send performance-part of the underlying to the performance receiver and insurance
     (v.toPerf, v.toInsurance) = _sendPerformanceFee(
       v.asset,
       v.amountPerf,
-      splitter,
+      v.splitter,
       baseState.performanceReceiver,
       baseState.performanceFeeRatio
     );
 
     // override rewardTokens_, v.amountsToForward by the values actually sent to the forwarder
-    (rewardTokens_, v.amountsToForward) = _sendTokensToForwarder(controller, splitter, rewardTokens_, v.amountsToForward, v.thresholds);
+    (rewardTokens_, v.amountsToForward) = _sendTokensToForwarder(controller, v.splitter, rewardTokens_, v.amountsToForward, v.thresholds);
 
     emit Recycle(rewardTokens_, v.amountsToForward, v.toPerf, v.toInsurance);
   }
@@ -752,85 +792,124 @@ library ConverterStrategyBaseLib {
   ///   Compound part of Rewards-1 should be just left on the balance
   ///   All forwarder-parts are returned in amountsToForward and should be transferred to the forwarder outside.
   ///   Performance amounts are liquidated, result amount of underlying is returned in {amountToPerformanceAndInsurance}
-  /// @param asset Underlying asset
-  /// @param compoundRatio Compound ration in the range [0...COMPOUND_DENOMINATOR]
-  /// @param tokens tokens received from {_depositorPoolAssets}
-  /// @param rewardTokens Full list of reward tokens received from tetuConverter and depositor
-  /// @param rewardAmounts Amounts of {rewardTokens_}; we assume, there are no zero amounts here
-  /// @param thresholds Liquidation thresholds for rewards tokens
-  /// @param performanceFee Performance fee in the range [0...FEE_DENOMINATOR]
   /// @return amountsToForward Amounts of {rewardTokens} to be sent to forwarder, zero amounts are allowed here
   /// @return amountToPerformanceAndInsurance Amount of underlying to be sent to performance receiver and insurance
-  function _recycle(
-    ITetuConverter converter_,
-    address asset,
-    uint compoundRatio,
-    address[] memory tokens,
-    ITetuLiquidator liquidator,
-    uint[] memory thresholds,
-    address[] memory rewardTokens,
-    uint[] memory rewardAmounts,
-    uint performanceFee
-  ) internal returns (
+  /// @return debtToInsuranceOut Remain debt to the insurance [in underlying]
+  function _recycle(RecycleParams memory p) internal returns (
     uint[] memory amountsToForward,
-    uint amountToPerformanceAndInsurance
+    uint amountToPerformanceAndInsurance,
+    int debtToInsuranceOut
   ) {
-    RecycleLocalParams memory p;
+    RecycleLocalParams memory v;
 
-    p.len = rewardTokens.length;
-    require(p.len == rewardAmounts.length, AppErrors.WRONG_LENGTHS);
+    v.len = p.rewardTokens.length;
+    require(v.len == p.rewardAmounts.length, AppErrors.WRONG_LENGTHS);
 
-    amountsToForward = new uint[](p.len);
+    amountsToForward = new uint[](v.len);
 
     // rewardAmounts => P + F + C, where P - performance + insurance, F - forwarder, C - compound
-    for (uint i; i < p.len; i = AppLib.uncheckedInc(i)) {
-      p.amountFC = rewardAmounts[i] * (COMPOUND_DENOMINATOR - performanceFee) / COMPOUND_DENOMINATOR;
-      p.amountC = p.amountFC * compoundRatio / COMPOUND_DENOMINATOR;
-      p.amountP = rewardAmounts[i] - p.amountFC;
-      p.rewardToken = rewardTokens[i];
-      p.amountCP = p.amountC + p.amountP;
+    for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
+      // if we have a debt-to-insurance we should firstly cover the debt using all available rewards
+      // and only then we can use leftovers of the rewards for other needs
+      if (p.debtToInsurance > int(p.assetThreshold)) {
+        (p.rewardAmounts[i], p.debtToInsurance) = _coverDebtToInsuranceFromRewards(p, i, uint(p.debtToInsurance));
+        if (p.rewardAmounts[i] < p.thresholds[i]) continue;
+      }
 
-      if (p.amountCP > 0) {
-        if (AppLib.getAssetIndex(tokens, p.rewardToken) != type(uint).max) {
-          if (p.rewardToken == asset) {
+      v.amountFC = p.rewardAmounts[i] * (COMPOUND_DENOMINATOR - p.performanceFee) / COMPOUND_DENOMINATOR;
+      v.amountC = v.amountFC * p.compoundRatio / COMPOUND_DENOMINATOR;
+      v.amountP = p.rewardAmounts[i] - v.amountFC;
+      v.rewardToken = p.rewardTokens[i];
+      v.amountCP = v.amountC + v.amountP;
+
+      if (v.amountCP > 0) {
+        if (AppLib.getAssetIndex(p.tokens, v.rewardToken) != type(uint).max) {
+          if (v.rewardToken == p.asset) {
             // This is underlying, liquidation of compound part is not allowed; just keep on the balance, should be handled later
-            amountToPerformanceAndInsurance += p.amountP;
+            amountToPerformanceAndInsurance += v.amountP;
           } else {
             // This is secondary asset, Liquidation of compound part is not allowed, we should liquidate performance part only
             // If the performance amount is too small, liquidation will not happen and we will just keep that dust tokens on balance forever
-            (, p.receivedAmountOut) = _liquidate(
-              converter_,
-              liquidator,
-              p.rewardToken,
-              asset,
-              p.amountP,
+            (, v.receivedAmountOut) = _liquidate(
+              p.converter,
+              p.liquidator,
+              v.rewardToken,
+              p.asset,
+              v.amountP,
               _REWARD_LIQUIDATION_SLIPPAGE,
-              thresholds[i],
+              p.thresholds[i],
               false // use conversion validation for these rewards
             );
-            amountToPerformanceAndInsurance += p.receivedAmountOut;
+            amountToPerformanceAndInsurance += v.receivedAmountOut;
           }
         } else {
           // If amount is too small, the liquidation won't be allowed and we will just keep that dust tokens on balance forever
           // The asset is not in the list of depositor's assets, its amount is big enough and should be liquidated
           // We assume here, that {token} cannot be equal to {_asset}
           // because the {_asset} is always included to the list of depositor's assets
-          (, p.receivedAmountOut) = _liquidate(
-            converter_,
-            liquidator,
-            p.rewardToken,
-            asset,
-            p.amountCP,
+          (, v.receivedAmountOut) = _liquidate(
+            p.converter,
+            p.liquidator,
+            v.rewardToken,
+            p.asset,
+            v.amountCP,
             _REWARD_LIQUIDATION_SLIPPAGE,
-            thresholds[i],
+            p.thresholds[i],
             true // skip conversion validation for rewards because we can have arbitrary assets here
           );
-          amountToPerformanceAndInsurance += p.receivedAmountOut * (rewardAmounts[i] - p.amountFC) / p.amountCP;
+          amountToPerformanceAndInsurance += v.receivedAmountOut * (p.rewardAmounts[i] - v.amountFC) / v.amountCP;
         }
       }
-      amountsToForward[i] = p.amountFC - p.amountC;
+      amountsToForward[i] = v.amountFC - v.amountC;
     }
-    return (amountsToForward, amountToPerformanceAndInsurance);
+    return (amountsToForward, amountToPerformanceAndInsurance, p.debtToInsurance); // todo
+  }
+
+  /// @notice Try to cover {p.debtToInsurance} using available rewards of {p.rewardTokens[index]}
+  /// @param index Index of the reward token in {p.rewardTokens}
+  /// @param debtAmount Debt to insurance that should be covered by the reward tokens
+  /// @return rewardsLeftovers Amount of unused reward tokens (it can be used for other needs)
+  /// @return debtToInsuranceOut New value of the debt to the insurance
+  function _coverDebtToInsuranceFromRewards(RecycleParams memory p, uint index, uint debtAmount) internal returns (
+    uint rewardsLeftovers,
+    int debtToInsuranceOut
+  ) {
+    uint spentAmount;
+    uint amountToSend;
+
+    if (p.asset == p.rewardTokens[index]) {
+      // assume p.debtToInsurance > 0 here
+      spentAmount = Math.min(debtAmount, p.rewardAmounts[index]);
+      amountToSend = spentAmount;
+    } else {
+      // estimate amount of underlying that we can receive for the available amount of the reward tokens
+      uint amountAsset = p.liquidator.getPrice(p.rewardTokens[index], p.asset, p.rewardAmounts[index]);
+      uint amountIn;
+
+      if (amountAsset > debtAmount + p.assetThreshold) {
+        // pay a part of the rewards to cover the debt completely
+        amountIn = p.rewardAmounts[index] * debtAmount / amountAsset;
+      } else {
+        // pay all available rewards to cover a part of the debt
+        amountIn = p.rewardAmounts[index];
+      }
+
+      (spentAmount, amountToSend) = _liquidate(
+        p.converter,
+        p.liquidator,
+        p.rewardTokens[index],
+        p.asset,
+        amountIn,
+        _REWARD_LIQUIDATION_SLIPPAGE,
+        p.thresholds[index],
+        true // skip conversion validation for rewards because we can have arbitrary assets here
+      );
+    }
+
+    IERC20(p.asset).safeTransfer(address(ITetuVaultV2(ISplitter(p.splitter).vault()).insurance()), amountToSend);
+
+    rewardsLeftovers = AppLib.sub0(p.rewardAmounts[index], spentAmount);
+    debtToInsuranceOut = int(debtAmount) - int(amountToSend);
   }
 //endregion----------------------------------------------- Recycle rewards
 
