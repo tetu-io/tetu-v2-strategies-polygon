@@ -188,11 +188,31 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
   ///////////////////////////////////////////////////
   ///               Get price
   ///////////////////////////////////////////////////
-  function getPrice(address tokenIn, address tokenOut, uint amount) external pure override returns (uint) {
-    tokenIn;
-    tokenOut;
-    amount;
-    revert("get Price is not implemented");
+  struct GetPriceParams {
+    address tokenIn;
+    address tokenOut;
+    uint amount;
+    uint priceOut;
+  }
+  /// @notice keccak256(tokenIn, tokenOut, pool, swapper, amount) => results
+  mapping(bytes32 => GetPriceParams) private _getPriceParams;
+
+  function setPrice(address tokenIn, address tokenOut, uint amount) external {
+    bytes32 key = keccak256(abi.encodePacked(tokenIn, tokenOut, amount));
+    GetPriceParams memory p = _getPriceParams[key];
+    _getPriceParams[key] = p;
+  }
+
+  function getPrice(address tokenIn, address tokenOut, uint amount) external view override returns (uint) {
+    bytes32 key = keccak256(abi.encodePacked(tokenIn, tokenOut, amount));
+    GetPriceParams memory p = _getPriceParams[key];
+
+    if (p.tokenOut == tokenOut) {
+      return p.priceOut;
+    } else {
+      console.log("MockTetuLiquidatorSingleCall.getPrice.missed amount", amount);
+      return 0;
+    }
   }
 
   ///////////////////////////////////////////////////
