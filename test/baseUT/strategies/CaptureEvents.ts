@@ -13,14 +13,13 @@ import {
   SwapByAggEventObject
 } from "../../../typechain/contracts/strategies/pair/PairBasedStrategyLib";
 import {
-  CoverLossEventObject,
   RebalancedDebtEventObject,
   RebalancedEventObject
 } from "../../../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategyLogicLib";
 import {PLATFORM_ALGEBRA, PLATFORM_UNIV3} from "./AppPlatforms";
 import {
   FixPriceChangesEventObject,
-  NotEnoughInsuranceEventObject, SendToInsuranceEventObject,
+  NotEnoughInsuranceEventObject, OnCoverLossEventObject, SendToInsuranceEventObject,
   UncoveredLossEventObject,
 } from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib2";
 import {formatUnits} from "ethers/lib/utils";
@@ -174,7 +173,8 @@ interface ISwapByAgg {
 
 interface ICoverLoss {
   loss: number;
-  coveredByRewards: number;
+  amountCovered: number;
+  debtToInsuranceInc: number;
 }
 
 export interface IEventsSet {
@@ -201,7 +201,7 @@ export interface ISummaryFromEventsSet {
   sentToInsurance: number;
   unsentToInsurance: number;
 
-  coveredByRewards: number;
+  debtToInsuranceInc: number;
   lossUncoveredNotEnoughInsurance: number;
 
   toPerfRecycle: number;
@@ -381,18 +381,19 @@ export class CaptureEvents {
         }
       }
 
-      if (event.topics[0].toLowerCase() === logicLibI.getEventTopic('CoverLoss').toLowerCase()) {
+      if (event.topics[0].toLowerCase() === converterStrategyBaseLib2I.getEventTopic('CoverLoss').toLowerCase()) {
         const log = (logicLibI.decodeEventLog(
-          logicLibI.getEvent('CoverLoss'),
+          converterStrategyBaseLib2I.getEvent('OnCoverLoss'),
           event.data,
           event.topics,
-        ) as unknown) as CoverLossEventObject;
+        ) as unknown) as OnCoverLossEventObject;
         if (! ret.coverLoss) {
           ret.coverLoss = [];
         }
         ret.coverLoss.push({
-          loss: +formatUnits(log.loss, decimals),
-          coveredByRewards: +formatUnits(log.coveredByRewards, decimals),
+          loss: +formatUnits(log.lossToCover, decimals),
+          amountCovered: +formatUnits(log.amountCovered, decimals),
+          debtToInsuranceInc: +formatUnits(log.debtToInsuranceInc, decimals),
         });
       }
 
@@ -521,8 +522,8 @@ export class CaptureEvents {
         ? eventsSet.sendToInsurance.reduce((prev, cur) => prev + cur.unsentAmount, 0)
         : 0,
 
-      coveredByRewards: eventsSet?.coverLoss
-        ? eventsSet.coverLoss.reduce((prev, cur) => prev + cur.coveredByRewards, 0)
+      debtToInsuranceInc: eventsSet?.coverLoss
+        ? eventsSet.coverLoss.reduce((prev, cur) => prev + cur.debtToInsuranceInc, 0)
         : 0,
       lossUncoveredNotEnoughInsurance: eventsSet?.notEnoughInsurance
         ? eventsSet.notEnoughInsurance.reduce((prev, cur) => prev + cur.lossUncovered, 0)

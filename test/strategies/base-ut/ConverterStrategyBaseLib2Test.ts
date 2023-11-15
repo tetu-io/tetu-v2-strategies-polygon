@@ -2388,7 +2388,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
         borrowAsset: MockToken;
         debtAmount: string;
         collateralAmount: string;
-        /** We need if for reverse debts. Byt default it's equal to the underlying */
+        /** We need it for reverse debts. By default, it's equal to the underlying */
         collateralAsset?: MockToken;
       }[];
       makeCheckout?: boolean; // false by default
@@ -2840,7 +2840,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
     });
   });
 
-  describe("getIncreaseToDebt", () => {
+  describe("_getIncreaseToDebt", () => {
     let snapshot: string;
     beforeEach(async function () {
       snapshot = await TimeUtils.snapshot();
@@ -2885,14 +2885,14 @@ describe('ConverterStrategyBaseLibTest2', () => {
         p.deltaLosses.map((x, index) => parseUnits(x, decimals[index])),
       );
 
-      const ret = await facade.callStatic.getIncreaseToDebt(
+      const ret = await facade.callStatic._getIncreaseToDebt(
         p.tokens.map(x => x.address),
         p.indexAsset,
         p.prices.map(x => parseUnits(x, 18)),
         decimals.map(x => parseUnits("1", x)),
         converter.address
       );
-      await facade.getIncreaseToDebt(
+      await facade._getIncreaseToDebt(
         p.tokens.map(x => x.address),
         p.indexAsset,
         p.prices.map(x => parseUnits(x, 18)),
@@ -2961,6 +2961,228 @@ describe('ConverterStrategyBaseLibTest2', () => {
 
           expect(increaseToDebt).eq(1300 * 0.5 / 1 - 1500 * 2 / 1);
         });
+      });
+    });
+  });
+
+  describe("fixPriceChanges", () => {
+    interface IParams {
+      debtToInsurance?: string;
+      investedAssetsBefore: string;
+
+      tokens: MockToken[];
+      indexAsset: number;
+      amountsPool: string[];
+
+      balances?: string[];
+      prices: string[];
+      debts?: {
+        borrowAsset: MockToken;
+        debtAmount: string;
+        collateralAmount: string;
+        /** We need it for reverse debts. By default, it's equal to the underlying */
+        collateralAsset?: MockToken;
+      }[];
+      deltaGains?: string[];
+      deltaLosses?: string[];
+
+      insuranceBalance?: string;
+    }
+
+    interface IResults {
+      earned: number;
+      investedAssetsOut: number;
+      debtToInsurance: number;
+      insuranceBalance: number;
+      vaultBalance: number;
+    }
+
+    async function fixPriceChanges(p: IParams): Promise<IResults> {
+      const decimals = await Promise.all(
+        p.tokens.map(
+          async x => x.decimals(),
+        ),
+      );
+
+      if (p.balances) {
+        for (let i = 0; i < p.tokens.length; ++i) {
+          await p.tokens[i].mint(facade.address, parseUnits(p.balances[i], decimals[i]));
+        }
+      }
+      const asset = p.tokens[p.indexAsset];
+
+      // Set up Tetu Converter
+      const converter = await MockHelper.createMockTetuConverter(signer);
+      if (p.debts) {
+        for (const item of p.debts) {
+          const collateralAsset = (item.collateralAsset ?? p.tokens[p.indexAsset]);
+          await converter.setGetDebtAmountCurrent(
+            facade.address,
+            collateralAsset.address,
+            item.borrowAsset.address,
+            parseUnits(item.debtAmount, await item.borrowAsset.decimals()),
+            parseUnits(item.collateralAmount, await collateralAsset.decimals()),
+            false,
+            false
+          );
+        }
+      }
+      const priceOracle = await MockHelper.createPriceOracle(
+        signer,
+        p.tokens.map(x => x.address),
+        p.prices.map(x => parseUnits(x, 18)),
+      );
+      const controller = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
+      await converter.setController(controller.address);
+      await controller.setAccountant(mockAccountant.address);
+
+      if (p.deltaGains && p.deltaLosses) {
+        await mockAccountant.setCheckpoint(
+          p.deltaGains.map((x, index) => parseUnits(x, decimals[index])),
+          p.deltaLosses.map((x, index) => parseUnits(x, decimals[index])),
+        )
+      }
+
+      // prepare splitter and vault
+      const insurance = ethers.Wallet.createRandom().address;
+      await asset.mint(insurance, parseUnits(p.insuranceBalance ?? "0", await asset.decimals()));
+
+      const vault = await MockHelper.createMockVault(signer);
+      await vault.setInsurance(insurance);
+
+      const splitter = await MockHelper.createMockSplitter(signer);
+      await splitter.setAsset(asset.address);
+      await splitter.setVault(vault.address);
+      await asset.connect(await Misc.impersonate(insurance)).approve(
+        splitter.address,
+        parseUnits(p.insuranceBalance ?? "0", await asset.decimals())
+      );
+      await splitter.setCoverFromInsurance(true);
+      await splitter.setInsurance(insurance);
+
+      const assetDecimals = await asset.decimals();
+      await facade.setCsbs(
+        parseUnits(p.investedAssetsBefore, assetDecimals),
+        converter.address,
+        1,
+        parseUnits(p.debtToInsurance ?? "0", assetDecimals)
+    );
+      await facade.setBaseState(
+        asset.address,
+        splitter.address,
+        ethers.Wallet.createRandom().address,
+        0,
+        0,
+        0,
+        "strategy name",
+      );
+
+      const ret = await facade.callStatic.fixPriceChanges(
+        p.amountsPool.map((x, index) => parseUnits(x, decimals[index])),
+        p.tokens.map(x => x.address),
+        p.indexAsset
+      );
+
+      await facade.fixPriceChanges(
+        p.amountsPool.map((x, index) => parseUnits(x, decimals[index])),
+        p.tokens.map(x => x.address),
+        p.indexAsset
+      );
+
+      const csb = await facade.getCsb();
+      return {
+        earned: +formatUnits(ret.earnedOut, assetDecimals),
+        insuranceBalance: +formatUnits(await asset.balanceOf(insurance), assetDecimals),
+        vaultBalance: +formatUnits(await asset.balanceOf(vault.address), assetDecimals),
+        debtToInsurance: +formatUnits(csb.debtToInsurance, assetDecimals),
+        investedAssetsOut: +formatUnits(csb.investedAssets, assetDecimals),
+      }
+    }
+
+    describe("investedAssets is reduced", () => {
+      async function fixPriceChangesTest(): Promise<IResults> {
+        return fixPriceChanges({
+          tokens: [tetu, usdc],
+          indexAsset: 1,
+          amountsPool: ["10000", "20000"],
+          debtToInsurance: "123",
+          investedAssetsBefore: "36000", // -500
+          prices: ["1", "1"],
+          deltaGains: ["1", "2"],
+          deltaLosses: ["101", "102"],
+          insuranceBalance: "10000",
+          balances: ["5000", "7000000"],
+          debts: [{
+            collateralAsset: usdc,
+            borrowAsset: tetu,
+            collateralAmount: "1000",
+            debtAmount: "500"
+          }]
+        });
+      }
+
+      it("should return expected earned value", async () => {
+        const ret = await loadFixture(fixPriceChangesTest);
+        expect(ret.earned).eq(0);
+      });
+      it("should return expected investedAssets", async () => {
+        const ret = await loadFixture(fixPriceChangesTest);
+        expect(ret.investedAssetsOut).eq(10_000 + 20_000 + 5000 + (1000 - 500)); // 35500
+      });
+      it("should cover expected amount of losses", async () => {
+        const ret = await loadFixture(fixPriceChangesTest);
+        expect(ret.vaultBalance).eq(36_000 - 35_500); // 500
+      });
+      it("should increase debt to insurance on expected amount", async () => {
+        const ret = await loadFixture(fixPriceChangesTest);
+        expect(ret.debtToInsurance).eq(123 + 101 + 102 - 1 - 2);
+      });
+      it("should reduce insurance balance on expected value", async () => {
+        const ret = await loadFixture(fixPriceChangesTest);
+        expect(ret.insuranceBalance).eq(10_000 - (36_000 - 35_500)); // 500
+      });
+    });
+    describe("investedAssets is increased", () => {
+      async function fixPriceChangesTest(): Promise<IResults> {
+        return fixPriceChanges({
+          tokens: [tetu, usdc],
+          indexAsset: 1,
+          amountsPool: ["10000", "20000"],
+          debtToInsurance: "123",
+          investedAssetsBefore: "35000", // +500
+          prices: ["1", "1"],
+          deltaGains: ["1", "2"],
+          deltaLosses: ["101", "102"],
+          insuranceBalance: "10000",
+          balances: ["5000", "7000000"],
+          debts: [{
+            collateralAsset: usdc,
+            borrowAsset: tetu,
+            collateralAmount: "1000",
+            debtAmount: "500"
+          }]
+        });
+      }
+
+      it("should return expected earned value", async () => {
+        const ret = await loadFixture(fixPriceChangesTest);
+        expect(ret.earned).eq(35_500 - 35_000);
+      });
+      it("should return expected investedAssets", async () => {
+        const ret = await loadFixture(fixPriceChangesTest);
+        expect(ret.investedAssetsOut).eq(10_000 + 20_000 + 5000 + (1000 - 500)); // 35500
+      });
+      it("should cover no losses", async () => {
+        const ret = await loadFixture(fixPriceChangesTest);
+        expect(ret.vaultBalance).eq(0);
+      });
+      it("should increase debt to insurance on expected amount", async () => {
+        const ret = await loadFixture(fixPriceChangesTest);
+        expect(ret.debtToInsurance).eq(123 + 101 + 102 - 1 - 2);
+      });
+      it("should not change insurance balance", async () => {
+        const ret = await loadFixture(fixPriceChangesTest);
+        expect(ret.insuranceBalance).eq(10_000);
       });
     });
   });

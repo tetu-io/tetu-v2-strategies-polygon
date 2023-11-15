@@ -223,7 +223,7 @@ contract ConverterStrategyBaseLibFacade2 {
   ) external returns (uint earned) {
     baseState.asset = asset;
     baseState.splitter = splitter;
-    return ConverterStrategyBaseLib2.coverLossAfterPriceChanging(
+    return ConverterStrategyBaseLib2._coverLossAfterPriceChanging(
       _csbs,
       investedAssetsBefore,
       investedAssetsAfter,
@@ -247,7 +247,7 @@ contract ConverterStrategyBaseLibFacade2 {
     return ConverterStrategyBaseLib2.sendProfitGetAssetBalance(theAsset_, balanceTheAsset_, investedAssets_, earnedByPrices_, baseState);
   }
 
-  function getIncreaseToDebt(
+  function _getIncreaseToDebt(
     address[] memory tokens,
     uint indexAsset,
     uint[] memory prices,
@@ -256,6 +256,17 @@ contract ConverterStrategyBaseLibFacade2 {
   ) external returns (
     int increaseToDebt
   ) {
-    return ConverterStrategyBaseLib2.getIncreaseToDebt(tokens, indexAsset, prices, decs, converter);
+    return ConverterStrategyBaseLib2._getIncreaseToDebt(tokens, indexAsset, prices, decs, converter);
+  }
+
+  function fixPriceChanges(
+    uint[] memory depositorQuoteExitAmountsOut,
+    address[] memory tokens,
+    uint indexAsset
+  ) external returns (
+    uint investedAssetsOut,
+    uint earnedOut
+  ) {
+    return ConverterStrategyBaseLib2.fixPriceChanges(_csbs, baseState, depositorQuoteExitAmountsOut, tokens, indexAsset);
   }
 }

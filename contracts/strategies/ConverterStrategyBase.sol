@@ -513,63 +513,59 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   /// @notice Updates cached _investedAssets to actual value
   /// @dev Should be called after deposit / withdraw / claim; virtual - for ut
   function _updateInvestedAssets() internal returns (uint investedAssetsOut) {
-    (address[] memory tokens, uint indexAsset) = _getTokens(baseState.asset);
-    (investedAssetsOut,,) = _calcInvestedAssets(tokens, indexAsset, true);
+    (investedAssetsOut,,) = _calcInvestedAssets();
     _csbs.investedAssets = investedAssetsOut;
   }
 
   /// @notice Calculate amount we will receive when we withdraw all from pool
   /// @dev This is writable function because we need to update current balances in the internal protocols.
-  /// @param makeCheckpoint_ True - call IAccountant.checkpoint in the converter
   /// @return amountOut Invested asset amount under control (in terms of {asset})
   /// @return prices Asset prices in USD, decimals 18
   /// @return decs 10**decimals
-  function _calcInvestedAssets(address[] memory tokens, uint indexAsset, bool makeCheckpoint_) internal returns (
-    uint amountOut,
-    uint[] memory prices,
-    uint[] memory decs
-  ) {
-    uint liquidity = _depositorLiquidity();
+  function _calcInvestedAssets() internal returns (uint amountOut, uint[] memory prices, uint[] memory decs) {
+    (address[] memory tokens, uint indexAsset) = _getTokens(baseState.asset);
     return ConverterStrategyBaseLib2.calcInvestedAssets(
       tokens,
-      liquidity == 0
-        ? new uint[](tokens.length)
-        : _depositorQuoteExit(liquidity),
+      _getDepositorQuoteExitAmountsOut(tokens),
       indexAsset,
       _csbs.converter,
-      makeCheckpoint_
+      true
     );
   }
 
   function calcInvestedAssets() external returns (uint investedAssetsOut) {
     StrategyLib2.onlyOperators(controller());
-    (address[] memory tokens, uint indexAsset) = _getTokens(baseState.asset);
-    (investedAssetsOut,,) = _calcInvestedAssets(tokens, indexAsset, true);
+    (investedAssetsOut,,) = _calcInvestedAssets();
+  }
+
+  /// @notice Calculate amount of deposited tokens that can be received from the pool after withdrawing all liquidity.
+  function _getDepositorQuoteExitAmountsOut(address[] memory tokens) internal returns (
+    uint[] memory depositorQuoteExitAmountsOut
+  ) {
+    uint liquidity = _depositorLiquidity();
+    return liquidity == 0
+      ? new uint[](tokens.length)
+      : _depositorQuoteExit(liquidity);
   }
 
   /// @notice Calculate profit/loss happened because of price changing. Try to cover the loss, send the profit to the insurance
   /// @param updateInvestedAssetsAmount_ If false - just return current value of invested assets
   /// @return investedAssetsOut Updated value of {_investedAssets}
   /// @return earnedOut Profit that was received because of price changes. It should be sent back to insurance.
-  ///                   It's too dangerous to try to get this amount here because of the problem "borrow-repay is not allowed in a single block"
-  ///                   So, we need to handle it in the caller code.
+  /// It's too dangerous to try to get this amount here because of the problem "borrow-repay is not allowed in a single block"
+  /// So, we need to handle it in the caller code.
   function _fixPriceChanges(bool updateInvestedAssetsAmount_) internal returns (uint investedAssetsOut, uint earnedOut) {
     if (updateInvestedAssetsAmount_) {
-      uint investedAssetsBefore = _csbs.investedAssets;
-
       (address[] memory tokens, uint indexAsset) = _getTokens(baseState.asset);
-      uint[] memory prices;
-      uint[] memory decs;
-
-      (investedAssetsOut, prices, decs) = _calcInvestedAssets(tokens, indexAsset, false);
-      _csbs.investedAssets = investedAssetsOut;
-
-      int increaseToDebt = ConverterStrategyBaseLib2.getIncreaseToDebt(tokens, indexAsset, prices, decs, _csbs.converter);
-
-      earnedOut = ConverterStrategyBaseLib2.coverLossAfterPriceChanging(_csbs, investedAssetsBefore, investedAssetsOut, increaseToDebt, baseState);
+      (investedAssetsOut, earnedOut) = ConverterStrategyBaseLib2.fixPriceChanges(
+        _csbs,
+        baseState,
+        _getDepositorQuoteExitAmountsOut(tokens),
+        tokens,
+        indexAsset
+      );
     } else {
-      investedAssetsOut = _csbs.investedAssets;
-      earnedOut = 0;
+      (investedAssetsOut, earnedOut) = (_csbs.investedAssets, 0);
     }
   }
   //endregion -------------------------------------------------------- InvestedAssets Calculations
@@ -662,6 +658,8 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     // almost same as type(uint).max but more gas efficient
   }
 
+  /// @return tokens Result of {_depositorPoolAssets}
+  /// @return indexAsset Index of the underlying in {tokens}
   function _getTokens(address asset_) internal view returns (address[] memory tokens, uint indexAsset) {
     tokens = _depositorPoolAssets();
     indexAsset = AppLib.getAssetIndex(tokens, asset_);
