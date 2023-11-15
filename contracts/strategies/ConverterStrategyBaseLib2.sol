@@ -778,6 +778,10 @@ library ConverterStrategyBaseLib2 {
     lossToCover = Math.min(loss, ConverterStrategyBaseLib2.HARDWORK_LOSS_TOLERANCE * totalAssets_ / 100_000);
     lossUncovered = AppLib.sub0(loss, lossToCover);
   }
+
+  function fixPriceChanges() internal {
+
+  }
 //endregion ------------------------------------------------------- Bookkeeper logic
 
 

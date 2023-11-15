@@ -1742,9 +1742,13 @@ describe('ConverterStrategyBaseLibTest', () => {
 
     async function makeRecycle(p: IRecycleTestParams): Promise<IRecycleTestResults> {
       // read decimals
-      const decimals: number[] = [];
+      const decimalsRewardTokens: number[] = [];
       for (let i = 0; i < p.rewardTokens.length; ++i) {
-        decimals.push(await p.rewardTokens[i].decimals());
+        decimalsRewardTokens.push(await p.rewardTokens[i].decimals());
+      }
+      const decimalsTokens: number[] = [];
+      for (let i = 0; i < p.tokens.length; ++i) {
+        decimalsTokens.push(await p.tokens[i].decimals());
       }
 
       // set up insurance
@@ -1803,9 +1807,9 @@ describe('ConverterStrategyBaseLibTest', () => {
         compoundRatio: p.compoundRatio,
         tokens: p.tokens.map(x => x.address),
         liquidator: liquidator.address,
-        thresholds: thresholds.map((x, index) => parseUnits(x, decimals[index])),
+        thresholds: thresholds.map((x, index) => parseUnits(x, decimalsRewardTokens[index])),
         rewardTokens: p.rewardTokens.map(x => x.address),
-        rewardAmounts: await p.rewardAmounts.map((amount, index) => parseUnits(amount, decimals[index])),
+        rewardAmounts: await p.rewardAmounts.map((amount, index) => parseUnits(amount, decimalsRewardTokens[index])),
         performanceFee: p.performanceFee,
         splitter: splitter.address,
         assetThreshold: parseUnits(p.assetThreshold ?? "0", await p.tokens[p.assetIndex].decimals()),
@@ -1819,9 +1823,9 @@ describe('ConverterStrategyBaseLibTest', () => {
         compoundRatio: p.compoundRatio,
         tokens: p.tokens.map(x => x.address),
         liquidator: liquidator.address,
-        thresholds: thresholds.map((x, index) => parseUnits(x, decimals[index])),
+        thresholds: thresholds.map((x, index) => parseUnits(x, decimalsRewardTokens[index])),
         rewardTokens: p.rewardTokens.map(x => x.address),
-        rewardAmounts: await p.rewardAmounts.map((amount, index) => parseUnits(amount, decimals[index])),
+        rewardAmounts: await p.rewardAmounts.map((amount, index) => parseUnits(amount, decimalsRewardTokens[index])),
         performanceFee: p.performanceFee,
         splitter: splitter.address,
         assetThreshold: parseUnits(p.assetThreshold ?? "0", await p.tokens[p.assetIndex].decimals()),
@@ -1841,7 +1845,7 @@ describe('ConverterStrategyBaseLibTest', () => {
         rewardTokenBalances: await Promise.all(p.rewardTokens.map(
           async t => (+formatUnits(await t.balanceOf(facade.address), await t.decimals())).toString()
         )),
-        debtToInsurance: +formatUnits(debtToInsuranceOut, decimals[p.assetIndex]),
+        debtToInsurance: +formatUnits(debtToInsuranceOut, decimalsTokens[p.assetIndex]),
       }
     }
 
@@ -2555,48 +2559,8 @@ describe('ConverterStrategyBaseLibTest', () => {
                 expect(r.debtToInsurance).eq(500 - 100);
               });
             });
-            describe("TODO Reward doesn't token belong to the list of depositor tokens", () => {
-              let snapshot: string;
-              before(async function () {
-                snapshot = await TimeUtils.snapshot();
-              });
-              after(async function () {
-                await TimeUtils.rollback(snapshot);
-              });
-
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
-                return makeRecycle({
-                  assetIndex: 1,
-                  tokens: [usdt, usdc, dai],
-                  rewardTokens: [tetu],
-                  rewardAmounts: ["100"],
-                  initialBalances: [
-                    {token: usdt, amount: "1"},
-                    {token: usdc, amount: "2"},
-                    {token: dai, amount: "3"},
-                    {token: tetu, amount: "108"}
-                  ],
-                  compoundRatio: 90_000,
-                  liquidations: [{tokenIn: tetu, tokenOut: usdc, amountIn: "90", amountOut: "97"}],
-                  performanceFee: 0
-                });
-              }
-
-              it("should return expected amounts for the forwarder", async () => {
-                const r = await loadFixture(makeRecycleTest);
-                expect(r.amountsToForward.join()).eq(["10"].join());
-              });
-              it("should not change balances of secondary depositor assets", async () => {
-                const r = await loadFixture(makeRecycleTest);
-                expect(r.tokenBalances.join()).eq(["1", "99", "3"].join());
-              });
-              it("should set expected balances of rewards tokens", async () => {
-                const r = await loadFixture(makeRecycleTest);
-                expect(r.rewardTokenBalances.join()).eq(["18"].join());
-              });
-            });
           });
-          describe("TODO multiple reward tokens", () => {
+          describe("multiple reward tokens", () => {
             describe("Normal case - a lot of various reward tokens", () => {
               let snapshot: string;
               before(async function () {
@@ -2611,7 +2575,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
                   rewardTokens: [usdc, usdt, weth, dai, tetu],
-                  rewardAmounts: ["100", "200", "300", "400", "500"],
+                  rewardAmounts: ["100", "400", "300", "400", "500"],
                   initialBalances: [
                     {token: usdc, amount: "10100"},
                     {token: usdt, amount: "20200"},
@@ -2623,107 +2587,30 @@ describe('ConverterStrategyBaseLibTest', () => {
                   liquidations: [
                     {tokenIn: weth, amountIn: "30", tokenOut: usdc, amountOut: "33"},
                     {tokenIn: tetu, amountIn: "50", tokenOut: usdc, amountOut: "55"},
+
+                    {tokenIn: usdt, amountIn: "400", tokenOut: usdc, amountOut: "400"}, // to get price
+                    {tokenIn: usdt, amountIn: "100", tokenOut: usdc, amountOut: "105"}, // to make conversion
                   ],
-                  performanceFee: 0
+                  performanceFee: 0,
+                  debtToInsurance: "200"
                 });
               }
 
               it("should return expected amounts for the forwarder", async () => {
                 const r = await loadFixture(makeRecycleTest);
-                expect(r.amountsToForward.join()).eq(["90", "180", "270", "360", "450"].join());
+                expect(r.amountsToForward.join()).eq(["0", "270", "270", "360", "450"].join());
               });
-              it("should not change balances of secondary depositior assets", async () => {
+              it("should set expected  balances of teh secondary depositor assets", async () => {
                 const r = await loadFixture(makeRecycleTest);
-                expect(r.tokenBalances.join()).eq(["20200", "10188", "30400"].join()); // 10100+33+55 = 10188
+                expect(r.tokenBalances.join()).eq(["20100", "10088", "30400"].join()); // 10100+33+55-1000 = 10088
               });
               it("should set expected balances of rewards tokens", async () => {
                 const r = await loadFixture(makeRecycleTest);
-                expect(r.rewardTokenBalances.join()).eq(["10188", "20200", "271", "30400", "452"].join()); // 10100+33+55 = 10188
+                expect(r.rewardTokenBalances.join()).eq(["10088", "20100", "271", "30400", "452"].join()); // 10100+33+55-1000 = 10088
               });
-            });
-            describe("Compound ratio is zero", () => {
-              let snapshot: string;
-              before(async function () {
-                snapshot = await TimeUtils.snapshot();
-              });
-              after(async function () {
-                await TimeUtils.rollback(snapshot);
-              });
-
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
-                return makeRecycle({
-                  assetIndex: 1,
-                  tokens: [usdt, usdc, dai],
-                  rewardTokens: [usdc, usdt, weth, dai, tetu],
-                  rewardAmounts: ["100", "200", "300", "400", "500"],
-                  initialBalances: [
-                    {token: usdc, amount: "10100"},
-                    {token: usdt, amount: "20200"},
-                    {token: weth, amount: "301"},  // 1 is dust token, we never use it
-                    {token: dai, amount: "30400"},
-                    {token: tetu, amount: "502"},  // 2 are dust tokens, we never use them
-                  ],
-                  compoundRatio: 0, // (!) edge case
-                  liquidations: [],
-                  performanceFee: 0
-                });
-              }
-
-              it("should return expected amounts for the forwarder", async () => {
+              it("should set expected debt to insurance", async () => {
                 const r = await loadFixture(makeRecycleTest);
-                expect(r.amountsToForward.join()).eq(["100", "200", "300", "400", "500"].join());
-              });
-              it("should not change balances of secondary depositior assets", async () => {
-                const r = await loadFixture(makeRecycleTest);
-                expect(r.tokenBalances.join()).eq(["20200", "10100", "30400"].join());
-              });
-              it("should set expected balances of rewards tokens", async () => {
-                const r = await loadFixture(makeRecycleTest);
-                expect(r.rewardTokenBalances.join()).eq(["10100", "20200", "301", "30400", "502"].join());
-              });
-            });
-            describe("Compound ratio is 100%", () => {
-              let snapshot: string;
-              before(async function () {
-                snapshot = await TimeUtils.snapshot();
-              });
-              after(async function () {
-                await TimeUtils.rollback(snapshot);
-              });
-
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
-                return makeRecycle({
-                  assetIndex: 1,
-                  tokens: [usdt, usdc, dai],
-                  rewardTokens: [usdc, usdt, weth, dai, tetu],
-                  rewardAmounts: ["100", "200", "300", "400", "500"],
-                  initialBalances: [
-                    {token: usdc, amount: "10100"},
-                    {token: usdt, amount: "20200"},
-                    {token: weth, amount: "301"},  // 1 is dust token, we never use it
-                    {token: dai, amount: "30400"},
-                    {token: tetu, amount: "502"},  // 2 are dust tokens, we never use them
-                  ],
-                  compoundRatio: 100_000, // (!) edge case
-                  liquidations: [
-                    {tokenIn: weth, amountIn: "300", tokenOut: usdc, amountOut: "330"},
-                    {tokenIn: tetu, amountIn: "500", tokenOut: usdc, amountOut: "550"},
-                  ],
-                  performanceFee: 0
-                });
-              }
-
-              it("should return expected amounts for the forwarder", async () => {
-                const r = await loadFixture(makeRecycleTest);
-                expect(r.amountsToForward.join()).eq(["0", "0", "0", "0", "0"].join());
-              });
-              it("should not change balances of secondary depositior assets", async () => {
-                const r = await loadFixture(makeRecycleTest);
-                expect(r.tokenBalances.join()).eq(["20200", "10980", "30400"].join());
-              });
-              it("should set expected balances of rewards tokens", async () => {
-                const r = await loadFixture(makeRecycleTest);
-                expect(r.rewardTokenBalances.join()).eq(["10980", "20200", "1", "30400", "2"].join());
+                expect(r.debtToInsurance).eq(-5);
               });
             });
           });
@@ -6185,6 +6072,337 @@ describe('ConverterStrategyBaseLibTest', () => {
             const r = await loadFixture(makeRequestedAmountFixture);
             expect(r.balances.join()).eq([0, 9899, 0].join()); // 97 + 2900 + 1900 + 3001 + 2001
           });
+        });
+      });
+    });
+  });
+
+  describe("_coverDebtToInsuranceFromRewards", () => {
+    interface IParams {
+      index: number;
+      debtAmount: string;
+
+      asset: MockToken;
+      assetThreshold: string;
+
+      rewardTokens: MockToken[];
+      rewardAmounts: string[];
+      thresholds?: ITokenAmountNum[];
+
+      liquidations?: ILiquidationParams[];
+      initialBalances: ITokenAmountNum[];
+    }
+    interface IResults {
+      rewardsLeftovers: number;
+      debtToInsuranceOut: number;
+      insuranceBalance: number;
+      facadeRewardTokenBalance: number;
+    }
+
+    async function coverDebtToInsuranceFromRewards(p: IParams): Promise<IResults> {
+      // read decimals
+      const decimalsRewardTokens: number[] = [];
+      for (let i = 0; i < p.rewardTokens.length; ++i) {
+        decimalsRewardTokens.push(await p.rewardTokens[i].decimals());
+      }
+      const decimalsAsset = await p.asset.decimals();
+
+      // set up insurance
+      const insurance = ethers.Wallet.createRandom().address;
+
+      const vault = await MockHelper.createMockVault(signer);
+      await vault.setInsurance(insurance);
+
+      const splitter = await MockHelper.createMockSplitter(signer);
+      await splitter.setVault(vault.address);
+
+      // set up thresholds
+      const thresholds = p.rewardTokens.map(x => "0");
+      if (p.thresholds) {
+        for (const thresholdInfo of p.thresholds) {
+          for (let i = 0; i < p.rewardTokens.length; ++i) {
+            if (p.rewardTokens[i] === thresholdInfo.token) {
+              thresholds[i] = thresholdInfo.amount;
+            }
+          }
+        }
+      }
+
+      // set up initial balances
+      for (const b of p.initialBalances) {
+        await b.token.mint(facade.address, parseUnits(b.amount, await b.token.decimals()));
+      }
+
+      // set up TetuConverter
+      const converter = await MockHelper.createMockTetuConverter(signer);
+
+      // set up expected liquidations
+      const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
+      for (const liquidation of p.liquidations ?? []) {
+        await setupMockedLiquidation(liquidator, liquidation);
+      }
+
+      const ret = await facade.callStatic._coverDebtToInsuranceFromRewards(
+        {
+          converter: converter.address,
+          liquidator: liquidator.address,
+          asset: p.asset.address,
+          debtToInsurance: parseUnits(p.debtAmount, decimalsAsset),
+          thresholds: thresholds.map((x, index) => parseUnits(x, decimalsRewardTokens[index])),
+          rewardTokens: p.rewardTokens.map(x => x.address),
+          rewardAmounts: await p.rewardAmounts.map((amount, index) => parseUnits(amount, decimalsRewardTokens[index])),
+          splitter: splitter.address,
+          assetThreshold: parseUnits(p.assetThreshold, decimalsAsset),
+
+          performanceFee: 0, // not used here
+          tokens: [], // not used here
+          compoundRatio: 0, // not used here
+        },
+        p.index,
+        parseUnits(p.debtAmount, decimalsAsset)
+      );
+
+      await facade._coverDebtToInsuranceFromRewards({
+          converter: converter.address,
+          liquidator: liquidator.address,
+          asset: p.asset.address,
+          debtToInsurance: parseUnits(p.debtAmount, decimalsAsset),
+          thresholds: thresholds.map((x, index) => parseUnits(x, decimalsRewardTokens[index])),
+          rewardTokens: p.rewardTokens.map(x => x.address),
+          rewardAmounts: await p.rewardAmounts.map((amount, index) => parseUnits(amount, decimalsRewardTokens[index])),
+          splitter: splitter.address,
+          assetThreshold: parseUnits(p.assetThreshold, decimalsAsset),
+
+          performanceFee: 0, // not used here
+          tokens: [], // not used here
+          compoundRatio: 0, // not used here
+        },
+        p.index,
+        parseUnits(p.debtAmount, decimalsAsset)
+      );
+      const balanceInsurance = await p.asset.balanceOf(insurance);
+      const facadeRewardTokenBalance = await p.rewardTokens[p.index].balanceOf(facade.address);
+
+      return {
+        rewardsLeftovers: +formatUnits(ret.rewardsLeftovers, decimalsRewardTokens[p.index]),
+        debtToInsuranceOut: +formatUnits(ret.debtToInsuranceOut, decimalsAsset),
+        insuranceBalance: +formatUnits(balanceInsurance, decimalsAsset),
+        facadeRewardTokenBalance: +formatUnits(facadeRewardTokenBalance, decimalsRewardTokens[p.index])
+      }
+    }
+
+    describe("Reward token is underlying", () => {
+      describe("Reward amount < debt to insurance", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function coverDebtToInsuranceFromRewardsTest(): Promise<IResults> {
+          return coverDebtToInsuranceFromRewards({
+            asset: usdc,
+            rewardTokens: [usdt, tetu, usdc],
+            rewardAmounts: ["1", "2", "300"],
+            assetThreshold: "2",
+            initialBalances: [
+              {token: usdc, amount: "5000"}
+            ],
+            debtAmount: "1000",
+            index: 2
+          })
+        }
+
+        it("should return expected leftovers of the debt to insurance", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.debtToInsuranceOut).eq(1000 - 300);
+        });
+        it("should send expected amount to the insurance", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.insuranceBalance).eq(300);
+        });
+        it("should return expected leftovers of the reward token", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.rewardsLeftovers).eq(0);
+        });
+        it("should set expected facade's balance of reward token", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.facadeRewardTokenBalance).eq(5000 - 300);
+        });
+      });
+      describe("Reward amount > debt to insurance", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function coverDebtToInsuranceFromRewardsTest(): Promise<IResults> {
+          return coverDebtToInsuranceFromRewards({
+            asset: usdc,
+            rewardTokens: [usdt, tetu, usdc],
+            rewardAmounts: ["1", "2", "1300"],
+            assetThreshold: "2",
+            initialBalances: [
+              {token: usdc, amount: "5000"}
+            ],
+            debtAmount: "1000",
+            index: 2
+          })
+        }
+
+        it("should return expected leftovers of the debt to insurance", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.debtToInsuranceOut).eq(0);
+        });
+        it("should send expected amount to the insurance", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.insuranceBalance).eq(1000);
+        });
+        it("should return expected leftovers of the reward token", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.rewardsLeftovers).eq(300);
+        });
+        it("should set expected facade's balance of reward token", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.facadeRewardTokenBalance).eq(5000 - 1000);
+        });
+      });
+    });
+    describe("Reward token is NOT underlying", () => {
+      describe("Reward amount < debt to insurance", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function coverDebtToInsuranceFromRewardsTest(): Promise<IResults> {
+          return coverDebtToInsuranceFromRewards({
+            asset: usdc,
+            rewardTokens: [usdt, tetu, usdc],
+            rewardAmounts: ["1", "300", "2"],
+            assetThreshold: "2",
+            initialBalances: [
+              {token: tetu, amount: "5000"}
+            ],
+            debtAmount: "600",
+            index: 1,
+            liquidations: [
+              {tokenIn: tetu, tokenOut: usdc, amountIn: "300", amountOut: "300"},
+            ]
+          })
+        }
+
+        it("should return expected leftovers of the debt to insurance", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.debtToInsuranceOut).eq(600 - 300);
+        });
+        it("should send expected amount to the insurance", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.insuranceBalance).eq(300);
+        });
+        it("should return expected leftovers of the reward token", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.rewardsLeftovers).eq(0);
+        });
+        it("should set expected facade's balance of reward token", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.facadeRewardTokenBalance).eq(5000 - 300);
+        });
+      });
+      describe("Reward amount > debt to insurance", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function coverDebtToInsuranceFromRewardsTest(): Promise<IResults> {
+          return coverDebtToInsuranceFromRewards({
+            asset: usdc,
+            rewardTokens: [usdt, tetu, usdc],
+            rewardAmounts: ["1", "2000", "2"],
+            assetThreshold: "2",
+            initialBalances: [
+              {token: tetu, amount: "5000"}
+            ],
+            debtAmount: "1000",
+            index: 1,
+            liquidations: [
+              {tokenIn: tetu, tokenOut: usdc, amountIn: "2000", amountOut: "2000"},
+              {tokenIn: tetu, tokenOut: usdc, amountIn: "1000", amountOut: "1007"},
+            ]
+          })
+        }
+
+        it("should return expected leftovers of the debt to insurance", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.debtToInsuranceOut).eq(-7);
+        });
+        it("should send expected amount to the insurance", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.insuranceBalance).eq(1007);
+        });
+        it("should return expected leftovers of the reward token", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.rewardsLeftovers).eq(2000 - 1000);
+        });
+        it("should set expected facade's balance of reward token", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.facadeRewardTokenBalance).eq(5000 - 1000);
+        });
+      });
+      describe("Tiny amounts (less than thresholds)", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function coverDebtToInsuranceFromRewardsTest(): Promise<IResults> {
+          return coverDebtToInsuranceFromRewards({
+            asset: usdc,
+            rewardTokens: [usdt, tetu, usdc],
+            rewardAmounts: ["1", "0.0001", "2"],
+            assetThreshold: "0.001",
+            initialBalances: [
+              {token: tetu, amount: "5000"}
+            ],
+            debtAmount: "0.00001",
+            index: 1,
+            liquidations: [
+              {tokenIn: tetu, tokenOut: usdc, amountIn: "2000", amountOut: "2000"},
+              {tokenIn: tetu, tokenOut: usdc, amountIn: "0.0001", amountOut: "0.0001"},
+            ]
+          })
+        }
+
+        it("should return expected leftovers of the debt to insurance", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.debtToInsuranceOut).eq(0.00001 - 0.0001);
+        });
+        it("should send expected amount to the insurance", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.insuranceBalance).eq(0.0001);
+        });
+        it("should return expected leftovers of the reward token", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.rewardsLeftovers).eq(0);
+        });
+        it("should set expected facade's balance of reward token", async () => {
+          const ret = await loadFixture(coverDebtToInsuranceFromRewardsTest);
+          expect(ret.facadeRewardTokenBalance).eq(5000 - 0.0001);
         });
       });
     });

@@ -268,4 +268,15 @@ contract ConverterStrategyBaseLibFacade {
   ) {
     return ConverterStrategyBaseLib._repayDebt(converter, collateralAsset, borrowAsset, amountToRepay);
   }
+
+  function _coverDebtToInsuranceFromRewards(
+    ConverterStrategyBaseLib.RecycleParams memory p,
+    uint index,
+    uint debtAmount
+  ) external returns (
+    uint rewardsLeftovers,
+    int debtToInsuranceOut
+  ) {
+    return ConverterStrategyBaseLib._coverDebtToInsuranceFromRewards(p, index, debtAmount);
+  }
 }

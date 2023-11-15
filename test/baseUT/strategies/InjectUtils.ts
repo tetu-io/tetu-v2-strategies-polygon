@@ -64,11 +64,12 @@ export class InjectUtils {
     );
     const governance = await controller.governance();
     const controllerAsGov = controller.connect(await Misc.impersonate(governance));
+    const operator = await Misc.impersonate((await controllerAsGov.operatorsList())[0]);
 
-    await controllerAsGov.removeProxyAnnounce(strategyProxy);
+    await controllerAsGov.connect(operator).removeProxyAnnounce(strategyProxy);
     await controllerAsGov.announceProxyUpgrade([strategyProxy], [strategyLogic.address]);
     await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
-    await controllerAsGov.upgradeProxy([strategyProxy]);
+    await controllerAsGov.connect(operator).upgradeProxy([strategyProxy]);
   }
 
   static async injectStrategyWithDeployedLogic(signer: SignerWithAddress, strategyProxy: string, newLogic: string) {

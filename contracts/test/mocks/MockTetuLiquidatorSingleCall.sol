@@ -161,6 +161,10 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
       IERC20(route[0].tokenOut).transfer(msg.sender, p.amountOut);
 
     } else {
+      console.log("MockTetuLiquidatorSingleCall.route.length", route.length);
+      console.log("MockTetuLiquidatorSingleCall.route[0].tokenIn", _tokenName(route[0].tokenIn));
+      console.log("MockTetuLiquidatorSingleCall.route[0].tokenOut", _tokenName(route[0].tokenOut));
+      console.log("MockTetuLiquidatorSingleCall.amount", amount);
       console.log("MockTetuLiquidatorSingleCall.liquidateWithRoute.missed.amount", amount);
     }
   }
@@ -197,13 +201,23 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
   /// @notice keccak256(tokenIn, tokenOut, pool, swapper, amount) => results
   mapping(bytes32 => GetPriceParams) private _getPriceParams;
 
-  function setPrice(address tokenIn, address tokenOut, uint amount) external {
+  function setPrice(address tokenIn, address tokenOut, uint amount, uint priceOut) external {
+    console.log("setPrice.tokenIn", _tokenName(tokenIn));
+    console.log("setPrice.tokenOut", _tokenName(tokenOut));
+    console.log("setPrice.amount", amount);
     bytes32 key = keccak256(abi.encodePacked(tokenIn, tokenOut, amount));
-    GetPriceParams memory p = _getPriceParams[key];
-    _getPriceParams[key] = p;
+    _getPriceParams[key] = GetPriceParams({
+      tokenIn: tokenIn,
+      tokenOut: tokenOut,
+      amount: amount,
+      priceOut: priceOut
+    });
   }
 
   function getPrice(address tokenIn, address tokenOut, uint amount) external view override returns (uint) {
+    console.log("setPrice.tokenIn", _tokenName(tokenIn));
+    console.log("setPrice.tokenOut", _tokenName(tokenOut));
+    console.log("getPrice.amount", amount);
     bytes32 key = keccak256(abi.encodePacked(tokenIn, tokenOut, amount));
     GetPriceParams memory p = _getPriceParams[key];
 

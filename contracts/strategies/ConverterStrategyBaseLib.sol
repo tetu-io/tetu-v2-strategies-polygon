@@ -16,6 +16,7 @@ import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../libs/IterationPlanLib.sol";
 import "../interfaces/IConverterStrategyBase.sol";
+import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -812,10 +813,12 @@ library ConverterStrategyBaseLib {
 
     // rewardAmounts => P + F + C, where P - performance + insurance, F - forwarder, C - compound
     for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
+      console.log("_recycle.p.debtToInsurance.1");console.logInt(p.debtToInsurance);
       // if we have a debt-to-insurance we should firstly cover the debt using all available rewards
       // and only then we can use leftovers of the rewards for other needs
       if (p.debtToInsurance > int(p.assetThreshold)) {
         (p.rewardAmounts[i], p.debtToInsurance) = _coverDebtToInsuranceFromRewards(p, i, uint(p.debtToInsurance));
+        console.log("_recycle.p.debtToInsurance.2");console.logInt(p.debtToInsurance);
         if (p.rewardAmounts[i] < p.thresholds[i]) continue;
       }
 
@@ -865,7 +868,7 @@ library ConverterStrategyBaseLib {
       }
       amountsToForward[i] = v.amountFC - v.amountC;
     }
-    return (amountsToForward, amountToPerformanceAndInsurance, p.debtToInsurance); // todo
+    return (amountsToForward, amountToPerformanceAndInsurance, p.debtToInsurance);
   }
 
   /// @notice Try to cover {p.debtToInsurance} using available rewards of {p.rewardTokens[index]}
@@ -886,7 +889,9 @@ library ConverterStrategyBaseLib {
       amountToSend = spentAmount;
     } else {
       // estimate amount of underlying that we can receive for the available amount of the reward tokens
-      uint amountAsset = p.liquidator.getPrice(p.rewardTokens[index], p.asset, p.rewardAmounts[index]);
+      uint amountAsset = p.rewardAmounts[index] > p.assetThreshold
+        ? p.liquidator.getPrice(p.rewardTokens[index], p.asset, p.rewardAmounts[index])
+        : 0;
       uint amountIn;
 
       if (amountAsset > debtAmount + p.assetThreshold) {
