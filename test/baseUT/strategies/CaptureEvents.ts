@@ -1,4 +1,4 @@
-import {BigNumber, Event, ContractReceipt, BigNumberish, BytesLike} from "ethers";
+import {BigNumber, Event, ContractReceipt, BigNumberish, BytesLike, Signer} from "ethers";
 import {
   AlgebraConverterStrategyLogicLib__factory, ConverterStrategyBase,
   ConverterStrategyBase__factory,
@@ -19,13 +19,20 @@ import {
 import {PLATFORM_ALGEBRA, PLATFORM_UNIV3} from "./AppPlatforms";
 import {
   FixPriceChangesEventObject,
-  NotEnoughInsuranceEventObject, OnCoverLossEventObject, SendToInsuranceEventObject,
+  NotEnoughInsuranceEventObject,
+  OnCoverLossEventObject,
+  OnIncreaseDebtToInsuranceEventObject,
+  SendToInsuranceEventObject,
   UncoveredLossEventObject,
 } from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib2";
 import {formatUnits} from "ethers/lib/utils";
 import {LossEventObject} from "../../../typechain/@tetu_io/tetu-contracts-v2/contracts/vault/StrategySplitterV2";
 import {LossCoveredEventObject} from "../../../typechain/@tetu_io/tetu-contracts-v2/contracts/vault/TetuVaultV2";
-import {RecycleEventObject} from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib";
+import {
+  OnCoverDebtToInsuranceEventObject,
+  OnPayDebtToInsuranceEvent, OnPayDebtToInsuranceEventObject,
+  RecycleEventObject
+} from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
 /**
@@ -93,12 +100,31 @@ interface IUncoveredLossEvent {
   investedAssetsAfter: number;
 }
 
-/**
- * ConverterStrategyBaseLib2.coverLossAfterPriceChanging
- */
 interface IFixPriceChanges {
   investedAssetsBefore: number;
   investedAssetsOut: number;
+  increaseToDebt: number;
+  debtToInsurance: number;
+}
+
+interface IOnIncreaseDebtToInsurance {
+  tokens: string[];
+  deltaGains: number[];
+  deltaLosses: number[];
+  prices: number[];
+  increaseToDebt: number;
+}
+
+interface IOnPayDebtToInsurance {
+  debtToInsuranceBefore: number;
+  debtToInsuraneAfter: number;
+}
+
+interface IOnCoverDebtToInsurance {
+  rewardToken: string;
+  rewardAmount: number;
+  debtToCover: number;
+  debtLeftovers: number;
 }
 
 /**
@@ -187,10 +213,14 @@ export interface IEventsSet {
 
   rebalanced?: IRebalancedEvent;
   rebalancedDebt?: IRebalancedDebtEvent;
-  fixPriceChanges?: IFixPriceChanges;
   fuseStatusChanged?: IFuseStatusChanged;
   recycle?: IRecycle;
   swapByAgg?: ISwapByAgg;
+
+  fixPriceChanges?: IFixPriceChanges;
+  payDebtToInsurance?: IOnPayDebtToInsurance;
+  increaseDebtToInsurance?: IOnIncreaseDebtToInsurance;
+  coverDebtToInsurance?: IOnCoverDebtToInsurance[];
 }
 
 export interface ISummaryFromEventsSet {
@@ -201,7 +231,9 @@ export interface ISummaryFromEventsSet {
   sentToInsurance: number;
   unsentToInsurance: number;
 
-  debtToInsuranceInc: number;
+  debtToInsuranceIncByCoverLoss: number;
+  debtToInsuranceIncByFixPrice: number;
+  debtToInsurancePaid: number;
   lossUncoveredNotEnoughInsurance: number;
 
   toPerfRecycle: number;
@@ -210,6 +242,7 @@ export interface ISummaryFromEventsSet {
   lossRebalance: number;
   investedAssetsBeforeFixPriceChanges: number;
   investedAssetsAfterFixPriceChanges: number;
+  debtToInsuranceAfterFixPriceChanges: number;
   swapByAgg?: ISwapByAgg;
 }
 
@@ -235,7 +268,7 @@ export class CaptureEvents {
     const cr = await tx.wait();
     console.log('REBALANCE gas', cr.gasUsed.toNumber());
 
-    return this.handleReceipt(cr, decimals, platform);
+    return this.handleReceipt(strategy.signer, cr, decimals, platform);
   }
 
   static async makeHardwork(strategy: ConverterStrategyBase): Promise<IEventsSet> {
@@ -245,7 +278,7 @@ export class CaptureEvents {
     const cr = await tx.wait();
     console.log('HARDWORK gas', cr.gasUsed.toNumber());
 
-    return this.handleReceipt(cr, decimals, platform);
+    return this.handleReceipt(strategy.signer, cr, decimals, platform);
   }
 
   static async makeDeposit(vault: TetuVaultV2, amount: BigNumber, platform?: string): Promise<IEventsSet> {
@@ -256,7 +289,7 @@ export class CaptureEvents {
     const cr = await tx.wait();
     console.log('DEPOSIT gas', cr.gasUsed.toNumber());
 
-    return this.handleReceipt(cr, decimals, platform);
+    return this.handleReceipt(vault.signer, cr, decimals, platform);
   }
 
   static async makeWithdraw(vault: TetuVaultV2, amount: BigNumber, platform?: string): Promise<IEventsSet> {
@@ -267,7 +300,7 @@ export class CaptureEvents {
     const cr = await tx.wait();
     console.log('WITHDRAW gas', cr.gasUsed.toNumber());
 
-    return this.handleReceipt(cr, decimals, platform);
+    return this.handleReceipt(vault.signer, cr, decimals, platform);
   }
 
   static async makeWithdrawAll(vault: TetuVaultV2, platform?: string): Promise<IEventsSet> {
@@ -278,7 +311,7 @@ export class CaptureEvents {
     const cr = await tx.wait();
     console.log('WITHDRAW-ALL gas', cr.gasUsed.toNumber());
 
-    return this.handleReceipt(cr, decimals, platform);
+    return this.handleReceipt(vault.signer, cr, decimals, platform);
   }
 
   static async makeWithdrawByAggStep(
@@ -297,12 +330,13 @@ export class CaptureEvents {
     const cr = await tx.wait();
     console.log('WITHDRAW-BY-AGG-STEP gas', cr.gasUsed.toNumber());
 
-    return this.handleReceipt(cr, decimals, await converterStrategyBase.PLATFORM());
+    return this.handleReceipt(converterStrategyBase.signer, cr, decimals, await converterStrategyBase.PLATFORM());
   }
   /**
    * Try to parse all events related to rebalance/hardwork/deposit/withdrawXXX operations
    */
   static async handleReceipt(
+    signer: Signer,
     receipt: ContractReceipt,
     decimals: number,
     platform: string = PLATFORM_UNIV3
@@ -482,6 +516,26 @@ export class CaptureEvents {
         ret.fixPriceChanges = {
           investedAssetsOut: +formatUnits(log.investedAssetsOut, decimals),
           investedAssetsBefore: +formatUnits(log.investedAssetsBefore, decimals),
+          debtToInsurance: +formatUnits(log.debtToInsurance, decimals),
+          increaseToDebt: +formatUnits(log.increaseToDebt, decimals),
+        }
+      }
+
+      if (event.topics[0].toLowerCase() === converterStrategyBaseLib2I.getEventTopic('OnIncreaseDebtToInsurance').toLowerCase()) {
+        const log = (converterStrategyBaseLib2I.decodeEventLog(
+          converterStrategyBaseLib2I.getEvent('OnIncreaseDebtToInsurance'),
+          event.data,
+          event.topics,
+        ) as unknown) as OnIncreaseDebtToInsuranceEventObject;
+        const tokenDecimals = await Promise.all(log.tokens.map(
+          async x => IERC20Metadata__factory.connect(x, signer).decimals()
+        ))
+        ret.increaseDebtToInsurance = {
+          tokens: log.tokens,
+          deltaGains: log.deltaGains.map((x, index) => +formatUnits(x, tokenDecimals[index])),
+          deltaLosses: log.deltaLosses.map((x, index) => +formatUnits(x, tokenDecimals[index])),
+          prices: log.prices.map(x => +formatUnits(x, 18)),
+          increaseToDebt: +formatUnits(log.increaseToDebt, decimals)
         }
       }
 
@@ -497,6 +551,35 @@ export class CaptureEvents {
           toInsurance: +formatUnits(log.toInsurance, decimals),
           toPerf: +formatUnits(log.toPerf, decimals),
         };
+      }
+
+      if (event.topics[0].toLowerCase() === converterStrategyBaseLibI.getEventTopic('OnPayDebtToInsurance').toLowerCase()) {
+        const log = (converterStrategyBaseLibI.decodeEventLog(
+          converterStrategyBaseLibI.getEvent('OnPayDebtToInsurance'),
+          event.data,
+          event.topics,
+        ) as unknown) as OnPayDebtToInsuranceEventObject;
+        ret.payDebtToInsurance = {
+          debtToInsuranceBefore: +formatUnits(log.debtToInsuranceBefore, decimals),
+          debtToInsuraneAfter: +formatUnits(log.debtToInsuraneAfter, decimals),
+        };
+      }
+
+      if (event.topics[0].toLowerCase() === converterStrategyBaseLibI.getEventTopic('OnCoverDebtToInsurance').toLowerCase()) {
+        const log = (converterStrategyBaseLibI.decodeEventLog(
+          converterStrategyBaseLibI.getEvent('OnCoverDebtToInsurance'),
+          event.data,
+          event.topics,
+        ) as unknown) as OnCoverDebtToInsuranceEventObject;
+        if (! ret.coverDebtToInsurance) {
+          ret.coverDebtToInsurance = [];
+        }
+        ret.coverDebtToInsurance.push({
+          rewardToken: log.rewardToken,
+          rewardAmount: +formatUnits(log.rewardAmount, await IERC20Metadata__factory.connect(log.rewardToken, signer).decimals()),
+          debtToCover: +formatUnits(log.debtToCover, decimals),
+          debtLeftovers: +formatUnits(log.debtLeftovers, decimals)
+        });
       }
     }
     console.log('*************');
@@ -522,8 +605,12 @@ export class CaptureEvents {
         ? eventsSet.sendToInsurance.reduce((prev, cur) => prev + cur.unsentAmount, 0)
         : 0,
 
-      debtToInsuranceInc: eventsSet?.coverLoss
+      debtToInsuranceIncByCoverLoss: eventsSet?.coverLoss
         ? eventsSet.coverLoss.reduce((prev, cur) => prev + cur.debtToInsuranceInc, 0)
+        : 0,
+      debtToInsuranceIncByFixPrice: eventsSet?.fixPriceChanges?.increaseToDebt ?? 0,
+      debtToInsurancePaid: eventsSet?.payDebtToInsurance
+        ? eventsSet.payDebtToInsurance.debtToInsuraneAfter - eventsSet.payDebtToInsurance.debtToInsuranceBefore
         : 0,
       lossUncoveredNotEnoughInsurance: eventsSet?.notEnoughInsurance
         ? eventsSet.notEnoughInsurance.reduce((prev, cur) => prev + cur.lossUncovered, 0)
@@ -536,6 +623,7 @@ export class CaptureEvents {
 
       investedAssetsBeforeFixPriceChanges: eventsSet?.fixPriceChanges?.investedAssetsBefore ?? 0,
       investedAssetsAfterFixPriceChanges: eventsSet?.fixPriceChanges?.investedAssetsOut ?? 0,
+      debtToInsuranceAfterFixPriceChanges: eventsSet?.fixPriceChanges?.debtToInsurance ?? 0,
 
       toForwarderRecycle: eventsSet?.recycle?.rewardTokens && eventsSet?.recycle?.rewardTokens.length
         ? await Promise.all(eventsSet?.recycle?.rewardTokens.map(

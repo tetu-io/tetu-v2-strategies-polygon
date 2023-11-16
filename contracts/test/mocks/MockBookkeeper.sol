@@ -3,7 +3,7 @@ pragma solidity 0.8.17;
 
 import "hardhat/console.sol";
 
-contract MockAccountant {
+contract MockBookkeeper {
   uint[] private _deltaGains;
   uint[] private _deltaLosses;
   address[] private _tokensPassed;

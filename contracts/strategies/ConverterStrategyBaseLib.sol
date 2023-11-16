@@ -16,7 +16,6 @@ import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../libs/IterationPlanLib.sol";
 import "../interfaces/IConverterStrategyBase.sol";
-import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -239,9 +238,23 @@ library ConverterStrategyBaseLib {
     uint toInsurance
   );
 
+  /// @notice Debt to insurance was paid by rewards
+  /// @param debtToInsuranceBefore Initial amount of debts to the insurance, in underlying
+  /// @param debtToInsuranceBefore Final amount of debts to the insurance, in underlying
   event OnPayDebtToInsurance(
     int debtToInsuranceBefore,
     int debtToInsuraneAfter
+  );
+
+  /// @notice Debt to insurance was paid by a reward token
+  /// @param debtToCover Initial amount of debt that should be covered, in underlying
+  /// @param debtLeftovers Final amount of debt that should be covered, in underlying
+  /// It can be negative if we paid more than required
+  event OnCoverDebtToInsurance(
+    address rewardToken,
+    uint rewardAmount,
+    uint debtToCover,
+    int debtLeftovers
   );
 //endregion---------------------------------------------------  Events
 
@@ -813,12 +826,10 @@ library ConverterStrategyBaseLib {
 
     // rewardAmounts => P + F + C, where P - performance + insurance, F - forwarder, C - compound
     for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
-      console.log("_recycle.p.debtToInsurance.1");console.logInt(p.debtToInsurance);
       // if we have a debt-to-insurance we should firstly cover the debt using all available rewards
       // and only then we can use leftovers of the rewards for other needs
       if (p.debtToInsurance > int(p.assetThreshold)) {
         (p.rewardAmounts[i], p.debtToInsurance) = _coverDebtToInsuranceFromRewards(p, i, uint(p.debtToInsurance));
-        console.log("_recycle.p.debtToInsurance.2");console.logInt(p.debtToInsurance);
         if (p.rewardAmounts[i] < p.thresholds[i]) continue;
       }
 
@@ -918,6 +929,8 @@ library ConverterStrategyBaseLib {
 
     rewardsLeftovers = AppLib.sub0(p.rewardAmounts[index], spentAmount);
     debtToInsuranceOut = int(debtAmount) - int(amountToSend);
+
+    emit OnCoverDebtToInsurance(p.rewardTokens[index], spentAmount, debtAmount, debtToInsuranceOut);
   }
 //endregion----------------------------------------------- Recycle rewards
 

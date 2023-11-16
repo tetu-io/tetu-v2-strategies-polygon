@@ -16,8 +16,7 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../interfaces/IConverterStrategyBase.sol";
-import "@tetu_io/tetu-converter/contracts/interfaces/IAccountant.sol";
-import "hardhat/console.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/IBookkeeper.sol";
 
 /// @notice Continuation of ConverterStrategyBaseLib (workaround for size limits)
 library ConverterStrategyBaseLib2 {
@@ -50,22 +49,27 @@ library ConverterStrategyBaseLib2 {
   event ReinvestThresholdPercentChanged(uint amount);
   event SendToInsurance(uint sentAmount, uint unsentAmount);
 
-  /// @notice Increase to debts between new and previous checkout
+  /// @notice Increase to debts between new and previous checkpoints.
   /// @param tokens List of possible collateral/borrow assets. One of the is unerlying.
   /// @param deltaGains Amounts by which the debt has reduced (supply profit) [sync with {tokens}]
   /// @param deltaLosses Amounts by which the debt has increased (increase of amount-to-pay) [sync with {tokens}]
   /// @param prices Prices of the {tokens}
-  event IncreaseToDebt(
+  /// @param increaseToDebt Total amount of increasing of the debt to the insurance in underlying
+  event OnIncreaseDebtToInsurance(
     address[] tokens,
     uint[] deltaGains,
     uint[] deltaLosses,
-    uint[] prices
+    uint[] prices,
+    int increaseToDebt
   );
 
+  /// @param increaseToDebt The value on which the debt to insurance was increased
+  /// @param debtToInsurance New value of the debt to insurance
   event FixPriceChanges(
     uint investedAssetsBefore,
     uint investedAssetsOut,
-    int increaseToDebt
+    int increaseToDebt,
+    int debtToInsurance
   );
 
   /// @param lossToCover Amount of loss that should be covered
@@ -462,7 +466,7 @@ library ConverterStrategyBaseLib2 {
   /// @notice Calculate amount we will receive when we withdraw all from pool
   /// @dev This is writable function because we need to update current balances in the internal protocols.
   /// @param indexAsset Index of the underlying (main asset) in {tokens}
-  /// @param makeCheckpoint_ True - call IAccountant.checkpoint in the converter
+  /// @param makeCheckpoint_ True - call IBookkeeper.checkpoint in the converter
   /// @return amountOut Invested asset amount under control (in terms of underlying)
   /// @return prices Asset prices in USD, decimals 18
   /// @return decs 10**decimals
@@ -483,7 +487,7 @@ library ConverterStrategyBaseLib2 {
   /// @notice Calculate amount we will receive when we withdraw all from pool
   /// @dev This is writable function because we need to update current balances in the internal protocols.
   /// @param indexAsset Index of the underlying (main asset) in {tokens}
-  /// @param makeCheckpoint_ True - call IAccountant.checkpoint in the converter
+  /// @param makeCheckpoint_ True - call IBookkeeper.checkpoint in the converter
   /// @return amountOut Invested asset amount under control (in terms of underlying)
   /// @return prices Asset prices in USD, decimals 18
   /// @return decs 10**decimals
@@ -498,26 +502,20 @@ library ConverterStrategyBaseLib2 {
     uint[] memory prices,
     uint[] memory decs
   ) {
-    console.log("_calcInvestedAssets");
     CalcInvestedAssetsLocal memory v;
     v.len = tokens.length;
     v.asset = tokens[indexAsset];
-    console.log("_calcInvestedAssets.1.v.len", v.len);
 
     // calculate prices, decimals
     (prices, decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, v.len);
-    console.log("_calcInvestedAssets.2");
 
     // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
     // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
     for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
       if (i == indexAsset) {
-        console.log("_calcInvestedAssets.3");
         // Current strategy balance of main asset is not taken into account here because it's add by splitter
         amountOut += depositorQuoteExitAmountsOut[i];
-        console.log("_calcInvestedAssets.4");
       } else {
-        console.log("_calcInvestedAssets.5");
         v.token = tokens[i];
         // possible reverse debt: collateralAsset = tokens[i], borrowAsset = underlying
         // investedAssets is calculated using exact debts, debt-gaps are not taken into account
@@ -527,7 +525,6 @@ library ConverterStrategyBaseLib2 {
         } else {
           amountOut -= toPay;
         }
-        console.log("_calcInvestedAssets.6");
 
         // available amount to repay
         uint toRepay = collateral + IERC20(v.token).balanceOf(address(this)) + depositorQuoteExitAmountsOut[i];
@@ -536,7 +533,6 @@ library ConverterStrategyBaseLib2 {
         // investedAssets is calculated using exact debts, debt-gaps are not taken into account
         (toPay, collateral) = converter_.getDebtAmountCurrent(address(this), v.asset, v.token, false);
         amountOut += collateral;
-        console.log("_calcInvestedAssets.7");
 
         if (toRepay >= toPay) {
           amountOut += (toRepay - toPay) * prices[i] * decs[indexAsset] / prices[indexAsset] / decs[i];
@@ -545,16 +541,13 @@ library ConverterStrategyBaseLib2 {
           // let's register a debt and try to resolve it later below
           setDebt(v, i, toPay - toRepay);
         }
-        console.log("_calcInvestedAssets.8");
       }
     }
     if (v.debts.length == v.len) {
-      console.log("_calcInvestedAssets.9");
       // we assume here, that it would be always profitable to save collateral
       // f.e. if there is not enough amount of USDT on our balance and we have a debt in USDT,
       // it's profitable to change any available asset to USDT, pay the debt and return the collateral back
       for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
-        console.log("_calcInvestedAssets.10");
         if (v.debts[i] == 0) continue;
 
         // estimatedAssets should be reduced on the debt-value
@@ -570,24 +563,21 @@ library ConverterStrategyBaseLib2 {
       }
     }
 
-    console.log("makeCheckpoint_.1");
     if (makeCheckpoint_) {
-      console.log("makeCheckpoint_.2");
       _callCheckpoint(tokens, converter_);
     }
 
-    console.log("_calcInvestedAssets.11");
     return (amountOut, prices, decs);
   }
 
-  /// @notice Make new checkpoint in converter's accountant
+  /// @notice Make new checkpoint in converter's bookkeeper
   /// As results, a next call of checkpoint will return amount of increases to debts ("deltas")
   /// since current moment up to the moment of the next call (we need such deltas in _fixPriceChanges only)
   function _callCheckpoint(address[] memory tokens, ITetuConverter converter_) internal returns (
     uint[] memory deltaGains,
     uint[] memory deltaLosses
   ) {
-    IAccountant a = IAccountant(IConverterController(converter_.controller()).accountant());
+    IBookkeeper a = IBookkeeper(IConverterController(converter_.controller()).bookkeeper());
     return a.checkpoint(tokens);
   }
 
@@ -683,7 +673,7 @@ library ConverterStrategyBaseLib2 {
   ) internal returns (
     int increaseToDebt
   ) {
-    IAccountant a = IAccountant(IConverterController(converter.controller()).accountant());
+    IBookkeeper a = IBookkeeper(IConverterController(converter.controller()).bookkeeper());
     (uint[] memory deltaGains, uint[] memory deltaLosses) = a.checkpoint(tokens);
 
     uint len = tokens.length;
@@ -696,7 +686,7 @@ library ConverterStrategyBaseLib2 {
           * int(prices[i]) * int(decs[indexAsset]) / int(prices[indexAsset]) / int(decs[i]);
       }
     }
-    emit IncreaseToDebt(tokens, deltaGains, deltaLosses, prices);
+    emit OnIncreaseDebtToInsurance(tokens, deltaGains, deltaLosses, prices, increaseToDebt);
 
     return increaseToDebt;
   }
@@ -714,7 +704,6 @@ library ConverterStrategyBaseLib2 {
     IStrategyV3.BaseState storage baseState
   ) internal returns (uint earned) {
     if (investedAssetsAfter > investedAssetsBefore) {
-      console.log("_coverLossAfterPriceChanging.1");
       earned = investedAssetsAfter - investedAssetsBefore;
       if (increaseToDebt != 0) {
         // Earned amount will be send to the insurance later
@@ -724,15 +713,10 @@ library ConverterStrategyBaseLib2 {
         csbs.debtToInsurance += increaseToDebt;
       }
     } else {
-      console.log("_coverLossAfterPriceChanging.2");
       uint lost = investedAssetsBefore - investedAssetsAfter;
-      console.log("_coverLossAfterPriceChanging.lost", lost);
       if (lost != 0) {
         uint totalAsset = investedAssetsAfter + IERC20(baseState.asset).balanceOf(address(this));
-        console.log("_coverLossAfterPriceChanging.totalAsset", totalAsset);
         (uint lossToCover, uint lossUncovered) = _getSafeLossToCover(lost, totalAsset);
-        console.log("_coverLossAfterPriceChanging.lossToCover", lossToCover);
-        console.log("_coverLossAfterPriceChanging.lossUncovered", lossUncovered);
         // in the case "lossToCover < loss" we reduce both amounts "from prices" and "from debts" proportionally
         _coverLossAndCheckResults(csbs, baseState.splitter, lossToCover, increaseToDebt * int(lossToCover) / int(lost));
 
@@ -742,7 +726,7 @@ library ConverterStrategyBaseLib2 {
       }
     }
 
-    emit FixPriceChanges(investedAssetsBefore, investedAssetsAfter, increaseToDebt);
+    emit FixPriceChanges(investedAssetsBefore, investedAssetsAfter, increaseToDebt, csbs.debtToInsurance);
     return earned;
   }
 
@@ -764,25 +748,20 @@ library ConverterStrategyBaseLib2 {
     uint lossToCover,
     int debtToInsuranceInc
   ) internal {
-    console.log("_coverLossAndCheckResults");
     address asset = ISplitter(splitter).asset();
     address vault = ISplitter(splitter).vault();
 
     uint balanceBefore = IERC20(asset).balanceOf(vault);
     ISplitter(splitter).coverPossibleStrategyLoss(0, lossToCover);
     uint balanceAfter = IERC20(asset).balanceOf(vault);
-    console.log("_coverLossAndCheckResults.balanceBefore", balanceBefore);
-    console.log("_coverLossAndCheckResults.balanceAfter", balanceAfter);
 
     if (debtToInsuranceInc != 0) {
       csbs.debtToInsurance += debtToInsuranceInc;
-      console.log("_coverLossAndCheckResults.debtToInsuranceInc");console.logInt(debtToInsuranceInc);
     }
 
     uint delta = balanceAfter > balanceBefore
       ? balanceAfter - balanceBefore
       : 0;
-    console.log("_coverLossAndCheckResults.delta", delta);
 
     if (delta < lossToCover) {
       emit NotEnoughInsurance(lossToCover - delta);
@@ -820,24 +799,17 @@ library ConverterStrategyBaseLib2 {
     uint investedAssetsOut,
     uint earnedOut
   ) {
-    console.log("fixPriceChanges.1");
     ITetuConverter converter = csbs.converter;
     uint investedAssetsBefore = csbs.investedAssets;
-    console.log("fixPriceChanges.2.csbs.converter", address(csbs.converter));
-    console.log("fixPriceChanges.2.csbs.investedAssets", csbs.investedAssets);
 
     uint[] memory prices;
     uint[] memory decs;
 
     (investedAssetsOut, prices, decs) = _calcInvestedAssets(tokens, amountsInPool, indexAsset, converter, false);
-    console.log("fixPriceChanges.3.investedAssetsOut", investedAssetsOut);
     csbs.investedAssets = investedAssetsOut;
-    console.log("fixPriceChanges.4");
 
     int increaseToDebt = _getIncreaseToDebt(tokens, indexAsset, prices, decs, converter);
-    console.log("fixPriceChanges.5.increaseToDebt"); console.logInt(increaseToDebt);
     earnedOut = _coverLossAfterPriceChanging(csbs, investedAssetsBefore, investedAssetsOut, increaseToDebt, baseState);
-    console.log("fixPriceChanges.6.earnedOut", earnedOut);
   }
 //endregion ------------------------------------------------------- Bookkeeper logic
 

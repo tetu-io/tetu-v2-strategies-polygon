@@ -68,6 +68,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
 //region before, after
   before(async function() {
+    this.timeout(1200000);
+
     await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     snapshotBefore = await TimeUtils.snapshot();
 
@@ -76,6 +78,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     require("util").inspect.defaultOptions.depth = null;
 
     [signer, signer2, signer3] = await ethers.getSigners();
+
+    await InjectUtils.injectTetuConverter(signer);
+    await ConverterUtils.disableAaveV2(signer);
+    await InjectUtils.redeployAave3PoolAdapters(signer);
   });
 
   after(async function() {
@@ -134,10 +140,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           );
 
           await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(signer, b.strategy.address);
-
-          await InjectUtils.injectTetuConverter(signer);
-          await ConverterUtils.disableAaveV2(signer);
-          // await InjectUtils.redeployAave3PoolAdapters(signer);
 
           return b;
         }
@@ -1162,10 +1164,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(signer, b.strategy.address);
         const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-        await InjectUtils.injectTetuConverter(signer);
-        await ConverterUtils.disableAaveV2(signer);
-        // await InjectUtils.redeployAave3PoolAdapters(signer);
-
         console.log('initial deposit...');
         await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
         await TokenUtils.getToken(b.asset, signer.address, parseUnits('100000', b.assetDecimals));
@@ -1263,10 +1261,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           b.strategy.address,
           "0.00001" // we need very small amount to avoid increasing of share price on hardwork
         );
-
-        await InjectUtils.injectTetuConverter(signer);
-        await ConverterUtils.disableAaveV2(signer);
-        // await InjectUtils.redeployAave3PoolAdapters(signer);
 
         await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
         await IERC20__factory.connect(b.asset, signer3).approve(b.vault.address, Misc.MAX_UINT);

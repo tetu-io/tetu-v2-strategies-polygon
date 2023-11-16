@@ -6,7 +6,7 @@ import {formatUnits, parseUnits} from 'ethers/lib/utils';
 import {
   ConverterStrategyBaseLib2__factory,
   ConverterStrategyBaseLibFacade2,
-  MockAccountant,
+  MockBookkeeper,
   MockToken,
   PriceOracleMock,
   StrategySplitterV2
@@ -50,7 +50,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
   let unknown: MockToken;
   let facade: ConverterStrategyBaseLibFacade2;
   let mapTokenByAddress: Map<string, MockToken>;
-  let mockAccountant: MockAccountant;
+  let mockBookkeeper: MockBookkeeper;
   //endregion Variables
 
   //region before, after
@@ -80,7 +80,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
     mapTokenByAddress.set(usdt.address, usdt);
     mapTokenByAddress.set(bal.address, bal);
 
-    mockAccountant = await MockHelper.createMockAccountant(signer);
+    mockBookkeeper = await MockHelper.createMockBookkeeper(signer);
   });
 
   after(async function () {
@@ -1773,7 +1773,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
       );
       const controller = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
       await converter.setController(controller.address);
-      await controller.setAccountant(mockAccountant.address);
+      await controller.setBookkeeper(mockBookkeeper.address);
 
       for (let i = 0; i < 2; ++i) {
         await p.tokens[i].mint(facade.address, parseUnits(p.balances[i], await p.tokens[i].decimals()));
@@ -2437,9 +2437,9 @@ describe('ConverterStrategyBaseLibTest2', () => {
       );
       const controller = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
       await tc.setController(controller.address);
-      await controller.setAccountant(mockAccountant.address);
+      await controller.setBookkeeper(mockBookkeeper.address);
       if (p.deltaGains && p.deltaLosses) {
-        await mockAccountant.setCheckpoint(
+        await mockBookkeeper.setCheckpoint(
           p.deltaGains.map((x, index) => parseUnits(x, decimals[index])),
           p.deltaLosses.map((x, index) => parseUnits(x, decimals[index])),
         )
@@ -2469,7 +2469,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
         prices: ret.prices.map(x=> +formatUnits(x, 18)),
         expectedDecs: ret.decs.map((x, index) => x.eq(parseUnits("1", decimals[index]))),
         gasUsed,
-        tokensPassedToCheckout: await mockAccountant.getCheckpointResults()
+        tokensPassedToCheckout: await mockBookkeeper.getCheckpointResults()
       };
     }
 
@@ -2872,7 +2872,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
       );
       const controller = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
       await converter.setController(controller.address);
-      await controller.setAccountant(mockAccountant.address);
+      await controller.setBookkeeper(mockBookkeeper.address);
 
       const decimals = await Promise.all(
         p.tokens.map(
@@ -2880,7 +2880,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
         ),
       );
 
-      await mockAccountant.setCheckpoint(
+      await mockBookkeeper.setCheckpoint(
         p.deltaGains.map((x, index) => parseUnits(x, decimals[index])),
         p.deltaLosses.map((x, index) => parseUnits(x, decimals[index])),
       );
@@ -3034,10 +3034,10 @@ describe('ConverterStrategyBaseLibTest2', () => {
       );
       const controller = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
       await converter.setController(controller.address);
-      await controller.setAccountant(mockAccountant.address);
+      await controller.setBookkeeper(mockBookkeeper.address);
 
       if (p.deltaGains && p.deltaLosses) {
-        await mockAccountant.setCheckpoint(
+        await mockBookkeeper.setCheckpoint(
           p.deltaGains.map((x, index) => parseUnits(x, decimals[index])),
           p.deltaLosses.map((x, index) => parseUnits(x, decimals[index])),
         )
@@ -3100,6 +3100,14 @@ describe('ConverterStrategyBaseLibTest2', () => {
     }
 
     describe("investedAssets is reduced", () => {
+      let snapshot: string;
+      before(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
       async function fixPriceChangesTest(): Promise<IResults> {
         return fixPriceChanges({
           tokens: [tetu, usdc],
@@ -3143,6 +3151,14 @@ describe('ConverterStrategyBaseLibTest2', () => {
       });
     });
     describe("investedAssets is increased", () => {
+      let snapshot: string;
+      before(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
       async function fixPriceChangesTest(): Promise<IResults> {
         return fixPriceChanges({
           tokens: [tetu, usdc],

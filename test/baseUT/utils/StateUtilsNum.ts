@@ -69,6 +69,7 @@ export interface IStateNum {
     borrowAssetsBalances: number[];
     rewardTokensBalances?: number[];
     liquidity: number;
+    debtToInsurance: number;
   };
   gauge: {
     strategyBalance?: number;
@@ -376,6 +377,7 @@ export class StateUtilsNum {
         liquidity,
         borrowAssetsBalances,
         borrowAssetsNames,
+        debtToInsurance: +formatUnits(await strategy.debtToInsurance(), assetDecimals),
       },
       vault: {
         assetBalance: +formatUnits(await asset.balanceOf(vault.address), assetDecimals),
@@ -586,6 +588,7 @@ export class StateUtilsNum {
       'strategy.liquidity',
       'strategy.totalAssets',
       'strategy.investedAssets',
+      'strategy.debtToInsurance',
 
       'gauge.balance',
 
@@ -637,6 +640,8 @@ export class StateUtilsNum {
       'events.sentToInsurance',
       'events.unsentToInsurance',
       'events.debtToInsuranceInc',
+      'events.debtToInsuranceIncByFixPrice',
+      'events.debtToInsurancePaid',
       'events.lossUncoveredNotEnoughInsurance',
       'events.toPerfRecycle',
       'events.toInsuranceRecycle',
@@ -691,7 +696,10 @@ export class StateUtilsNum {
       item.strategy.liquidity,
       item.strategy.totalAssets,
       item.strategy.investedAssets,
+      item.strategy.debtToInsurance,
+
       item.gauge.strategyBalance,
+
       item.vault.assetBalance,
       item.splitter.assetBalance,
       item.splitter.totalAssets,
@@ -738,7 +746,9 @@ export class StateUtilsNum {
       item.events?.lossUncoveredCutByMax,
       item.events?.sentToInsurance,
       item.events?.unsentToInsurance,
-      item.events?.debtToInsuranceInc,
+      item.events?.debtToInsuranceIncByCoverLoss,
+      item.events?.debtToInsuranceIncByFixPrice,
+      item.events?.debtToInsurancePaid,
       item.events?.lossUncoveredNotEnoughInsurance,
       item.events?.toPerfRecycle,
       item.events?.toInsuranceRecycle,

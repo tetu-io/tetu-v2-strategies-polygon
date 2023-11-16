@@ -75,6 +75,10 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   function reinvestThresholdPercent() external view returns (uint) {
     return _csbs.reinvestThresholdPercent;
   }
+
+  function debtToInsurance() external view returns (int) {
+    return _csbs.debtToInsurance;
+  }
   //endregion -------------------------------------------------------- Getters
 
   //region -------------------------------------------------------- Events

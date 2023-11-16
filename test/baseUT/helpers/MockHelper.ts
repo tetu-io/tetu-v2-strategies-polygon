@@ -27,7 +27,7 @@ import {
   SwapHelper,
   MockAggregator,
   MockSwapper,
-  MockAccountant,
+  MockBookkeeper,
 } from '../../../typechain';
 import { DeployerUtils } from '../../../scripts/utils/DeployerUtils';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
@@ -201,7 +201,7 @@ export class MockHelper {
     return (await DeployerUtils.deployContract(signer, 'MockSwapper', priceOracle, token0, token1)) as MockSwapper;
   }
 
-  public static async createMockAccountant(signer: SignerWithAddress): Promise<MockAccountant> {
-    return (await DeployerUtils.deployContract(signer, 'MockAccountant')) as MockAccountant;
+  public static async createMockBookkeeper(signer: SignerWithAddress): Promise<MockBookkeeper> {
+    return (await DeployerUtils.deployContract(signer, 'MockBookkeeper')) as MockBookkeeper;
   }
 }
