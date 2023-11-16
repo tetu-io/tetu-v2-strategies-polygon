@@ -53,7 +53,7 @@ describe('PairBasedStrategyMultipleActionsIntTest @skip-on-coverage', function()
 
     snapshotBefore = await TimeUtils.snapshot();
     [signer, signer2, signer3, signer4, signer5] = await ethers.getSigners();
-    await InjectUtils.injectTetuConverter(signer);
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
   })
 
   after(async function() {

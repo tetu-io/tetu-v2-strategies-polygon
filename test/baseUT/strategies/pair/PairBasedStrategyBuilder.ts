@@ -36,7 +36,14 @@ export const KYBER_PID_DEFAULT_BLOCK = 71; // 54; // 40;
 export const KYBER_USDC_DAI_PID_DEFAULT_BLOCK = 72; // 55; // 42;
 
 
-export interface IBuilderParams {
+export interface IStrategyCustomizationParams {
+  compoundRatio?: number;
+  buffer?: number;
+  depositFee?: number;
+  withdrawFee?: number;
+}
+
+export interface IBuilderParams extends IStrategyCustomizationParams {
   gov: string;
   pool: string;
   /** underlying in the pool */
@@ -50,10 +57,6 @@ export interface IBuilderParams {
   liquidatorPools: ITetuLiquidator.PoolDataStruct[];
   quoter: string;
 
-  compoundRatio?: number;
-  buffer?: number;
-  depositFee?: number;
-  withdrawFee?: number;
 }
 
 export interface IStrategyBasicInfo {
@@ -202,8 +205,8 @@ export class PairBasedStrategyBuilder {
       controller,
       gov,
       p.buffer ?? 0,
-        p.depositFee ?? 300,
-      p.withdrawFee ?? 300,
+        p.depositFee ?? 0,
+      p.withdrawFee ?? 0,
       false,
     );
 

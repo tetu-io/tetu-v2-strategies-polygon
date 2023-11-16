@@ -49,6 +49,8 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     snapshotBefore = await TimeUtils.snapshot();
     [signer, signer2] = await ethers.getSigners();
+
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
   })
 
   after(async function () {
@@ -309,10 +311,6 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
 
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
-
-        await InjectUtils.injectTetuConverter(signer);
-        await ConverterUtils.disableAaveV2(signer);
-        // await InjectUtils.redeployAave3PoolAdapters(signer);
 
         await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
         return b;

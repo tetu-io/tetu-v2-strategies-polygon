@@ -59,7 +59,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     snapshotBefore = await TimeUtils.snapshot();
     [signer, signer2] = await ethers.getSigners();
     gov = await Misc.impersonate(MaticAddresses.GOV_ADDRESS);
-    await InjectUtils.injectTetuConverter(signer);
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
     core = Addresses.getCore() as CoreAddresses;
     pool = MaticAddresses.UNISWAPV3_USDC_USDT_100;

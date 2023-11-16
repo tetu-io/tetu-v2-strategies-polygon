@@ -32,7 +32,6 @@ import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
 import {MockAggregatorUtils} from "../../../baseUT/mocks/MockAggregatorUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
-import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {
   IPrepareWithdrawTestResults,
   PairWithdrawByAggUtils
@@ -62,9 +61,7 @@ describe('PairBasedNoSwapIntTest', function() {
     require("util").inspect.defaultOptions.depth = null;
     [signer, signer2] = await ethers.getSigners();
 
-    // we need to display full objects, so we use util.inspect, see
-    // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
-    require("util").inspect.defaultOptions.depth = null;
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
   })
 
   after(async function() {
@@ -82,10 +79,6 @@ describe('PairBasedNoSwapIntTest', function() {
         signer2,
         {kyberPid: KYBER_PID_DEFAULT_BLOCK}
       );
-
-      await InjectUtils.injectTetuConverter(signer);
-      await ConverterUtils.disableAaveV2(signer);
-      // await InjectUtils.redeployAaveTwoPoolAdapters(signer);
 
       // provide $1000 of insurance to compensate possible price decreasing
       await PairBasedStrategyPrepareStateUtils.prepareInsurance(b, "1000");
@@ -1255,7 +1248,7 @@ describe('PairBasedNoSwapIntTest', function() {
 
               // example of "unknown" loss: expected 697.431018 to be close to 697.431651 +/- 0.000001
               // such loss can happen because of covering borrow-debts
-              // so, lets's use 1e-3 instead of 1e-6 below to cover such differences
+              // so, let's use 1e-3 instead of 1e-6 below to cover such differences
               expect(initialTotalAssets - finalTotalAssets).approximately(uncoveredLoss, 1e-3);
             });
           });

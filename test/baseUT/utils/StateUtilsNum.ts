@@ -656,6 +656,7 @@ export class StateUtilsNum {
 
       'fixPriceChanges.investedAssetsBefore',
       'fixPriceChanges.investedAssetsAfter',
+      'debtToInsuranceAfterFixPriceChanges',
     ];
 
     return { stateHeaders };
@@ -771,6 +772,7 @@ export class StateUtilsNum {
 
       item.events?.investedAssetsBeforeFixPriceChanges,
       item.events?.investedAssetsAfterFixPriceChanges,
+      item.events?.debtToInsuranceAfterFixPriceChanges,
     ]);
 
     writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', { encoding: 'utf8', flag: override ? 'w' : 'a'});

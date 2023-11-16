@@ -26,7 +26,7 @@ describe('UniswapV3ConverterStrategyAggRebalanceW3FTest', function() {
     [signer] = await ethers.getSigners();
 
     strategy = UniswapV3ConverterStrategy__factory.connect('0x29ce0ca8d0A625Ebe1d0A2F94a2aC9Cc0f9948F1', signer)
-    await InjectUtils.injectTetuConverter(signer);
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
     rebalanceW3f = w3f.get("uniswapv3-rebalance");
     userArgs = {

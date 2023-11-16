@@ -697,7 +697,7 @@ library ConverterStrategyBaseLib {
   /// @param rewardAmounts_ Amounts of {rewardTokens_}; we assume, there are no zero amounts here
   function recycle(
     IStrategyV3.BaseState storage baseState,
-    IConverterStrategyBase.ConverterStrategyBaseState memory csbs,
+    IConverterStrategyBase.ConverterStrategyBaseState storage csbs,
     address[] memory tokens,
     address controller,
     mapping(address => uint) storage liquidationThresholds,

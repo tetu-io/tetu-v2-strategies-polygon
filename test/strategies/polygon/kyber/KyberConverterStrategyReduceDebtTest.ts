@@ -46,7 +46,7 @@ describe('KyberConverterStrategy reduce debt by agg test', function() {
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
-    await InjectUtils.injectTetuConverter(signer);
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
     const core = Addresses.getCore();
     const controller = DeployerUtilsLocal.getController(signer);

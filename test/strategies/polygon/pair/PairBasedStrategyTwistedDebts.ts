@@ -79,6 +79,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
     [signer, signer2, signer3] = await ethers.getSigners();
 
     reader = await MockHelper.createPairBasedStrategyReader(signer);
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
   });
 
   after(async function () {
@@ -236,11 +237,6 @@ describe('PairBasedStrategyTwistedDebts', function () {
         const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
         const states: IStateNum[] = [];
         const pathOut = `./tmp/${strategyInfo.name}-folded-debts-up-user-prepare-strategy.csv`;
-
-        await InjectUtils.injectTetuConverter(signer);
-        await ConverterUtils.disableAaveV2(signer);
-        await ConverterUtils.disableDForce(signer);
-        // await InjectUtils.redeployAave3PoolAdapters(signer);
 
         console.log('Deposit...');
         await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
@@ -736,11 +732,6 @@ describe('PairBasedStrategyTwistedDebts', function () {
         const platform = await converterStrategyBase.PLATFORM();
         const states: IStateNum[] = [];
         const pathOut = `./tmp/${strategyInfo.name}-folded-debts-down-user-prepare-strategy.csv`;
-
-        await InjectUtils.injectTetuConverter(signer);
-        await ConverterUtils.disableAaveV2(signer);
-        await ConverterUtils.disableDForce(signer);
-        // await InjectUtils.redeployAave3PoolAdapters(signer);
 
         const state = await PackedData.getDefaultState(b.strategy);
         await UniversalUtils.makePoolVolume(signer2, state, b.swapper, parseUnits("50000", 6));

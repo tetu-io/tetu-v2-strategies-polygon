@@ -45,7 +45,7 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
     await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID, -1);
     snapshotBefore = await TimeUtils.snapshot();
     await HardhatUtils.switchToMostCurrentBlock(); // 1inch works on current block only
-    await InjectUtils.injectTetuConverter(signer);
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);

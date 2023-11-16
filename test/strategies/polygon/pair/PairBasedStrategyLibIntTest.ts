@@ -45,7 +45,7 @@ describe('PairBasedStrategyLibIntTest', () => {
     await HardhatUtils.switchToMostCurrentBlock(); // 1inch works on current block only
 
     [signer] = await ethers.getSigners();
-    await InjectUtils.injectTetuConverter(signer);
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
     facade = await MockHelper.createPairBasedStrategyLibFacade(signer);
     converter = ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer);
@@ -542,9 +542,6 @@ describe('PairBasedStrategyLibIntTest', () => {
       const decimalsX = await tokenX.decimals();
       const decimalsY = await tokenY.decimals();
       const signerFacade = await DeployerUtilsLocal.impersonate(facade.address);
-
-      // we need only AAVE3 adapter, disable others
-      await InjectUtils.injectTetuConverter(signer);
 
       // set up current balances
       await TokenUtils.getToken(p.tokenX, facade.address, parseUnits(p.balanceX, decimalsX));

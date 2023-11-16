@@ -26,6 +26,7 @@ import {
 } from "../../../baseUT/AppConstants";
 import {HARDHAT_NETWORK_ID, HardhatUtils} from '../../../baseUT/utils/HardhatUtils';
 import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 describe('PairBasedStrategyLibTest', () => {
   /** prop0 + prop1 */
@@ -64,6 +65,8 @@ describe('PairBasedStrategyLibTest', () => {
     );
     const controller = await MockHelper.createMockTetuConverterController(signer, priceOracleMock.address);
     await converter.setController(controller.address);
+
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
   });
 
   after(async function () {

@@ -40,7 +40,7 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
     await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     snapshotBefore = await TimeUtils.snapshot();
     await HardhatUtils.switchToMostCurrentBlock();
-    await InjectUtils.injectTetuConverter(signer);
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
     [signer, signer2] = await ethers.getSigners();
     reader = await MockHelper.createPairBasedStrategyReader(signer);

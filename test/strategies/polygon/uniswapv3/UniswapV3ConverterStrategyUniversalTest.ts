@@ -63,7 +63,8 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
 
     const [signer] = await ethers.getSigners();
 
-    await InjectUtils.injectTetuConverter(signer);
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
+
     await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
     await StrategyTestUtils.deployAndSetCustomSplitter(signer, core);
     // Disable DForce (as it reverts on repay after block advance)

@@ -473,7 +473,7 @@ describe("ConverterStrategyBaseInt", () => {
       await cc.vault.setDoHardWorkOnInvest(false);
 
       // possibility to view debug messages of converter
-      await InjectUtils.injectTetuConverter(signer);
+      await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
       // make deposits
       await TokenUtils.getToken(cc.asset, signer2.address, BigNumber.from(10000));

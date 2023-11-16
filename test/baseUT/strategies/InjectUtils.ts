@@ -19,7 +19,17 @@ import {RunHelper} from "../../../scripts/utils/RunHelper";
 
 /** Utils to replace currently deployed implementation of contracts by most recent versions */
 export class InjectUtils {
-  /** Setup converter before running tests */
+  /**
+   * This function prepare exist instance of TetuConverter before each test
+   * if such preparations are necessary. Don't remove injectTetuConverterBeforeAnyTest from tests,
+   * just comment body of injectTetuConverterBeforeAnyTest if no preparations are required.
+   */
+  static async injectTetuConverterBeforeAnyTest(signer: SignerWithAddress) {
+    await InjectUtils.injectTetuConverter(signer);
+    await ConverterUtils.disableAaveV2(signer);
+    await InjectUtils.redeployAave3PoolAdapters(signer);
+  }
+
   static async injectTetuConverter(signer: SignerWithAddress) {
 
 

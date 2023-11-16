@@ -56,7 +56,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
     [signer, signer2, signer3] = await ethers.getSigners();
     gov = await DeployerUtilsLocal.getControllerGovernance(signer);
-    await InjectUtils.injectTetuConverter(signer);
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
     const core = Addresses.getCore();
     controller = DeployerUtilsLocal.getController(signer);

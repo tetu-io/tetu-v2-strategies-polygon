@@ -79,9 +79,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
     [signer, signer2, signer3] = await ethers.getSigners();
 
-    await InjectUtils.injectTetuConverter(signer);
-    await ConverterUtils.disableAaveV2(signer);
-    await InjectUtils.redeployAave3PoolAdapters(signer);
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
   });
 
   after(async function() {
@@ -135,7 +133,13 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             signer2,
             {
               kyberPid: KYBER_PID_DEFAULT_BLOCK,
-              notUnderlying: strategyInfo.notUnderlyingToken
+              notUnderlying: strategyInfo.notUnderlyingToken,
+              customParams: {
+                depositFee: 0,
+                withdrawFee: 0,
+                compoundRatio: 50_000,
+                buffer: 0
+              }
             }
           );
 
@@ -1253,7 +1257,13 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             signer2,
             {
               kyberPid: KYBER_PID_DEFAULT_BLOCK,
-              notUnderlying: strategyInfo.notUnderlyingToken
+              notUnderlying: strategyInfo.notUnderlyingToken,
+              customParams: {
+                depositFee: 0,
+                withdrawFee: 0,
+                compoundRatio: 50_000,
+                buffer: 0
+              }
             }
         );
         await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(
@@ -1261,6 +1271,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           b.strategy.address,
           "0.00001" // we need very small amount to avoid increasing of share price on hardwork
         );
+
+        await PairBasedStrategyPrepareStateUtils.prepareInsurance(b);
 
         await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
         await IERC20__factory.connect(b.asset, signer3).approve(b.vault.address, Misc.MAX_UINT);

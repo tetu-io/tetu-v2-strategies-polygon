@@ -30,7 +30,7 @@ describe.skip(`AlgebraConverterStrategyHardworkOnSpecifiedBlockTest`, function()
     snapshotBefore = await TimeUtils.snapshot();
 
     await HardhatUtils.switchToMostCurrentBlock();
-    await InjectUtils.injectTetuConverter(signer);
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
     [signer] = await ethers.getSigners();
 

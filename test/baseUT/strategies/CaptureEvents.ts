@@ -415,7 +415,7 @@ export class CaptureEvents {
         }
       }
 
-      if (event.topics[0].toLowerCase() === converterStrategyBaseLib2I.getEventTopic('CoverLoss').toLowerCase()) {
+      if (event.topics[0].toLowerCase() === converterStrategyBaseLib2I.getEventTopic('OnCoverLoss').toLowerCase()) {
         const log = (logicLibI.decodeEventLog(
           converterStrategyBaseLib2I.getEvent('OnCoverLoss'),
           event.data,
@@ -610,7 +610,7 @@ export class CaptureEvents {
         : 0,
       debtToInsuranceIncByFixPrice: eventsSet?.fixPriceChanges?.increaseToDebt ?? 0,
       debtToInsurancePaid: eventsSet?.payDebtToInsurance
-        ? eventsSet.payDebtToInsurance.debtToInsuraneAfter - eventsSet.payDebtToInsurance.debtToInsuranceBefore
+        ? eventsSet.payDebtToInsurance.debtToInsuranceBefore - eventsSet.payDebtToInsurance.debtToInsuraneAfter
         : 0,
       lossUncoveredNotEnoughInsurance: eventsSet?.notEnoughInsurance
         ? eventsSet.notEnoughInsurance.reduce((prev, cur) => prev + cur.lossUncovered, 0)
