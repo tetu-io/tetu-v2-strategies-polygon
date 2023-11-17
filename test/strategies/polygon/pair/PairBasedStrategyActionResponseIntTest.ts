@@ -1233,9 +1233,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     }
 
     const strategies: IStrategyInfo[] = [
-      {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
-
       {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
+
+      {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
       // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 10_000},
       // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 100_000},
 
@@ -1369,18 +1369,23 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             }
 
-            if (i % 4) {
-              await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
-                await b.strategy.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)),
-                MaticAddresses.TETU_LIQUIDATOR,
-                () => true,
-                async (stateTitle, eventsSet): Promise<IStateNum> => {
-                  states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, stateTitle, {eventsSet}));
-                  StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
-                  return states[states.length - 1];
-                }
-              );
-            }
+            // todo uncomment
+            // if (i % 4) {
+            //   await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
+            //     await b.strategy.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)),
+            //     MaticAddresses.TETU_LIQUIDATOR,
+            //     () => true,
+            //     async (stateTitle, eventsSet): Promise<IStateNum> => {
+            //       states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, stateTitle, {eventsSet}));
+            //       StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+            //       return states[states.length - 1];
+            //     }
+            //   );
+            // }
+
+            // let's give some time to increase the debts..
+            await TimeUtils.advanceNBlocks(25000);
+
 
             if (i % 5) {
               console.log('Hardwork..')
@@ -1389,12 +1394,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             }
 
+            // let's give some time to increase the debts..
+            await TimeUtils.advanceNBlocks(25000);
+
             if (i % 2) {
-              console.log('Deposit..')
-              const eventsSet = await CaptureEvents.makeDeposit(b.vault.connect(signer3), parseUnits('100.496467', 6), platform);
-              states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `d${i}`, {eventsSet}));
-              StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
-            } else {
               console.log('Withdraw..');
               const toWithdraw = parseUnits('100.111437', 6)
               const balBefore = await TokenUtils.balanceOf(state.tokenA, signer3.address)
@@ -1404,6 +1407,11 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               const balAfter = await TokenUtils.balanceOf(state.tokenA, signer3.address)
               console.log(`To withdraw: ${toWithdraw.toString()}. Withdrawn: ${balAfter.sub(balBefore).toString()}`)
               states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `w${i}`, {eventsSet}));
+              StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+            } else {
+              console.log('Deposit..')
+              const eventsSet = await CaptureEvents.makeDeposit(b.vault.connect(signer3), parseUnits('100.496467', 6), platform);
+              states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `d${i}`, {eventsSet}));
               StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             }
 
@@ -1452,6 +1460,13 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const eventsSet3 = await CaptureEvents.makeWithdrawAll(b.vault.connect(signer3), platform);
           states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `w-all-s3`, {eventsSet: eventsSet3}));
           StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
+          if (await b.strategy.needRebalance()) {
+            console.log('Rebalance..')
+            const eventsSet = await CaptureEvents.makeRebalanceNoSwap(b.strategy);
+            states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `r-all`, {eventsSet}));
+            StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+          }
 
           console.log('withdrawAll as signer...');
           await b.vault.connect(signer).requestWithdraw();

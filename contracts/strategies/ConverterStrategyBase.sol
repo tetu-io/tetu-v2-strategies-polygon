@@ -267,7 +267,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     uint[] memory quoteAmounts = _depositorQuoteExit(depositorLiquidity);
     console.log("_makeRequestedAmount.quoteAmounts", quoteAmounts[0], quoteAmounts[1]);
     uint liquidityAmountToWithdraw = ConverterStrategyBaseLib2.getLiquidityAmount(
-      ConverterStrategyBaseLib.applyRequestedBalanceGap(amount_),
+      amount_,
       v.tokens,
       v.indexTheAsset,
       v.converter,

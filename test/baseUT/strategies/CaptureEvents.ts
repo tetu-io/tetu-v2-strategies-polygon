@@ -243,6 +243,7 @@ export interface ISummaryFromEventsSet {
   investedAssetsBeforeFixPriceChanges: number;
   investedAssetsAfterFixPriceChanges: number;
   debtToInsuranceAfterFixPriceChanges: number;
+  increaseToDebtFixPriceChanges: number;
   swapByAgg?: ISwapByAgg;
 }
 
@@ -624,6 +625,7 @@ export class CaptureEvents {
       investedAssetsBeforeFixPriceChanges: eventsSet?.fixPriceChanges?.investedAssetsBefore ?? 0,
       investedAssetsAfterFixPriceChanges: eventsSet?.fixPriceChanges?.investedAssetsOut ?? 0,
       debtToInsuranceAfterFixPriceChanges: eventsSet?.fixPriceChanges?.debtToInsurance ?? 0,
+      increaseToDebtFixPriceChanges: eventsSet?.fixPriceChanges?.increaseToDebt ?? 0,
 
       toForwarderRecycle: eventsSet?.recycle?.rewardTokens && eventsSet?.recycle?.rewardTokens.length
         ? await Promise.all(eventsSet?.recycle?.rewardTokens.map(

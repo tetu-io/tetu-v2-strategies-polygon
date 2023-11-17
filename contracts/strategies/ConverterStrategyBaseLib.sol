@@ -1207,11 +1207,12 @@ library ConverterStrategyBaseLib {
               // if we already received enough amount on balance, we can avoid additional actions
               // to avoid high gas consumption in the cases like SCB-787
               uint balanceAsset = IERC20(v.asset).balanceOf(address(this));
+              console.log("_closePositionsToGetAmount.balanceAsset.1", balanceAsset);
               if (balanceAsset + liquidationThresholds_[d_.indexAsset] > requestedBalance) {
                 v.balanceAsset = balanceAsset;
                 break;
               }
-              console.log("_closePositionsToGetAmount.balanceAsset", balanceAsset);
+              console.log("_closePositionsToGetAmount.balanceAsset.2", balanceAsset);
             }
           }
 
