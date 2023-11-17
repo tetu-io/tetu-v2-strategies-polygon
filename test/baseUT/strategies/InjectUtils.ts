@@ -60,19 +60,13 @@ export class InjectUtils {
     const converterGovernance = await Misc.impersonate(await ConverterController__factory.connect(converterController, signer).governance());
     const converterControllerAsGov = ConverterController__factory.connect(converterController, converterGovernance);
 
-    console.log("1");
     const bookkeeperProxy = await DeployerUtils.deployContract(signer, '@tetu_io/tetu-converter/contracts/proxy/ProxyControlled.sol:ProxyControlled') as ProxyControlled;
-    console.log("2");
     await RunHelper.runAndWait(() => bookkeeperProxy.initProxy(bookkeeperLogic.address));
-    console.log("3");
     const bookkeeper = await Bookkeeper__factory.connect(bookkeeperProxy.address, signer);
-    console.log("4");
 
     await bookkeeper.init(converterController);
-    console.log("5");
     console.log("version", await converterControllerAsGov.CONVERTER_CONTROLLER_VERSION());
     await converterControllerAsGov.setBookkeeper(bookkeeper.address);
-    console.log("6");
 
     // -------------------------------------------- Set up TetuConverter
     // const tetuConverter = getConverterAddress();
@@ -144,19 +138,19 @@ export class InjectUtils {
     }
 
     // create new platform adapter for AAVE3
-    // const converterNormal = await CustomConverterDeployHelper.createAave3PoolAdapter(signer);
-    // const converterEMode = await CustomConverterDeployHelper.createAave3PoolAdapterEMode(signer);
-    // const platformAdapter = await CustomConverterDeployHelper.createAave3PlatformAdapter(
-    //   signer,
-    //   controller,
-    //   MaticAddresses.AAVE3_POOL,
-    //   converterNormal.address,
-    //   converterEMode.address,
-    // );
+    const converterNormal = await CustomConverterDeployHelper.createAave3PoolAdapter(signer);
+    const converterEMode = await CustomConverterDeployHelper.createAave3PoolAdapterEMode(signer);
+    const platformAdapter = await CustomConverterDeployHelper.createAave3PlatformAdapter(
+      signer,
+      controller,
+      MaticAddresses.AAVE3_POOL,
+      converterNormal.address,
+      converterEMode.address,
+    );
 
     // register all pairs with new platform adapter
     await borrowManager.addAssetPairs(
-      "0x861af5e04ac40DFa479BcA240391FE68d9Cc91fF", // platformAdapter.address,
+      platformAdapter.address,
       pairs.map(x => x.assetLeft),
       pairs.map(x => x.assetRight)
     );

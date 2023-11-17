@@ -7,6 +7,7 @@ import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
 import "../interfaces/IConverterStrategyBase.sol";
+import "hardhat/console.sol";
 
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
@@ -258,12 +259,15 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   function _makeRequestedAmount(uint amount_, WithdrawUniversalLocal memory v) internal virtual returns ( // it's virtual to simplify unit testing
     uint expectedTotalAssetAmount
   ) {
+    console.log("_makeRequestedAmount.amount_", amount_);
     uint depositorLiquidity = _depositorLiquidity();
+    console.log("_makeRequestedAmount.depositorLiquidity", depositorLiquidity);
 
     // calculate how much liquidity we need to withdraw for getting at least requested amount of the {v.asset}
     uint[] memory quoteAmounts = _depositorQuoteExit(depositorLiquidity);
+    console.log("_makeRequestedAmount.quoteAmounts", quoteAmounts[0], quoteAmounts[1]);
     uint liquidityAmountToWithdraw = ConverterStrategyBaseLib2.getLiquidityAmount(
-      amount_,
+      ConverterStrategyBaseLib.applyRequestedBalanceGap(amount_),
       v.tokens,
       v.indexTheAsset,
       v.converter,
@@ -271,13 +275,16 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       depositorLiquidity,
       v.indexUnderlying
     );
+    console.log("_makeRequestedAmount.liquidityAmountToWithdraw", liquidityAmountToWithdraw);
 
     if (liquidityAmountToWithdraw != 0) {
       uint[] memory withdrawnAmounts = _depositorExit(liquidityAmountToWithdraw);
+      console.log("_makeRequestedAmount.withdrawnAmounts", withdrawnAmounts[0], withdrawnAmounts[1]);
       // the depositor is able to use less liquidity than it was asked, i.e. Balancer-depositor leaves some BPT unused
       // use what exactly was withdrew instead of the expectation
       // assume that liquidity cannot increase in _depositorExit
       liquidityAmountToWithdraw = depositorLiquidity - _depositorLiquidity();
+      console.log("_makeRequestedAmount.liquidityAmountToWithdraw", liquidityAmountToWithdraw);
       emit OnDepositorExit(liquidityAmountToWithdraw, withdrawnAmounts);
     }
 
@@ -290,6 +297,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       (amount_ == type(uint).max ? amount_ : v.balanceBefore + amount_), // current balance + the amount required to be withdrawn on balance
       liquidationThresholds
     );
+    console.log("_makeRequestedAmount.expectedBalance", expectedBalance);
 
     require(expectedBalance >= v.balanceBefore, AppErrors.BALANCE_DECREASE);
     return expectedBalance - v.balanceBefore;
@@ -344,11 +352,16 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     uint strategyLoss,
     uint amountSentToInsurance
   ) {
+    console.log("_withdrawUniversal.amount_", amount_);
+    console.log("_withdrawUniversal.earnedByPrices_", earnedByPrices_);
+    console.log("_withdrawUniversal.investedAssets_", investedAssets_);
+
     // amount to withdraw; we add a little gap to avoid situation "opened debts, no liquidity to pay"
     uint amount = amount_ == type(uint).max
       ? amount_
       : (amount_ + earnedByPrices_) * (DENOMINATOR + GAP_WITHDRAW) / DENOMINATOR;
     _beforeWithdraw(amount);
+    console.log("_withdrawUniversal.amount", amount);
 
     if (amount != 0 && investedAssets_ != 0) {
       WithdrawUniversalLocal memory v;
@@ -357,9 +370,11 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
 
       // get at least requested amount of the underlying on the balance
       assetPrice = ConverterStrategyBaseLib2.getAssetPriceFromConverter(v.converter, v.theAsset);
-      expectedWithdrewUSD = _makeRequestedAmount(amount, v) * assetPrice / 1e18;
+      expectedWithdrewUSD = AppLib.sub0(_makeRequestedAmount(amount, v), earnedByPrices_) * assetPrice / 1e18;
+      console.log("_withdrawUniversal.expectedWithdrewUSD", expectedWithdrewUSD);
 
       uint balanceAfterWithdraw = AppLib.balance(v.theAsset);
+      console.log("_withdrawUniversal.balanceAfterWithdraw", balanceAfterWithdraw);
 
       // we need to compensate difference if during withdraw we lost some assets
       // also we should send earned amounts to the insurance
@@ -376,6 +391,8 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
             : 0,
         _updateInvestedAssets() + balanceAfterWithdraw
       );
+      console.log("_withdrawUniversal.earned", earned);
+      console.log("_withdrawUniversal.strategyLoss", strategyLoss);
 
       if (earned != 0) {
         (amountSentToInsurance,) = ConverterStrategyBaseLib2.sendToInsurance(
@@ -385,6 +402,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
           investedAssets_ + v.balanceBefore,
           balanceAfterWithdraw
         );
+        console.log("_withdrawUniversal.amountSentToInsurance", amountSentToInsurance);
       }
     }
 

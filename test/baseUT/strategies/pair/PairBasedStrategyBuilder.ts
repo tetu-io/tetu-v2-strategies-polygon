@@ -251,9 +251,9 @@ export class PairBasedStrategyBuilder {
         },
         controller,
         gov,
-        1_000,
-        300,
-        300,
+        p.buffer ?? 1_000,
+        p?.depositFee ?? 300,
+        p?.withdrawFee ?? 300,
         false,
     );
     const lib = await DeployerUtils.deployContract(signer, 'AlgebraLib') as AlgebraLib;
@@ -300,9 +300,9 @@ export class PairBasedStrategyBuilder {
         },
         controllerAsGov,
         gov,
-        0,
-        300,
-        300,
+      p.buffer ?? 1_000,
+      p?.depositFee ?? 300,
+      p?.withdrawFee ?? 300,
         false,
     );
     const lib = await DeployerUtils.deployContract(signer, 'KyberLib') as KyberLib;

@@ -11,12 +11,13 @@ import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV3.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/IBookkeeper.sol";
 import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../interfaces/IConverterStrategyBase.sol";
-import "@tetu_io/tetu-converter/contracts/interfaces/IBookkeeper.sol";
+import "hardhat/console.sol";
 
 /// @notice Continuation of ConverterStrategyBaseLib (workaround for size limits)
 library ConverterStrategyBaseLib2 {
@@ -567,6 +568,7 @@ library ConverterStrategyBaseLib2 {
       _callCheckpoint(tokens, converter_);
     }
 
+    console.log("_calcInvestedAssets.amountOut", amountOut);
     return (amountOut, prices, decs);
   }
 
@@ -678,6 +680,8 @@ library ConverterStrategyBaseLib2 {
 
     uint len = tokens.length;
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      console.log("_getIncreaseToDebt.deltaGains.i", i, deltaGains[i]);
+      console.log("_getIncreaseToDebt.deltaLosses.i", i, deltaLosses[i]);
       if (i == indexAsset) {
         increaseToDebt -= int(deltaGains[i]);
         increaseToDebt += int(deltaLosses[i]);
@@ -810,6 +814,11 @@ library ConverterStrategyBaseLib2 {
 
     int increaseToDebt = _getIncreaseToDebt(tokens, indexAsset, prices, decs, converter);
     earnedOut = _coverLossAfterPriceChanging(csbs, investedAssetsBefore, investedAssetsOut, increaseToDebt, baseState);
+
+    console.log("fixPriceChanges.increaseToDebt"); console.logInt(increaseToDebt);
+    console.log("fixPriceChanges.earnedOut", earnedOut);
+    console.log("fixPriceChanges.investedAssetsBefore", investedAssetsBefore);
+    console.log("fixPriceChanges.investedAssetsOut", investedAssetsOut);
   }
 //endregion ------------------------------------------------------- Bookkeeper logic
 

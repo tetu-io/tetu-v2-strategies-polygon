@@ -98,13 +98,13 @@ export class PairWithdrawByAggUtils {
         }
       }
       console.log("makeFullWithdraw.withdrawByAggStep.execute --------------------------------");
-      console.log("tokenToSwap", tokenToSwap);
-      console.log("AGGREGATOR", p.aggregator);
-      console.log("amountToSwap", amountToSwap);
-      console.log("swapData", swapData);
-      console.log("swapData.length", swapData.length);
-      console.log("planEntryData", p.planEntryData);
-      console.log("ENTRY_TO_POOL_IS_ALLOWED", p.entryToPool);
+      // console.log("tokenToSwap", tokenToSwap);
+      // console.log("AGGREGATOR", p.aggregator);
+      // console.log("amountToSwap", amountToSwap);
+      // console.log("swapData", swapData);
+      // console.log("swapData.length", swapData.length);
+      // console.log("planEntryData", p.planEntryData);
+      // console.log("ENTRY_TO_POOL_IS_ALLOWED", p.entryToPool);
 
       if (p.mockSwapper) {
         // temporary replace swapper by mocked one

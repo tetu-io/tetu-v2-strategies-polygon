@@ -1276,10 +1276,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
         await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
         await IERC20__factory.connect(b.asset, signer3).approve(b.vault.address, Misc.MAX_UINT);
-        await TokenUtils.getToken(b.asset, signer.address, parseUnits('2000', 6));
-        await TokenUtils.getToken(b.asset, signer3.address, parseUnits('2000', 6));
+        await TokenUtils.getToken(b.asset, signer.address, parseUnits('20000', 6));
+        await TokenUtils.getToken(b.asset, signer3.address, parseUnits('20000', 6));
 
-        const investAmount = parseUnits("1000", 6);
+        const investAmount = parseUnits("10000", 6);
         console.log('initial deposits...');
         await b.vault.connect(signer).deposit(investAmount, signer.address, {gasLimit: 19_000_000});
         await b.vault.connect(signer3).deposit(investAmount, signer3.address, {gasLimit: 19_000_000});

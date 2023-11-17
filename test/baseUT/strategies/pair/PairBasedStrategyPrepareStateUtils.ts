@@ -264,11 +264,11 @@ export class PairBasedStrategyPrepareStateUtils {
         }
       }
       console.log("unfoldBorrows.withdrawByAggStep.execute --------------------------------");
-      console.log("tokenToSwap", tokenToSwap);
-      console.log("AGGREGATOR", aggregator) ;
+      // console.log("tokenToSwap", tokenToSwap);
+      // console.log("AGGREGATOR", aggregator) ;
       console.log("amountToSwap", amountToSwap);
-      console.log("swapData", swapData);
-      console.log("planEntryData", planEntryData);
+      // console.log("swapData", swapData);
+      // console.log("planEntryData", planEntryData);
 
       const eventsSet = await CaptureEvents.makeWithdrawByAggStep(
         strategyAsOperator,
