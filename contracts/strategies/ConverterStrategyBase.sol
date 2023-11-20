@@ -505,8 +505,8 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
     if (!_preHardWork(reInvest)) {
       // claim rewards and get current asset balance
-      uint assetBalance;
-      (earned, lost, assetBalance) = _handleRewards();
+      (uint earned1, uint lost1, uint assetBalance) = _handleRewards();
+
       // re-invest income
       (, uint amountSentToInsurance) = _depositToPoolUniversal(
         reInvest
@@ -517,13 +517,19 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
         earnedByPrices,
         investedAssetsNewPrices
       );
-      (uint earned2, uint lost2) = ConverterStrategyBaseLib2._registerIncome(
+
+      (earned, lost) = ConverterStrategyBaseLib2._registerIncome(
         investedAssetsNewPrices + assetBalance, // assets in use before deposit
         _csbs.investedAssets + AppLib.balance(baseState.asset) + amountSentToInsurance // assets in use after deposit
       );
+
       _postHardWork();
-      emit OnHardWorkEarnedLost(investedAssetsNewPrices, earnedByPrices, earned, lost, earned2, lost2);
-      return (earned + earned2, lost + lost2);
+      emit OnHardWorkEarnedLost(investedAssetsNewPrices, earnedByPrices, earned1, lost1, earned, lost);
+
+      // register amount paid for the debts and amount received for the provided collaterals
+      ConverterStrategyBaseLib2.registerBorrowResults(_csbs.converter, baseState.asset);
+
+      return (earned1 + earned, lost1 + lost);
     } else {
       return (0, 0);
     }

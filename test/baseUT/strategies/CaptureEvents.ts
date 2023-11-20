@@ -18,6 +18,7 @@ import {
 } from "../../../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategyLogicLib";
 import {PLATFORM_ALGEBRA, PLATFORM_UNIV3} from "./AppPlatforms";
 import {
+  BorrowResultsEventObject,
   FixPriceChangesEventObject,
   NotEnoughInsuranceEventObject,
   OnCoverLossEventObject,
@@ -127,6 +128,11 @@ interface IOnCoverDebtToInsurance {
   debtLeftovers: number;
 }
 
+interface IBorrowResults {
+  gains: number;
+  losses: number;
+}
+
 /**
  * ConverterStrategyBaseLib2._coverLossAndCheckResults
  */
@@ -221,6 +227,7 @@ export interface IEventsSet {
   payDebtToInsurance?: IOnPayDebtToInsurance;
   increaseDebtToInsurance?: IOnIncreaseDebtToInsurance;
   coverDebtToInsurance?: IOnCoverDebtToInsurance[];
+  borrowResults?: IBorrowResults;
 }
 
 export interface ISummaryFromEventsSet {
@@ -245,6 +252,9 @@ export interface ISummaryFromEventsSet {
   debtToInsuranceAfterFixPriceChanges: number;
   increaseToDebtFixPriceChanges: number;
   swapByAgg?: ISwapByAgg;
+
+  borrowGains: number;
+  borrowLosses: number;
 }
 
 /**
@@ -540,6 +550,18 @@ export class CaptureEvents {
         }
       }
 
+      if (event.topics[0].toLowerCase() === converterStrategyBaseLib2I.getEventTopic('BorrowResults').toLowerCase()) {
+        const log = (converterStrategyBaseLib2I.decodeEventLog(
+          converterStrategyBaseLib2I.getEvent('BorrowResults'),
+          event.data,
+          event.topics,
+        ) as unknown) as BorrowResultsEventObject;
+        ret.borrowResults = {
+          gains: +formatUnits(log.gains, decimals),
+          losses: +formatUnits(log.losses, decimals),
+        }
+      }
+
       if (event.topics[0].toLowerCase() === converterStrategyBaseLibI.getEventTopic('Recycle').toLowerCase()) {
         const log = (converterStrategyBaseLibI.decodeEventLog(
           converterStrategyBaseLibI.getEvent('Recycle'),
@@ -638,7 +660,10 @@ export class CaptureEvents {
         ))
         : [],
 
-      swapByAgg: eventsSet?.swapByAgg
+      swapByAgg: eventsSet?.swapByAgg,
+
+      borrowGains: eventsSet?.borrowResults?.gains ?? 0,
+      borrowLosses: eventsSet?.borrowResults?.losses ?? 0,
     }
   }
 }

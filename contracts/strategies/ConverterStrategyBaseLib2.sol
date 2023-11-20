@@ -83,6 +83,11 @@ library ConverterStrategyBaseLib2 {
 
   /// @notice Insurance balance were not enough to cover the loss, {lossUncovered} was uncovered
   event NotEnoughInsurance(uint lossUncovered);
+
+  /// @notice Register amounts received for supplying collaterals and amount paid for the debts
+  /// @param gains Amount received by all pool adapters for the provided collateral, in underlying
+  /// @param losses Amount paid by all pool adapters for the debts, in underlying
+  event BorrowResults(uint gains, uint losses);
 //endregion----------------------------------------- EVENTS
 
 //region----------------------------------------- MAIN LOGIC
@@ -819,6 +824,16 @@ library ConverterStrategyBaseLib2 {
     console.log("fixPriceChanges.earnedOut", earnedOut);
     console.log("fixPriceChanges.investedAssetsBefore", investedAssetsBefore);
     console.log("fixPriceChanges.investedAssetsOut", investedAssetsOut);
+  }
+
+  /// @notice Register amounts received for supplying collaterals and amount paid for the debts
+  ///         for the current period (a new period is started after each hardwork operation)
+  function registerBorrowResults(ITetuConverter converter, address asset) external {
+    IBookkeeper a = IBookkeeper(IConverterController(converter.controller()).bookkeeper());
+    (uint gains, uint losses) = a.startPeriod(asset);
+    if (gains != 0 && losses != 0) {
+      emit BorrowResults(gains, losses);
+    }
   }
 //endregion ------------------------------------------------------- Bookkeeper logic
 
