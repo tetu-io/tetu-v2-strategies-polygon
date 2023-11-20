@@ -3,7 +3,32 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre from "hardhat";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {writeFileSync} from "fs";
-import {AlgebraConverterStrategy__factory, AlgebraLib, BalancerBoostedStrategy__factory, ConverterStrategyBase, ConverterStrategyBase__factory, IBalancerGauge__factory, IBorrowManager, IBorrowManager__factory, IConverterController__factory, IERC20Metadata__factory, IPoolAdapter__factory, IPriceOracle, IPriceOracle__factory, IRebalancingV2Strategy, ISplitter__factory, ITetuConverter, ITetuConverter__factory, IUniswapV3Pool__factory, KyberConverterStrategy__factory, KyberLib, TetuVaultV2, UniswapV3ConverterStrategy__factory, UniswapV3Lib} from "../../../typechain";
+import {
+  AlgebraConverterStrategy__factory,
+  AlgebraLib,
+  BalancerBoostedStrategy__factory,
+  ConverterStrategyBase,
+  ConverterStrategyBase__factory,
+  IBalancerGauge__factory,
+  IBookkeeper__factory,
+  IBorrowManager,
+  IBorrowManager__factory,
+  IConverterController__factory,
+  IERC20Metadata__factory,
+  IPoolAdapter__factory,
+  IPriceOracle,
+  IPriceOracle__factory,
+  IRebalancingV2Strategy,
+  ISplitter__factory,
+  ITetuConverter,
+  ITetuConverter__factory,
+  IUniswapV3Pool__factory,
+  KyberConverterStrategy__factory,
+  KyberLib,
+  TetuVaultV2,
+  UniswapV3ConverterStrategy__factory,
+  UniswapV3Lib
+} from "../../../typechain";
 import {MockHelper} from "../helpers/MockHelper";
 import {writeFileSyncRestoreFolder} from "./FileUtils";
 import {ConverterAdaptersHelper} from "../converter/ConverterAdaptersHelper";
@@ -48,6 +73,12 @@ export interface IUniv3Pool {
   amount0: BigNumber,
   amount1: BigNumber
 }
+
+export interface IBorrowResults {
+  borrowGains: number;
+  borrowLosses: number;
+}
+
 /**
  * Same as IState but all numbers are without decimals
  */
@@ -141,6 +172,8 @@ export interface IStateNum {
   univ3?: IUniv3Values;
   univ3Pool?: IUniv3Pool;
   events?: ISummaryFromEventsSet;
+
+  previewBorrowResults?: IBorrowResults;
 }
 
 export interface IStateParams {
@@ -232,6 +265,7 @@ export class StateUtilsNum {
     let withdrawDone: number | undefined;
 
     let currentTick: ILiquidityAmountInTick | undefined;
+    let previewBorrowResults: IBorrowResults | undefined;
 
     const converter = await ITetuConverter__factory.connect(await strategy.converter(), signer);
     const priceOracle = IPriceOracle__factory.connect(
@@ -357,6 +391,8 @@ export class StateUtilsNum {
       borrowAssetsPrices.push(+formatUnits(await priceOracle.getAssetPrice(borrowAssetAddress), 18));
     }
 
+    previewBorrowResults = await this.getPreviewBorrowResults(signer, converter, strategy, assetDecimals);
+
     const totalAssets = +formatUnits(await vault.totalAssets(), assetDecimals);
     const totalAssetInStrategy = +formatUnits(await strategy.totalAssets(), assetDecimals);
     // noinspection UnnecessaryLocalVariableJS
@@ -440,11 +476,33 @@ export class StateUtilsNum {
       univ3Pool,
 
       events: await CaptureEvents.getSummaryFromEventsSet(signer, p?.eventsSet),
+
+      previewBorrowResults
     }
 
     // console.log(dest)
 
     return dest
+  }
+
+  public static async getPreviewBorrowResults(
+    signer: SignerWithAddress,
+    converter: ITetuConverter,
+    strategy: ConverterStrategyBase,
+    assetDecimals: number
+  ): Promise<IBorrowResults> {
+    const ret = await IBookkeeper__factory.connect(
+      await IConverterController__factory.connect(await converter.controller(), signer).bookkeeper(),
+      signer
+    ).previewPeriod(
+      await strategy.asset(),
+      strategy.address
+    );
+
+    return {
+      borrowGains: +formatUnits(ret.gains, assetDecimals),
+      borrowLosses: +formatUnits(ret.losses, assetDecimals),
+    }
   }
 
   public static async getBorrowInfo(
@@ -661,6 +719,8 @@ export class StateUtilsNum {
 
       'borrowResults.borrowGains',
       'borrowResults.borrowLosses',
+      'preview.borrowGains',
+      'preview.borrowLosses',
     ];
 
     return { stateHeaders };
@@ -781,6 +841,9 @@ export class StateUtilsNum {
 
       item.events?.borrowGains,
       item.events?.borrowLosses,
+
+      item.previewBorrowResults?.borrowGains,
+      item.previewBorrowResults?.borrowLosses,
     ]);
 
     writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', { encoding: 'utf8', flag: override ? 'w' : 'a'});

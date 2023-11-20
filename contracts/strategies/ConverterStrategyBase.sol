@@ -526,13 +526,14 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       _postHardWork();
       emit OnHardWorkEarnedLost(investedAssetsNewPrices, earnedByPrices, earned1, lost1, earned, lost);
 
-      // register amount paid for the debts and amount received for the provided collaterals
-      ConverterStrategyBaseLib2.registerBorrowResults(_csbs.converter, baseState.asset);
-
-      return (earned1 + earned, lost1 + lost);
-    } else {
-      return (0, 0);
+      earned += earned1;
+      lost += lost1;
     }
+
+    // register amount paid for the debts and amount received for the provided collaterals
+    ConverterStrategyBaseLib2.registerBorrowResults(_csbs.converter, baseState.asset);
+
+    return (earned, lost);
   }
   //endregion -------------------------------------------------------- Hardwork
 
