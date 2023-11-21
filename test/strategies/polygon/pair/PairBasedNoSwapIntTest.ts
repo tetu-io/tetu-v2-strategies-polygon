@@ -154,7 +154,7 @@ describe('PairBasedNoSwapIntTest', function() {
                     const sharePrice0 = states[0].vault.sharePrice;
                     let sumUncoveredLoss = 0;
                     for (let i = 1; i < states.length; ++i) {
-                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.onCoverLoss.lossUncoveredNotEnoughInsurance ?? 0);
                       const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
                       expect(sharePrice0).approximately(adjustedSharePrice, testSetup.sharePriceDeviation, states[i].title);
                     }
@@ -197,7 +197,7 @@ describe('PairBasedNoSwapIntTest', function() {
                     const totalAssets0 = states[0].vault.totalAssets;
                     let sumUncoveredLoss = 0;
                     for (let i = 1; i < states.length; ++i) {
-                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.onCoverLoss.lossUncoveredNotEnoughInsurance ?? 0);
                       const totalAssets = states[i].vault.totalAssets;
                       expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
                     }
@@ -227,7 +227,7 @@ describe('PairBasedNoSwapIntTest', function() {
                     const sharePrice0 = states[0].vault.sharePrice;
                     let sumUncoveredLoss = 0;
                     for (let i = 1; i < states.length; ++i) {
-                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.onCoverLoss.lossUncoveredNotEnoughInsurance ?? 0);
                       const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
                       expect(sharePrice0).approximately(adjustedSharePrice, testSetup.sharePriceDeviation, states[i].title);
                     }
@@ -264,7 +264,7 @@ describe('PairBasedNoSwapIntTest', function() {
                     const totalAssets0 = states[0].vault.totalAssets;
                     let sumUncoveredLoss = 0;
                     for (let i = 1; i < states.length; ++i) {
-                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.onCoverLoss.lossUncoveredNotEnoughInsurance ?? 0);
                       const totalAssets = states[i].vault.totalAssets;
                       expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
                     }
@@ -302,7 +302,7 @@ describe('PairBasedNoSwapIntTest', function() {
                     const sharePrice0 = states[0].vault.sharePrice;
                     let sumUncoveredLoss = 0;
                     for (let i = 1; i < states.length; ++i) {
-                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.onCoverLoss.lossUncoveredNotEnoughInsurance ?? 0);
                       const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
                       expect(sharePrice0).approximately(adjustedSharePrice, testSetup.sharePriceDeviation, states[i].title);
                     }
@@ -339,7 +339,7 @@ describe('PairBasedNoSwapIntTest', function() {
                     const totalAssets0 = states[0].vault.totalAssets;
                     let sumUncoveredLoss = 0;
                     for (let i = 1; i < states.length; ++i) {
-                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.onCoverLoss.lossUncoveredNotEnoughInsurance ?? 0);
                       const totalAssets = states[i].vault.totalAssets;
                       expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
                     }
@@ -375,7 +375,7 @@ describe('PairBasedNoSwapIntTest', function() {
                     const sharePrice0 = states[0].vault.sharePrice;
                     let sumUncoveredLoss = 0;
                     for (let i = 1; i < states.length; ++i) {
-                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.onCoverLoss.lossUncoveredNotEnoughInsurance ?? 0);
                       const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
                       expect(sharePrice0).approximately(adjustedSharePrice, testSetup.sharePriceDeviation, states[i].title);
                     }
@@ -406,7 +406,7 @@ describe('PairBasedNoSwapIntTest', function() {
                     const totalAssets0 = states[0].vault.totalAssets;
                     let sumUncoveredLoss = 0;
                     for (let i = 1; i < states.length; ++i) {
-                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.onCoverLoss.lossUncoveredNotEnoughInsurance ?? 0);
                       const totalAssets = states[i].vault.totalAssets;
                       expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
                     }
@@ -644,7 +644,7 @@ describe('PairBasedNoSwapIntTest', function() {
                     const sharePrice0 = states[0].vault.sharePrice;
                     let sumUncoveredLoss = 0;
                     for (let i = 1; i < states.length; ++i) {
-                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.onCoverLoss.lossUncoveredNotEnoughInsurance ?? 0);
                       const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
                       expect(sharePrice0).approximately(adjustedSharePrice, testSetup.sharePriceDeviation, states[i].title);
                     }
@@ -682,7 +682,7 @@ describe('PairBasedNoSwapIntTest', function() {
                     const totalAssets0 = states[0].vault.totalAssets;
                     let sumUncoveredLoss = 0;
                     for (let i = 1; i < states.length; ++i) {
-                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.onCoverLoss.lossUncoveredNotEnoughInsurance ?? 0);
                       const totalAssets = states[i].vault.totalAssets;
                       expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
                     }
@@ -717,7 +717,7 @@ describe('PairBasedNoSwapIntTest', function() {
                     const sharePrice0 = states[0].vault.sharePrice;
                     let sumUncoveredLoss = 0;
                     for (let i = 1; i < states.length; ++i) {
-                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.onCoverLoss.lossUncoveredNotEnoughInsurance ?? 0);
                       const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
                       expect(sharePrice0).approximately(adjustedSharePrice, testSetup.sharePriceDeviation, states[i].title);
                     }
@@ -748,7 +748,7 @@ describe('PairBasedNoSwapIntTest', function() {
                     const totalAssets0 = states[0].vault.totalAssets;
                     let sumUncoveredLoss = 0;
                     for (let i = 1; i < states.length; ++i) {
-                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                      sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.onCoverLoss.lossUncoveredNotEnoughInsurance ?? 0);
                       const totalAssets = states[i].vault.totalAssets;
                       expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
                     }
@@ -1065,7 +1065,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 const sharePrice0 = states[0].vault.sharePrice;
                 let sumUncoveredLoss = 0;
                 for (let i = 1; i < states.length; ++i) {
-                  sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                  sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.onCoverLoss.lossUncoveredNotEnoughInsurance ?? 0);
                   const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
                   expect(sharePrice0).approximately(adjustedSharePrice, testSetup.sharePriceDeviation, states[i].title);
                 }
@@ -1108,7 +1108,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 const totalAssets0 = states[0].vault.totalAssets;
                 let sumUncoveredLoss = 0;
                 for (let i = 1; i < states.length; ++i) {
-                  sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                  sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.onCoverLoss.lossUncoveredNotEnoughInsurance ?? 0);
                   const totalAssets = states[i].vault.totalAssets;
                   expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
                 }
@@ -1231,11 +1231,11 @@ describe('PairBasedNoSwapIntTest', function() {
               const totalLoss =
                   (ret.stateFinal.events?.lossCoveredVault ?? 0)
                   + (ret.stateFinal.events?.lossUncoveredCutByMax ?? 0)
-                  + (ret.stateFinal.events?.lossUncoveredNotEnoughInsurance ?? 0)
+                  + (ret.stateFinal.events?.onCoverLoss.lossUncoveredNotEnoughInsurance ?? 0)
                   - (ret.stateFinal.events?.lossRebalance ?? 0);
               const investedAssetsDiff =
-                  (ret.stateFinal.events?.investedAssetsBeforeFixPriceChanges ?? 0)
-                  - (ret.stateFinal.events?.investedAssetsAfterFixPriceChanges ?? 0)
+                  (ret.stateFinal.events?.fixPriceChanges.investedAssetsBefore ?? 0)
+                  - (ret.stateFinal.events?.fixPriceChanges.investedAssetsAfter ?? 0)
               expect(investedAssetsDiff).approximately(totalLoss, 1e-6); // ignore rounding error: 996.729798-996.9994 gives 0,2696020000000770
             });
 
@@ -1244,7 +1244,7 @@ describe('PairBasedNoSwapIntTest', function() {
               const finalTotalAssets = ret.stateFinal.vault.totalAssets;
               const uncoveredLoss =
                   +(ret.stateFinal.events?.lossUncoveredCutByMax ?? 0)
-                  + (ret.stateFinal.events?.lossUncoveredNotEnoughInsurance ?? 0);
+                  + (ret.stateFinal.events?.onCoverLoss.lossUncoveredNotEnoughInsurance ?? 0);
 
               // example of "unknown" loss: expected 697.431018 to be close to 697.431651 +/- 0.000001
               // such loss can happen because of covering borrow-debts

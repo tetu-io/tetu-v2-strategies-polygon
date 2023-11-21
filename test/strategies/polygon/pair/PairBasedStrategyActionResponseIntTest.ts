@@ -11,7 +11,7 @@ import {
   IController__factory,
   IDebtMonitor,
   IDebtMonitor__factory,
-  IERC20__factory,
+  IERC20__factory, IERC20Metadata__factory,
   IKeeperCallback__factory,
   IPlatformAdapter__factory,
   IPoolAdapter__factory,
@@ -48,7 +48,7 @@ import {
 } from "../../../../typechain/factories/contracts/test/aave/Aave3PriceSourceBalancerBoosted.sol";
 import {controlGasLimitsEx} from "../../../../scripts/utils/GasLimitUtils";
 import {BigNumber} from "ethers";
-import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
+import {CaptureEvents, IEventsSet} from "../../../baseUT/strategies/CaptureEvents";
 import {MockAggregatorUtils} from "../../../baseUT/mocks/MockAggregatorUtils";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
@@ -136,7 +136,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               notUnderlying: strategyInfo.notUnderlyingToken,
               customParams: {
                 depositFee: 0,
-                withdrawFee: 0,
+                withdrawFee: 300,
                 compoundRatio: 50_000,
                 buffer: 0
               }
@@ -1260,8 +1260,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               notUnderlying: strategyInfo.notUnderlyingToken,
               customParams: {
                 depositFee: 0,
-                withdrawFee: 0,
-                compoundRatio: 50_000,
+                withdrawFee: 300,
+                compoundRatio: strategyInfo.compoundRatio,
                 buffer: 0
               }
             }
@@ -1276,10 +1276,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
         await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
         await IERC20__factory.connect(b.asset, signer3).approve(b.vault.address, Misc.MAX_UINT);
-        await TokenUtils.getToken(b.asset, signer.address, parseUnits('20000', 6));
-        await TokenUtils.getToken(b.asset, signer3.address, parseUnits('20000', 6));
+        await TokenUtils.getToken(b.asset, signer.address, parseUnits('2000', 6));
+        await TokenUtils.getToken(b.asset, signer3.address, parseUnits('2000', 6));
 
-        const investAmount = parseUnits("10000", 6);
+        const investAmount = parseUnits("1000", 6);
         console.log('initial deposits...');
         await b.vault.connect(signer).deposit(investAmount, signer.address, {gasLimit: 19_000_000});
         await b.vault.connect(signer3).deposit(investAmount, signer3.address, {gasLimit: 19_000_000});
@@ -1369,23 +1369,18 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             }
 
-            // todo uncomment
-            // if (i % 4) {
-            //   await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
-            //     await b.strategy.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)),
-            //     MaticAddresses.TETU_LIQUIDATOR,
-            //     () => true,
-            //     async (stateTitle, eventsSet): Promise<IStateNum> => {
-            //       states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, stateTitle, {eventsSet}));
-            //       StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
-            //       return states[states.length - 1];
-            //     }
-            //   );
-            // }
-
-            // let's give some time to increase the debts..
-            await TimeUtils.advanceNBlocks(25000);
-
+            if (i % 4) {
+              await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
+                await b.strategy.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)),
+                MaticAddresses.TETU_LIQUIDATOR,
+                () => true,
+                async (stateTitle, eventsSet): Promise<IStateNum> => {
+                  states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, stateTitle, {eventsSet}));
+                  StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+                  return states[states.length - 1];
+                }
+              );
+            }
 
             if (i % 5) {
               console.log('Hardwork..')
@@ -1393,9 +1388,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `h${i}`, {eventsSet}));
               StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             }
-
-            // let's give some time to increase the debts..
-            await TimeUtils.advanceNBlocks(25000);
 
             if (i % 2) {
               console.log('Withdraw..');
@@ -1475,6 +1467,236 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
           // shouldn't revert up to the end
+        });
+      });
+    });
+  });
+
+  describe("Check invariants on loops", () => {
+    const WITHDRAW_FEE = 300;
+    /** Currently withdraw-fee is used as priceChangeTolerance */
+    const PRICE_CHANGE_TOLERANCE = WITHDRAW_FEE;
+
+    interface IStrategyInfo {
+      caseTag: string;
+      name: string,
+      notUnderlyingToken: string;
+      compoundRatio: number;
+      initialAmountOnSignerBalance: string;
+      investAmount: string;
+      initialInsuranceBalance: string;
+      initialAmountOnSignerBalanceSigner3?: string; // by default initialAmountOnSignerBalance
+      investAmountSigner3?: string; // by default investAmountSigner3
+      initialLastDirectionUp?: boolean; // false by default
+      countBlocksToAdvance: number; // 2000 by default
+      percentToWithdraw?: number; // 6 by default
+      percentToDeposit?: number; // 6 by default
+    }
+
+    const strategies: IStrategyInfo[] = [
+      { // small total assets, not enough insurance, large withdraw/deposits
+        caseTag: "case2",
+        name: PLATFORM_UNIV3,
+        notUnderlyingToken: MaticAddresses.USDT_TOKEN,
+        compoundRatio: 0,
+        initialAmountOnSignerBalance: "40000",
+        investAmount: "1000",
+        initialAmountOnSignerBalanceSigner3: "2000",
+        investAmountSigner3: "1000",
+        initialInsuranceBalance: "0",
+        initialLastDirectionUp: true,
+        countBlocksToAdvance: 5000,
+        percentToWithdraw: 50,
+        percentToDeposit: 80,
+      },
+      { // large total assets, enough insurance to cover any losses, small withdraw/deposits
+        caseTag: "case1",
+        name: PLATFORM_UNIV3,
+        notUnderlyingToken: MaticAddresses.USDT_TOKEN,
+        compoundRatio: 0,
+        initialAmountOnSignerBalance: "40000",
+        investAmount: "10000",
+        initialInsuranceBalance: "1000",
+        initialLastDirectionUp: false,
+        countBlocksToAdvance: 2000,
+      },
+    ];
+
+    strategies.forEach(function (strategyInfo: IStrategyInfo) {
+      async function prepareStrategy(): Promise<IBuilderResults> {
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+            strategyInfo.name,
+            signer,
+            signer2,
+            {
+              kyberPid: KYBER_PID_DEFAULT_BLOCK,
+              notUnderlying: strategyInfo.notUnderlyingToken,
+              customParams: {
+                depositFee: 0,
+                withdrawFee: WITHDRAW_FEE,
+                compoundRatio: strategyInfo.compoundRatio,
+                buffer: 0
+              }
+            }
+        );
+
+        // we need very small thresholds to avoid increasing of share price on hardwork
+        await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(signer, b.strategy.address, "0.00001");
+
+        await PairBasedStrategyPrepareStateUtils.prepareInsurance(b, strategyInfo.initialInsuranceBalance);
+
+        await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
+        await IERC20__factory.connect(b.asset, signer3).approve(b.vault.address, Misc.MAX_UINT);
+        await TokenUtils.getToken(b.asset, signer.address, parseUnits(strategyInfo.initialAmountOnSignerBalance, 6));
+        await TokenUtils.getToken(b.asset, signer3.address, parseUnits(strategyInfo.initialAmountOnSignerBalanceSigner3 ?? strategyInfo.initialAmountOnSignerBalance, 6));
+
+        console.log('initial deposits...');
+        await b.vault.connect(signer).deposit(parseUnits(strategyInfo.investAmount, 6), signer.address, {gasLimit: 19_000_000});
+        await b.vault.connect(signer3).deposit(parseUnits(strategyInfo.investAmountSigner3 ?? strategyInfo.investAmount, 6), signer3.address, {gasLimit: 19_000_000});
+
+        return b;
+      }
+
+      describe(`${strategyInfo.name}:${tokenName(strategyInfo.notUnderlyingToken)}-${strategyInfo.caseTag}`, () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeCalculations(): Promise<IStateNum[]> {
+          const COUNT_CYCLES = 10;
+          const maxLockedPercent = 35;
+          const b = await loadFixture(prepareStrategy);
+          const states: IStateNum[] = [];
+          const user = signer3;
+          const statesParams = b.stateParams;
+          statesParams.additionalParams = ["Withdraw fee"];
+
+          const saver = async (title: string, eventsSet?: IEventsSet, lastWithdrawFee?: number): Promise<IStateNum> => {
+            states.push(await StateUtilsNum.getState(signer, user, converterStrategyBase, b.vault, title, {eventsSet, additionalParamValues: [lastWithdrawFee ?? 0]}));
+            StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+            return states[states.length - 1];
+          }
+          const pathOut = `./tmp/event-invariants-${strategyInfo.name}-${strategyInfo.caseTag}.csv`;
+
+          const reader = await MockHelper.createPairBasedStrategyReader(signer);
+
+          // Following amount is used as swapAmount for both tokens A and B...
+          const swapAssetValueForPriceMove = parseUnits('300000', 6);
+          const state = await PackedData.getDefaultState(b.strategy);
+
+          const splitterSigner = await DeployerUtilsLocal.impersonate(await b.splitter.address);
+          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+          const platform = await converterStrategyBase.PLATFORM();
+
+          await saver("before");
+
+          let lastDirectionUp = strategyInfo.initialLastDirectionUp;
+          for (let i = 0; i < COUNT_CYCLES; i++) {
+            console.log(`==================== CYCLE ${i} ====================`);
+            // provide some rewards
+            await UniversalUtils.makePoolVolume(signer2, state, b.swapper, parseUnits('100000', 6));
+            await TimeUtils.advanceNBlocks(strategyInfo.countBlocksToAdvance ?? 2000);
+
+            if (i % 3) {
+              const movePricesUp = !lastDirectionUp;
+              console.log(`Change prices.. ==================== ${i} ==================== ${movePricesUp ? "up" : "down"}`);
+              await PairBasedStrategyPrepareStateUtils.movePriceBySteps(
+                  signer,
+                  b,
+                  movePricesUp,
+                  state,
+                  strategyInfo.name === PLATFORM_KYBER
+                      ? await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
+                          signer,
+                          b,
+                          state.tokenA,
+                          state.tokenB,
+                          movePricesUp,
+                          1.1
+                      )
+                      : swapAssetValueForPriceMove,
+                  swapAssetValueForPriceMove,
+                  5
+              );
+              lastDirectionUp = !lastDirectionUp;
+              await saver(`p${i}`);
+            }
+
+            if (await b.strategy.needRebalance()) {
+              console.log(`Rebalance.. ==================== ${i} ====================`)
+              await saver(`r${i}`, await CaptureEvents.makeRebalanceNoSwap(b.strategy));
+            }
+
+            // let's give some time to increase the debts
+            await TimeUtils.advanceNBlocks(strategyInfo.countBlocksToAdvance ?? 2000);
+
+            if (i % 5) {
+              console.log(`Hardwork.. ==================== ${i} ==================== `)
+              await saver(`h${i}`, await CaptureEvents.makeHardwork(converterStrategyBase.connect(splitterSigner)));
+            }
+
+            // let's give some time to increase the debts
+            await TimeUtils.advanceNBlocks(strategyInfo.countBlocksToAdvance ?? 2000);
+
+            if (i % 2) {
+              const maxWithdraw = await b.vault.maxWithdraw(user.address);
+              const toWithdraw = maxWithdraw.mul(i % 4 ? strategyInfo.percentToWithdraw ?? 6 : 3).div(100);
+              const lastWithdrawFee = +formatUnits(toWithdraw, b.assetDecimals) * PRICE_CHANGE_TOLERANCE / 100_000;
+              console.log(`Withdraw.. ==================== ${i} ==================== max=${maxWithdraw} to=${toWithdraw}`);
+              await saver(`w${i}`, await CaptureEvents.makeWithdraw(b.vault.connect(user), toWithdraw, platform), lastWithdrawFee);
+            } else {
+              const maxDeposit = await IERC20Metadata__factory.connect(b.asset, signer).balanceOf(user.address);
+              const toDeposit = maxDeposit.mul(i % 3 ? 3 : strategyInfo.percentToDeposit ?? 6).div(100);
+              console.log(`Deposit.. ==================== ${i} ==================== max=${maxDeposit} to=${toDeposit}`);
+              await saver(`d${i}`, await CaptureEvents.makeDeposit(b.vault.connect(user), toDeposit, platform));
+            }
+
+            const readerResults = await reader.getLockedUnderlyingAmount(b.strategy.address);
+            const locketAmount = +formatUnits(readerResults.estimatedUnderlyingAmount, b.assetDecimals);
+            const totalAsset = +formatUnits(readerResults.totalAssets, b.assetDecimals);
+            const lockedPercent = 100 * locketAmount / totalAsset;
+            console.log(`locketAmount=${locketAmount} totalAsset=${totalAsset} lockedPercent=${lockedPercent}`);
+            if (lockedPercent > maxLockedPercent) {
+              console.log(`Rebalance debts.. ==================== ${i} ====================`);
+              const planEntryData = buildEntryData1();
+              const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
+              await b.strategy.withdrawByAggStep(
+                  quote.tokenToSwap,
+                  Misc.ZERO_ADDRESS,
+                  quote.amountToSwap,
+                  "0x",
+                  planEntryData,
+                  ENTRY_TO_POOL_IS_ALLOWED,
+                  {gasLimit: 19_000_000}
+              );
+            }
+          }
+
+          const stateAfter = await saver("final");
+
+          const uncoveredLoss = StateUtilsNum.getTotalUncoveredLoss(states);
+          const finalSharePrice = (stateAfter.vault.totalAssets + uncoveredLoss) / stateAfter.vault.totalSupply;
+          console.log("finalSharePrice", finalSharePrice);
+          console.log("stateAfter.vault.totalAssets", stateAfter.vault.totalAssets);
+
+          return states;
+        }
+
+        it('should keep invariants of state params', async () => {
+          const states = await makeCalculations();
+          // Delta insurance = totalWithdrawFee + sendToInsurance + debtPaid + toInsuranceRecycle - lossCovered
+
+          // Debt to insurance = OnCoverLossInc - debtPaid + debtToInsuranceOnProfitInc
+
+
+          // gain/losses >= preview gain/losses on previous step
+
+          // finalSharePrice >= stateBefore.vault.sharePrice if compoundRatio != 0
+          // finalSharePrice == stateBefore.vault.sharePrice if compoundRatio == 0
         });
       });
     });

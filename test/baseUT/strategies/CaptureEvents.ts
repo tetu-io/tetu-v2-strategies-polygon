@@ -18,9 +18,8 @@ import {
 } from "../../../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategyLogicLib";
 import {PLATFORM_ALGEBRA, PLATFORM_UNIV3} from "./AppPlatforms";
 import {
-  BorrowResultsEventObject,
+  BorrowResultsEventObject, ChangeDebtToInsuranceOnProfitEventObject,
   FixPriceChangesEventObject,
-  NotEnoughInsuranceEventObject,
   OnCoverLossEventObject,
   OnIncreaseDebtToInsuranceEventObject,
   SendToInsuranceEventObject,
@@ -104,8 +103,9 @@ interface IUncoveredLossEvent {
 interface IFixPriceChanges {
   investedAssetsBefore: number;
   investedAssetsOut: number;
+  debtToInsuranceBefore: number;
+  debtToInsuranceAfter: number;
   increaseToDebt: number;
-  debtToInsurance: number;
 }
 
 interface IOnIncreaseDebtToInsurance {
@@ -118,7 +118,7 @@ interface IOnIncreaseDebtToInsurance {
 
 interface IOnPayDebtToInsurance {
   debtToInsuranceBefore: number;
-  debtToInsuraneAfter: number;
+  debtToInsuranceAfter: number;
 }
 
 interface IOnCoverDebtToInsurance {
@@ -131,13 +131,6 @@ interface IOnCoverDebtToInsurance {
 interface IBorrowResults {
   gains: number;
   losses: number;
-}
-
-/**
- * ConverterStrategyBaseLib2._coverLossAndCheckResults
- */
-interface INotEnoughInsurance {
-  lossUncovered: number;
 }
 
 interface IRebalancedEvent {
@@ -203,19 +196,24 @@ interface ISwapByAgg {
   aggregator: string;
 }
 
-interface ICoverLoss {
-  loss: number;
+interface IOnCoverLoss {
+  lossToCover: number;
   amountCovered: number;
   debtToInsuranceInc: number;
+  lossUncovered: number;
+}
+
+interface IChangeDebtToInsuranceOnProfit {
+  debtToInsuranceBefore: number;
+  increaseToDebt: number;
 }
 
 export interface IEventsSet {
   lossEvent?: ILossEvent[];
   lossCoveredEvent?: ILossCoveredEvent[];
   uncoveredLossEvent?: IUncoveredLossEvent[];
-  notEnoughInsurance?: INotEnoughInsurance[];
   sendToInsurance?: ISendToInsurance[];
-  coverLoss?: ICoverLoss[];
+  coverLoss?: IOnCoverLoss[];
 
   rebalanced?: IRebalancedEvent;
   rebalancedDebt?: IRebalancedDebtEvent;
@@ -224,37 +222,57 @@ export interface IEventsSet {
   swapByAgg?: ISwapByAgg;
 
   fixPriceChanges?: IFixPriceChanges;
-  payDebtToInsurance?: IOnPayDebtToInsurance;
-  increaseDebtToInsurance?: IOnIncreaseDebtToInsurance;
-  coverDebtToInsurance?: IOnCoverDebtToInsurance[];
+  changeDebtToInsuranceOnProfit?: IChangeDebtToInsuranceOnProfit;
   borrowResults?: IBorrowResults;
+  increaseDebtToInsurance?: IOnIncreaseDebtToInsurance;
+
+  payDebtToInsurance?: IOnPayDebtToInsurance;
+  coverDebtToInsurance?: IOnCoverDebtToInsurance[];
 }
 
 export interface ISummaryFromEventsSet {
   lossSplitter: number;
   lossCoveredVault: number;
+  onCoverLoss: {
+    lossToCover: number;
+    amountCovered: number;
+    debtToInsuranceInc: number;
+    lossUncoveredNotEnoughInsurance: number;
+  }
   lossUncoveredCutByMax: number;
 
   sentToInsurance: number;
   unsentToInsurance: number;
 
-  debtToInsuranceIncByCoverLoss: number;
-  debtToInsuranceIncByFixPrice: number;
-  debtToInsurancePaid: number;
-  lossUncoveredNotEnoughInsurance: number;
+  changeDebtToInsuranceOnProfit: {
+    debtToInsuranceBefore: number;
+    increaseToDebt: number;
+  }
+
+  payDebtToInsurance: {
+    debtToInsuranceBefore: number;
+    debtToInsuranceAfter: number;
+    debtPaid: number,
+  };
 
   toPerfRecycle: number;
   toInsuranceRecycle: number;
   toForwarderRecycle: number[];
   lossRebalance: number;
-  investedAssetsBeforeFixPriceChanges: number;
-  investedAssetsAfterFixPriceChanges: number;
-  debtToInsuranceAfterFixPriceChanges: number;
-  increaseToDebtFixPriceChanges: number;
+
+  fixPriceChanges: {
+    investedAssetsBefore: number;
+    investedAssetsAfter: number;
+    debtToInsuranceBefore: number;
+    debtToInsuranceAfter: number;
+    increaseToDebt: number;
+  }
   swapByAgg?: ISwapByAgg;
 
-  borrowGains: number;
-  borrowLosses: number;
+  borrowResults: {
+    gains: number;
+    losses: number;
+  }
 }
 
 /**
@@ -436,7 +454,8 @@ export class CaptureEvents {
           ret.coverLoss = [];
         }
         ret.coverLoss.push({
-          loss: +formatUnits(log.lossToCover, decimals),
+          lossToCover: +formatUnits(log.lossToCover, decimals),
+          lossUncovered: +formatUnits(log.lossUncovered, decimals),
           amountCovered: +formatUnits(log.amountCovered, decimals),
           debtToInsuranceInc: +formatUnits(log.debtToInsuranceInc, decimals),
         });
@@ -460,18 +479,16 @@ export class CaptureEvents {
         });
       }
 
-      if (event.topics[0].toLowerCase() === converterStrategyBaseLib2I.getEventTopic('NotEnoughInsurance').toLowerCase()) {
+      if (event.topics[0].toLowerCase() === converterStrategyBaseLib2I.getEventTopic('ChangeDebtToInsuranceOnProfit').toLowerCase()) {
         const log = (converterStrategyBaseLib2I.decodeEventLog(
-          converterStrategyBaseLib2I.getEvent('NotEnoughInsurance'),
+          converterStrategyBaseLib2I.getEvent('ChangeDebtToInsuranceOnProfit'),
           event.data,
           event.topics,
-        ) as unknown) as NotEnoughInsuranceEventObject;
-        if (!ret.notEnoughInsurance) {
-          ret.notEnoughInsurance = [];
-        }
-        ret.notEnoughInsurance.push({
-          lossUncovered: +formatUnits(log.lossUncovered, decimals),
-        });
+        ) as unknown) as ChangeDebtToInsuranceOnProfitEventObject;
+        ret.changeDebtToInsuranceOnProfit = {
+          debtToInsuranceBefore: +formatUnits(log.debtToInsuranceBefore, decimals),
+          increaseToDebt: +formatUnits(log.increaseToDebt, decimals),
+        };
       }
 
       if (event.topics[0].toLowerCase() === converterStrategyBaseLib2I.getEventTopic('SendToInsurance').toLowerCase()) {
@@ -527,7 +544,8 @@ export class CaptureEvents {
         ret.fixPriceChanges = {
           investedAssetsOut: +formatUnits(log.investedAssetsOut, decimals),
           investedAssetsBefore: +formatUnits(log.investedAssetsBefore, decimals),
-          debtToInsurance: +formatUnits(log.debtToInsurance, decimals),
+          debtToInsuranceBefore: +formatUnits(log.debtToInsuranceBefore, decimals),
+          debtToInsuranceAfter: +formatUnits(log.debtToInsuranceAfter, decimals),
           increaseToDebt: +formatUnits(log.increaseToDebt, decimals),
         }
       }
@@ -584,7 +602,7 @@ export class CaptureEvents {
         ) as unknown) as OnPayDebtToInsuranceEventObject;
         ret.payDebtToInsurance = {
           debtToInsuranceBefore: +formatUnits(log.debtToInsuranceBefore, decimals),
-          debtToInsuraneAfter: +formatUnits(log.debtToInsuraneAfter, decimals),
+          debtToInsuranceAfter: +formatUnits(log.debtToInsuraneAfter, decimals),
         };
       }
 
@@ -628,26 +646,39 @@ export class CaptureEvents {
         ? eventsSet.sendToInsurance.reduce((prev, cur) => prev + cur.unsentAmount, 0)
         : 0,
 
-      debtToInsuranceIncByCoverLoss: eventsSet?.coverLoss
-        ? eventsSet.coverLoss.reduce((prev, cur) => prev + cur.debtToInsuranceInc, 0)
-        : 0,
-      debtToInsuranceIncByFixPrice: eventsSet?.fixPriceChanges?.increaseToDebt ?? 0,
-      debtToInsurancePaid: eventsSet?.payDebtToInsurance
-        ? eventsSet.payDebtToInsurance.debtToInsuranceBefore - eventsSet.payDebtToInsurance.debtToInsuraneAfter
-        : 0,
-      lossUncoveredNotEnoughInsurance: eventsSet?.notEnoughInsurance
-        ? eventsSet.notEnoughInsurance.reduce((prev, cur) => prev + cur.lossUncovered, 0)
-        : 0,
+      onCoverLoss: {
+        debtToInsuranceInc: eventsSet?.coverLoss
+          ? eventsSet.coverLoss.reduce((prev, cur) => prev + cur.debtToInsuranceInc, 0)
+          : 0,
+        lossToCover: eventsSet?.coverLoss
+            ? eventsSet.coverLoss.reduce((prev, cur) => prev + cur.lossToCover, 0)
+            : 0,
+        lossUncoveredNotEnoughInsurance: eventsSet?.coverLoss
+            ? eventsSet.coverLoss.reduce((prev, cur) => prev + cur.lossUncovered, 0)
+            : 0,
+        amountCovered: eventsSet?.coverLoss
+            ? eventsSet.coverLoss.reduce((prev, cur) => prev + cur.amountCovered, 0)
+            : 0,
+      },
+
+      payDebtToInsurance: {
+        debtToInsuranceBefore: eventsSet?.payDebtToInsurance?.debtToInsuranceBefore ?? 0,
+        debtToInsuranceAfter: eventsSet?.payDebtToInsurance?.debtToInsuranceAfter ?? 0,
+        debtPaid: (eventsSet?.payDebtToInsurance?.debtToInsuranceBefore ?? 0)
+            - (eventsSet?.payDebtToInsurance?.debtToInsuranceAfter ?? 0),
+      },
 
       toPerfRecycle: eventsSet?.recycle?.toPerf ?? 0,
       toInsuranceRecycle: eventsSet?.recycle?.toInsurance ?? 0,
-
       lossRebalance: eventsSet?.rebalanced?.loss ?? 0,
 
-      investedAssetsBeforeFixPriceChanges: eventsSet?.fixPriceChanges?.investedAssetsBefore ?? 0,
-      investedAssetsAfterFixPriceChanges: eventsSet?.fixPriceChanges?.investedAssetsOut ?? 0,
-      debtToInsuranceAfterFixPriceChanges: eventsSet?.fixPriceChanges?.debtToInsurance ?? 0,
-      increaseToDebtFixPriceChanges: eventsSet?.fixPriceChanges?.increaseToDebt ?? 0,
+      fixPriceChanges: {
+          investedAssetsBefore: eventsSet?.fixPriceChanges?.investedAssetsBefore ?? 0,
+          investedAssetsAfter: eventsSet?.fixPriceChanges?.investedAssetsOut ?? 0,
+          debtToInsuranceBefore: eventsSet?.fixPriceChanges?.debtToInsuranceBefore ?? 0,
+          debtToInsuranceAfter: eventsSet?.fixPriceChanges?.debtToInsuranceAfter ?? 0,
+          increaseToDebt: eventsSet?.fixPriceChanges?.increaseToDebt ?? 0,
+      },
 
       toForwarderRecycle: eventsSet?.recycle?.rewardTokens && eventsSet?.recycle?.rewardTokens.length
         ? await Promise.all(eventsSet?.recycle?.rewardTokens.map(
@@ -662,8 +693,15 @@ export class CaptureEvents {
 
       swapByAgg: eventsSet?.swapByAgg,
 
-      borrowGains: eventsSet?.borrowResults?.gains ?? 0,
-      borrowLosses: eventsSet?.borrowResults?.losses ?? 0,
+      borrowResults: {
+        gains: eventsSet?.borrowResults?.gains ?? 0,
+        losses: eventsSet?.borrowResults?.losses ?? 0,
+      },
+
+      changeDebtToInsuranceOnProfit: {
+        debtToInsuranceBefore: eventsSet?.changeDebtToInsuranceOnProfit?.debtToInsuranceBefore ?? 0,
+        increaseToDebt: eventsSet?.changeDebtToInsuranceOnProfit?.increaseToDebt ?? 0,
+      }
     }
   }
 }

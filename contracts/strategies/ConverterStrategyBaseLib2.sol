@@ -65,24 +65,43 @@ library ConverterStrategyBaseLib2 {
   );
 
   /// @param increaseToDebt The value on which the debt to insurance was increased
-  /// @param debtToInsurance New value of the debt to insurance
+  /// @param debtToInsuranceBefore Value of the debt to insurance before fix price change
+  /// @param debtToInsuranceAfter New value of the debt to insurance
+  /// @param increaseToDebt Amount on which debt was increased.
+  /// Actual value {debtToInsuranceAfter}-{debtToInsuranceBefore} can be less than increaseToDebt
+  /// because some amount can be left uncovered.
   event FixPriceChanges(
     uint investedAssetsBefore,
     uint investedAssetsOut,
-    int increaseToDebt,
-    int debtToInsurance
+    int debtToInsuranceBefore,
+    int debtToInsuranceAfter,
+    int increaseToDebt
   );
 
-  /// @param lossToCover Amount of loss that should be covered
+  /// @param lossToCover Amount of loss that should be covered (it fits to allowed limits, no revert)
   /// @param debtToInsuranceInc The amount by which the debt to insurance increases
   /// @param amountCovered Actually covered amount of loss. If amountCovered < lossToCover => the insurance is not enough
-  event OnCoverLoss(uint lossToCover, int debtToInsuranceInc, uint amountCovered);
+  /// @param lossUncovered Amount of uncovered losses (not enough insurance)
+  event OnCoverLoss(
+    uint lossToCover,
+    int debtToInsuranceInc,
+    uint amountCovered,
+    uint lossUncovered
+  );
 
-  /// @notice Compensation of losses is not carried out completely because loss amount exceeds allowed max
+  /// @notice Value of {debtToInsurance} was increased on {increaseToDebt} inside fix-price-change
+  /// in the case when invested-asset amounts were increased.
+  /// @dev See comments in {_coverLossAfterPriceChanging}: actual profit-to-cover amount can be less than {increaseToDebt}
+  /// @param debtToInsuranceBefore Value of debtToInsurance before fix-price-change
+  /// @param increaseToDebt Value on which {debtToInsuranceBefore} was incremented
+  event ChangeDebtToInsuranceOnProfit(
+    int debtToInsuranceBefore,
+    int increaseToDebt
+  );
+
+  /// @notice Amount {lossCovered}+{lossUncovered} should be covered, but it's too high and will produce revert
+  /// on the splitter side. So, only {lossCovered} can be covered, {lossUncovered} are not covered
   event UncoveredLoss(uint lossCovered, uint lossUncovered, uint investedAssetsBefore, uint investedAssetsAfter);
-
-  /// @notice Insurance balance were not enough to cover the loss, {lossUncovered} was uncovered
-  event NotEnoughInsurance(uint lossUncovered);
 
   /// @notice Register amounts received for supplying collaterals and amount paid for the debts
   /// @param gains Amount received by all pool adapters for the provided collateral, in underlying
@@ -712,30 +731,43 @@ library ConverterStrategyBaseLib2 {
     int increaseToDebt,
     IStrategyV3.BaseState storage baseState
   ) internal returns (uint earned) {
+    int debtToInsurance0 = csbs.debtToInsurance;
     if (investedAssetsAfter > investedAssetsBefore) {
       earned = investedAssetsAfter - investedAssetsBefore;
       if (increaseToDebt != 0) {
-        // Earned amount will be send to the insurance later
-        // probably it can be reduced by same limitations as {lost} amount below
-        // and so, it will be necessary to decrease increaseToDebt proportionally
+        // Earned amount will be send to the insurance later.
+        // Probably it can be reduced by same limitations as {lost} amount below
+        // and so, it will be necessary to decrease increaseToDebt proportionally.
         // For simplicity, we increase debtToInsurance on full increaseToDebt always
+        // in assumption, that such profits are always low.
         csbs.debtToInsurance += increaseToDebt;
+        emit ChangeDebtToInsuranceOnProfit(debtToInsurance0, increaseToDebt);
       }
     } else {
       uint lost = investedAssetsBefore - investedAssetsAfter;
       if (lost != 0) {
         uint totalAsset = investedAssetsAfter + IERC20(baseState.asset).balanceOf(address(this));
         (uint lossToCover, uint lossUncovered) = _getSafeLossToCover(lost, totalAsset);
-        // in the case "lossToCover < loss" we reduce both amounts "from prices" and "from debts" proportionally
-        _coverLossAndCheckResults(csbs, baseState.splitter, lossToCover, increaseToDebt * int(lossToCover) / int(lost));
 
         if (lossUncovered != 0) {
+          // we need to cover lost-amount, but this amount is too high and will produce revert in the splitter
+          // so, we will cover only part of {lost} and leave other part uncovered.
           emit UncoveredLoss(lossToCover, lossUncovered, investedAssetsBefore, investedAssetsAfter);
         }
+
+        // if we compensate lost only partially, we reduce both amounts "from prices" and "from debts" proportionally
+        _coverLossAndCheckResults(csbs, baseState.splitter, lossToCover, increaseToDebt * int(lossToCover) / int(lost));
+
       }
     }
 
-    emit FixPriceChanges(investedAssetsBefore, investedAssetsAfter, increaseToDebt, csbs.debtToInsurance);
+    emit FixPriceChanges(
+      investedAssetsBefore,
+      investedAssetsAfter,
+      debtToInsurance0,
+      csbs.debtToInsurance,
+      increaseToDebt
+    );
     return earned;
   }
 
@@ -768,15 +800,8 @@ library ConverterStrategyBaseLib2 {
       csbs.debtToInsurance += debtToInsuranceInc;
     }
 
-    uint delta = balanceAfter > balanceBefore
-      ? balanceAfter - balanceBefore
-      : 0;
-
-    if (delta < lossToCover) {
-      emit NotEnoughInsurance(lossToCover - delta);
-    }
-
-    emit OnCoverLoss(lossToCover, debtToInsuranceInc, delta);
+    uint delta = AppLib.sub0(balanceAfter, balanceBefore);
+    emit OnCoverLoss(lossToCover, debtToInsuranceInc, delta, AppLib.sub0(lossToCover, delta));
   }
 
   /// @notice Cut loss-value to safe value that doesn't produce revert inside splitter

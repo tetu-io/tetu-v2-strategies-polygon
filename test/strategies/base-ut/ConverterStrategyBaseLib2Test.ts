@@ -27,7 +27,11 @@ import {
   GET_EXPECTED_WITHDRAW_AMOUNT_ASSETS
 } from "../../baseUT/GasLimits";
 import {BigNumber} from "ethers";
-import {FixPriceChangesEventObject, UncoveredLossEventObject, NotEnoughInsuranceEventObject} from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib2";
+import {
+  FixPriceChangesEventObject,
+  OnCoverLossEventObject,
+  UncoveredLossEventObject
+} from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib2";
 import {Misc} from "../../../scripts/utils/Misc";
 import { HARDHAT_NETWORK_ID, HardhatUtils } from '../../baseUT/utils/HardhatUtils';
 
@@ -1898,12 +1902,12 @@ describe('ConverterStrategyBaseLibTest2', () => {
       const cr = await tx.wait();
       const converterStrategyBaseLib2 = ConverterStrategyBaseLib2__factory.createInterface();
       for (const event of (cr.events ?? [])) {
-        if (event.topics[0].toLowerCase() === converterStrategyBaseLib2.getEventTopic('NotEnoughInsurance').toLowerCase()) {
+        if (event.topics[0].toLowerCase() === converterStrategyBaseLib2.getEventTopic('OnCoverLoss').toLowerCase()) {
           const log = (converterStrategyBaseLib2.decodeEventLog(
-            converterStrategyBaseLib2.getEvent('NotEnoughInsurance'),
+            converterStrategyBaseLib2.getEvent('OnCoverLoss'),
             event.data,
             event.topics,
-          ) as unknown) as NotEnoughInsuranceEventObject;
+          ) as unknown) as OnCoverLossEventObject;
           notEnoughInsurance = {
             emittedLossUncovered: +formatUnits(log.lossUncovered, assetDecimals),
           }

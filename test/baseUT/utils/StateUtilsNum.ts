@@ -174,19 +174,18 @@ export interface IStateNum {
   events?: ISummaryFromEventsSet;
 
   previewBorrowResults?: IBorrowResults;
+  additionalParams: number[];
 }
 
 export interface IStateParams {
   mainAssetSymbol: string;
+  additionalParams?: string[];
 }
 
-export interface IFixPricesChangesEventInfo {
-  assetBefore: number;
-  assetAfter: number;
-}
 export interface IGetStateParams {
   eventsSet?: IEventsSet;
   lib?: KyberLib | UniswapV3Lib | AlgebraLib;
+  additionalParamValues?: number[];
 }
 
 /**
@@ -477,12 +476,13 @@ export class StateUtilsNum {
 
       events: await CaptureEvents.getSummaryFromEventsSet(signer, p?.eventsSet),
 
-      previewBorrowResults
+      previewBorrowResults,
+      additionalParams: p?.additionalParamValues ?? []
     }
 
     // console.log(dest)
 
-    return dest
+    return dest;
   }
 
   public static async getPreviewBorrowResults(
@@ -695,16 +695,32 @@ export class StateUtilsNum {
       'events.lossSplitter',
       'events.lossCoveredVault',
       'events.lossUncoveredCutByMax',
+
+      'events.onCoverLoss.lossToCover',
+      'events.onCoverLoss.amountCovered',
+      'events.lossUncoveredNotEnoughInsurance',
+      'events.onCoverLoss.debtToInsuranceInc',
+        
       'events.sentToInsurance',
       'events.unsentToInsurance',
-      'events.debtToInsuranceInc',
-      'events.debtToInsuranceIncByFixPrice',
-      'events.debtToInsurancePaid',
-      'events.lossUncoveredNotEnoughInsurance',
+        
+      'events.debtToInsuranceOnProfit.debtToInsuranceBefore',
+      'events.debtToInsuranceOnProfit.increaseToDebt',
+
+      'events.payToInsurance.debtToInsuranceBefore',
+      'events.payToInsurance.debtToInsuranceAfter',
+      'events.payToInsurance.debtPaid',
+
       'events.toPerfRecycle',
       'events.toInsuranceRecycle',
       'events.toForwarderRecycle',
       'events.lossRebalance',
+
+      "fixPriceChanges.debtToInsuranceBefore",
+      "fixPriceChanges.debtToInsuranceAfter",
+      "fixPriceChanges.increaseToDebt",
+      "fixPriceChanges.investedAssetsBefore",
+      "fixPriceChanges.investedAssetsAfter",
 
       'swapByAgg.amountToSwap',
       'swapByAgg.amountIn',
@@ -712,16 +728,18 @@ export class StateUtilsNum {
       'swapByAgg.amountOutExpected',
       'swapByAgg.aggregator',
 
-      'fixPriceChanges.investedAssetsBefore',
-      'fixPriceChanges.investedAssetsAfter',
-      'fixPriceChanges.debtToInsuranceAfter',
-      'fixPriceChanges.increaseToDebt',
+      'borrowResults.gains',
+      'borrowResults.losses',
 
-      'borrowResults.borrowGains',
-      'borrowResults.borrowLosses',
       'preview.borrowGains',
       'preview.borrowLosses',
     ];
+
+    if (params.additionalParams) {
+      for (const title of params.additionalParams) {
+        stateHeaders.push(title);
+      }
+    }
 
     return { stateHeaders };
   }
@@ -806,19 +824,36 @@ export class StateUtilsNum {
       item.fuseStatus,
       item.withdrawDone,
 
+
       item.events?.lossSplitter,
       item.events?.lossCoveredVault,
       item.events?.lossUncoveredCutByMax,
+
+      item.events?.onCoverLoss.lossToCover,
+      item.events?.onCoverLoss.amountCovered,
+      item.events?.onCoverLoss.lossUncoveredNotEnoughInsurance,
+      item.events?.onCoverLoss.debtToInsuranceInc,
+
       item.events?.sentToInsurance,
       item.events?.unsentToInsurance,
-      item.events?.debtToInsuranceIncByCoverLoss,
-      item.events?.debtToInsuranceIncByFixPrice,
-      item.events?.debtToInsurancePaid,
-      item.events?.lossUncoveredNotEnoughInsurance,
+
+      item.events?.changeDebtToInsuranceOnProfit?.debtToInsuranceBefore,
+      item.events?.changeDebtToInsuranceOnProfit?.increaseToDebt,
+
+      item.events?.payDebtToInsurance?.debtToInsuranceBefore,
+      item.events?.payDebtToInsurance?.debtToInsuranceAfter,
+      item.events?.payDebtToInsurance?.debtPaid,
+
       item.events?.toPerfRecycle,
       item.events?.toInsuranceRecycle,
       item.events?.toForwarderRecycle.join(" "),
       item.events?.lossRebalance,
+
+      item.events?.fixPriceChanges.debtToInsuranceBefore,
+      item.events?.fixPriceChanges.debtToInsuranceAfter,
+      item.events?.fixPriceChanges.increaseToDebt,
+      item.events?.fixPriceChanges.investedAssetsBefore,
+      item.events?.fixPriceChanges.investedAssetsAfter,
 
       item.events?.swapByAgg?.amountToSwap,
       item.events?.swapByAgg?.amountIn,
@@ -834,16 +869,13 @@ export class StateUtilsNum {
                 ? "OpenOcean"
                 : "???",
 
-      item.events?.investedAssetsBeforeFixPriceChanges,
-      item.events?.investedAssetsAfterFixPriceChanges,
-      item.events?.debtToInsuranceAfterFixPriceChanges,
-      item.events?.increaseToDebtFixPriceChanges,
-
-      item.events?.borrowGains,
-      item.events?.borrowLosses,
+      item.events?.borrowResults.gains,
+      item.events?.borrowResults.losses,
 
       item.previewBorrowResults?.borrowGains,
       item.previewBorrowResults?.borrowLosses,
+
+      ...item.additionalParams
     ]);
 
     writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', { encoding: 'utf8', flag: override ? 'w' : 'a'});
@@ -905,7 +937,7 @@ export class StateUtilsNum {
   public static getTotalUncoveredLoss(states: IStateNum[]) : number {
     let dest = 0;
     for (const state of states) {
-      dest += (state.events?.lossUncoveredCutByMax ?? 0) + (state.events?.lossUncoveredNotEnoughInsurance ?? 0);
+      dest += (state.events?.lossUncoveredCutByMax ?? 0) + (state.events?.onCoverLoss?.lossUncoveredNotEnoughInsurance ?? 0);
     }
     return dest;
   }

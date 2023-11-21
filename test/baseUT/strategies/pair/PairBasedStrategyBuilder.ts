@@ -204,9 +204,9 @@ export class PairBasedStrategyBuilder {
       },
       controller,
       gov,
-      p.buffer ?? 0,
-        p.depositFee ?? 0,
-      p.withdrawFee ?? 0,
+      p.buffer ?? 1000,
+        p.depositFee ?? 300,
+      p.withdrawFee ?? 300,
       false,
     );
 

@@ -175,13 +175,15 @@ describe("Scb807-899 @skip-on-coverage", () => {
       await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
       await HardhatUtils.switchToMostCurrentBlock();
 
+      const signer = (await ethers.getSigners())[0];
+
       const b = await hre.ethers.provider.getBlockWithTransactions(BLOCK);
       let counter = 0;
       for (const tx of b.transactions) {
         console.log("counter", counter++);
         try {
           const cr = await tx.wait();
-          const hr = await CaptureEvents.handleReceipt(cr, 6, PLATFORM_KYBER);
+          const hr = await CaptureEvents.handleReceipt(signer, cr, 6, PLATFORM_KYBER);
           console.log("blockHash", tx.blockHash);
           console.log("hr", hr);
         } catch (e) {

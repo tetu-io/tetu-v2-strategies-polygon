@@ -385,12 +385,14 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       // but if earned < earnedByPrices_ it means that we compensate a part of losses from earned-by-prices.
 
       uint earned;
+      console.log("_withdrawUniversal.investedAssets_ + v.balanceBefore", investedAssets_ + v.balanceBefore);
+      console.log("_withdrawUniversal.earnedByPrices_", earnedByPrices_);
+      console.log("_withdrawUniversal.balanceAfterWithdraw", balanceAfterWithdraw);
       (earned, strategyLoss) = ConverterStrategyBaseLib2._registerIncome(
-        investedAssets_ + v.balanceBefore > earnedByPrices_
-            ? investedAssets_ + v.balanceBefore - earnedByPrices_
-            : 0,
+        AppLib.sub0(investedAssets_ + v.balanceBefore, earnedByPrices_),
         _updateInvestedAssets() + balanceAfterWithdraw
       );
+      console.log("_withdrawUniversal._csbs.investedAssets", _csbs.investedAssets);
       console.log("_withdrawUniversal.earned", earned);
       console.log("_withdrawUniversal.strategyLoss", strategyLoss);
 

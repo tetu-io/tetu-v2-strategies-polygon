@@ -3,7 +3,22 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import hre, { ethers } from 'hardhat';
 import { TimeUtils } from '../../../../scripts/utils/TimeUtils';
 import { DeployerUtils } from '../../../../scripts/utils/DeployerUtils';
-import {IBorrowManager__factory, IController, IConverterController__factory, IERC20, IERC20__factory, IStrategyV2, ISwapper, ISwapper__factory, TetuConverter__factory, TetuVaultV2, UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory, VaultFactory__factory,} from '../../../../typechain';
+import {
+  IBorrowManager__factory,
+  IController,
+  IConverterController__factory,
+  IERC20,
+  IERC20__factory,
+  IERC20Metadata__factory,
+  IStrategyV2,
+  ISwapper,
+  ISwapper__factory,
+  TetuConverter__factory,
+  TetuVaultV2,
+  UniswapV3ConverterStrategy,
+  UniswapV3ConverterStrategy__factory,
+  VaultFactory__factory,
+} from '../../../../typechain';
 import { BigNumber } from 'ethers';
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
@@ -252,10 +267,11 @@ describe('UniswapV3ConverterStrategyTests', function() {
       const investAmount = _10_000;
       const swapAssetValueForPriceMove = parseUnits('500000', 6);
       let state = await PackedData.getDefaultState(strategy3);
+      const decimalsB = await IERC20Metadata__factory.connect(state.tokenB, signer).decimals();
 
       const splitterSigner = await DeployerUtilsLocal.impersonate(await vault3.splitter());
       let price;
-      price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+      price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, parseUnits("1", decimalsB));
       console.log('tokenB price', formatUnits(price, 6));
 
       console.log('deposit...');
@@ -263,7 +279,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       await UniversalUtils.movePoolPriceUp(signer2, state, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
       await strategy3.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
-      price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+      price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, parseUnits("1", decimalsB));
 
       await UniversalUtils.movePoolPriceDown(signer2, state, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1', 6)).div(price));
       await strategy3.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
@@ -273,7 +289,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       state = await PackedData.getDefaultState(strategy3);
       const specificState = await PackedData.getSpecificStateUniv3(strategy3);
 
-      price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+      price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, parseUnits("1", decimalsB));
 
       let earnedTotal = BigNumber.from(0)
 

@@ -644,6 +644,7 @@ library ConverterStrategyBaseLib {
     }
 
     (ITetuLiquidator.PoolData[] memory route,) = liquidator_.buildRoute(tokenIn_, tokenOut_);
+    console.log("route len, pool, swapper", route.length, route[0].pool, route[0].swapper);
 
     require(route.length != 0, AppErrors.NO_LIQUIDATION_ROUTE);
 
@@ -674,6 +675,8 @@ library ConverterStrategyBaseLib {
 
     require(balanceAfter > balanceBefore, AppErrors.BALANCE_DECREASE);
     receivedAmountOut = balanceAfter - balanceBefore;
+    console.log("_liquidateWithRoute.amountIn_", amountIn_);
+    console.log("_liquidateWithRoute.receivedAmountOut", receivedAmountOut);
 
     // Oracle in TetuConverter "knows" only limited number of the assets
     // It may not know prices for reward assets, so for rewards this validation should be skipped to avoid TC-4 error
@@ -1194,15 +1197,18 @@ library ConverterStrategyBaseLib {
               false
             );
             console.log("_closePositionsToGetAmount.spentAmountIn", spentAmountIn);
+            console.log("_closePositionsToGetAmount.v.prices[i],i", v.prices[i], i);
+            console.log("_closePositionsToGetAmount.v.prices[d_.indexAsset],d_.indexAsset", v.prices[d_.indexAsset], d_.indexAsset);
+            console.log("_closePositionsToGetAmount.v.prices[0]", AppLib._getPriceOracle(d_.converter).getAssetPrice(d_.tokens[0]));
+            console.log("_closePositionsToGetAmount.v.prices[1]", AppLib._getPriceOracle(d_.converter).getAssetPrice(d_.tokens[1]));
 
             if (indexIn == d_.indexAsset) {
-              expectedBalance = expectedBalance > spentAmountIn
-                ? expectedBalance - spentAmountIn
-                : 0;
+              expectedBalance = AppLib.sub0(expectedBalance, spentAmountIn);
               console.log("_closePositionsToGetAmount.expectedBalance.2", expectedBalance);
             } else if (indexOut == d_.indexAsset) {
               expectedBalance += spentAmountIn * v.prices[i] * v.decs[d_.indexAsset] / v.prices[d_.indexAsset] / v.decs[i];
               console.log("_closePositionsToGetAmount.expectedBalance.3", expectedBalance);
+              console.log("_closePositionsToGetAmount.expectedBalance.increment", spentAmountIn * v.prices[i] * v.decs[d_.indexAsset] / v.prices[d_.indexAsset] / v.decs[i]);
 
               // if we already received enough amount on balance, we can avoid additional actions
               // to avoid high gas consumption in the cases like SCB-787
@@ -1210,6 +1216,7 @@ library ConverterStrategyBaseLib {
               console.log("_closePositionsToGetAmount.balanceAsset.1", balanceAsset);
               if (balanceAsset + liquidationThresholds_[d_.indexAsset] > requestedBalance) {
                 v.balanceAsset = balanceAsset;
+                console.log("_closePositionsToGetAmount.balanceAsset.break", balanceAsset);
                 break;
               }
               console.log("_closePositionsToGetAmount.balanceAsset.2", balanceAsset);
