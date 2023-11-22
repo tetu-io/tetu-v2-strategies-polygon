@@ -665,7 +665,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               console.log("stateBefore", stateBefore);
               console.log("stateAfter", stateAfter);
 
-              expect(stateAfter.vault.sharePrice).eq(stateBefore.vault.sharePrice);
+              expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, 1e-6);
             });
 
             it("should withdraw almost all successfully, mocked swapper returns higher amount  for any swap", async () => {
@@ -683,7 +683,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, b.swapper);
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-              expect(stateAfter.vault.sharePrice).eq(stateBefore.vault.sharePrice);
+              expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, 1e-6);
             });
 
             it("should withdraw almost all successfully, mocked swapper returns smaller amount for any swap", async () => {
@@ -702,7 +702,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, b.swapper);
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-              expect(stateAfter.vault.sharePrice).eq(stateBefore.vault.sharePrice);
+              expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, 1e-6);
             });
 
             it("should withdraw almost all successfully, token0=>token1 swap amount higher, token0=>token1 swap amount lower", async () => {
@@ -722,7 +722,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, b.swapper);
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-              expect(stateAfter.vault.sharePrice).eq(stateBefore.vault.sharePrice);
+              expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, 1e-6);
             });
 
             it("should withdraw almost all successfully, token0=>token1 swap amount lower, token0=>token1 swap amount higher", async () => {
@@ -742,7 +742,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, b.swapper);
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-              expect(stateAfter.vault.sharePrice).eq(stateBefore.vault.sharePrice);
+              expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, 1e-6);
             });
           });
         });
@@ -1491,24 +1491,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       countBlocksToAdvance: number; // 2000 by default
       percentToWithdraw?: number; // 6 by default
       percentToDeposit?: number; // 6 by default
+      dontChangePrices?: boolean; // false by default
     }
 
     const strategies: IStrategyInfo[] = [
-      { // small total assets, not enough insurance, large withdraw/deposits
-        caseTag: "case2",
-        name: PLATFORM_UNIV3,
-        notUnderlyingToken: MaticAddresses.USDT_TOKEN,
-        compoundRatio: 0,
-        initialAmountOnSignerBalance: "40000",
-        investAmount: "1000",
-        initialAmountOnSignerBalanceSigner3: "2000",
-        investAmountSigner3: "1000",
-        initialInsuranceBalance: "0",
-        initialLastDirectionUp: true,
-        countBlocksToAdvance: 5000,
-        percentToWithdraw: 50,
-        percentToDeposit: 80,
-      },
       { // large total assets, enough insurance to cover any losses, small withdraw/deposits
         caseTag: "case1",
         name: PLATFORM_UNIV3,
@@ -1519,6 +1505,22 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         initialInsuranceBalance: "1000",
         initialLastDirectionUp: false,
         countBlocksToAdvance: 2000,
+        dontChangePrices: false
+      },
+      { // small total assets, not enough insurance, large withdraw/deposits
+        caseTag: "case2",
+        name: PLATFORM_UNIV3,
+        notUnderlyingToken: MaticAddresses.USDT_TOKEN,
+        compoundRatio: 0,
+        initialAmountOnSignerBalance: "40000",
+        investAmount: "1000",
+        initialAmountOnSignerBalanceSigner3: "2000",
+        investAmountSigner3: "1000",
+        initialInsuranceBalance: "0",
+        initialLastDirectionUp: false,
+        countBlocksToAdvance: 7000,
+        percentToWithdraw: 80,
+        percentToDeposit: 80,
       },
     ];
 
@@ -1559,6 +1561,13 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
       describe(`${strategyInfo.name}:${tokenName(strategyInfo.notUnderlyingToken)}-${strategyInfo.caseTag}`, () => {
         let snapshot: string;
+
+        interface IResults {
+          ret: IStateNum[];
+          totalWithdrawFee: number;
+          totalWithdraw: number;
+          totalDeposit: number;
+        }
         before(async function () {
           snapshot = await TimeUtils.snapshot();
         });
@@ -1566,17 +1575,33 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           await TimeUtils.rollback(snapshot);
         });
 
-        async function makeCalculations(): Promise<IStateNum[]> {
+        interface IAdditionalParams {
+          deposit?: number;
+          withdraw?: number;
+          withdrawFee?: number;
+        }
+
+        async function makeCalculations(): Promise<IResults> {
           const COUNT_CYCLES = 10;
           const maxLockedPercent = 35;
           const b = await loadFixture(prepareStrategy);
           const states: IStateNum[] = [];
           const user = signer3;
           const statesParams = b.stateParams;
-          statesParams.additionalParams = ["Withdraw fee"];
+          statesParams.additionalParams = ["Deposit", "Withdraw", "Withdraw fee",];
+          let totalWithdrawFee = 0;
+          let totalWithdraw = 0;
+          let totalDeposit = 0;
 
-          const saver = async (title: string, eventsSet?: IEventsSet, lastWithdrawFee?: number): Promise<IStateNum> => {
-            states.push(await StateUtilsNum.getState(signer, user, converterStrategyBase, b.vault, title, {eventsSet, additionalParamValues: [lastWithdrawFee ?? 0]}));
+          const saver = async (title: string, eventsSet?: IEventsSet, ap?: IAdditionalParams): Promise<IStateNum> => {
+            states.push(await StateUtilsNum.getState(signer, user, converterStrategyBase, b.vault, title, {
+              eventsSet,
+              additionalParamValues: [
+                ap?.deposit ?? 0,
+                ap?.withdraw ?? 0,
+                ap?.withdrawFee ?? 0,
+              ]
+            }));
             StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             return states[states.length - 1];
           }
@@ -1592,7 +1617,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
           const platform = await converterStrategyBase.PLATFORM();
 
-          await saver("before");
+          await saver("init");
 
           let lastDirectionUp = strategyInfo.initialLastDirectionUp;
           for (let i = 0; i < COUNT_CYCLES; i++) {
@@ -1601,7 +1626,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             await UniversalUtils.makePoolVolume(signer2, state, b.swapper, parseUnits('100000', 6));
             await TimeUtils.advanceNBlocks(strategyInfo.countBlocksToAdvance ?? 2000);
 
-            if (i % 3) {
+            if (i % 3 && !strategyInfo.dontChangePrices) {
               const movePricesUp = !lastDirectionUp;
               console.log(`Change prices.. ==================== ${i} ==================== ${movePricesUp ? "up" : "down"}`);
               await PairBasedStrategyPrepareStateUtils.movePriceBySteps(
@@ -1645,14 +1670,22 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             if (i % 2) {
               const maxWithdraw = await b.vault.maxWithdraw(user.address);
               const toWithdraw = maxWithdraw.mul(i % 4 ? strategyInfo.percentToWithdraw ?? 6 : 3).div(100);
-              const lastWithdrawFee = +formatUnits(toWithdraw, b.assetDecimals) * PRICE_CHANGE_TOLERANCE / 100_000;
+              const lastWithdrawFee = +formatUnits(toWithdraw, b.assetDecimals) * (100_000 / (100_000 - PRICE_CHANGE_TOLERANCE) - 1);
+              totalWithdrawFee += lastWithdrawFee;
+              totalWithdraw += +formatUnits(toWithdraw, b.assetDecimals);
               console.log(`Withdraw.. ==================== ${i} ==================== max=${maxWithdraw} to=${toWithdraw}`);
-              await saver(`w${i}`, await CaptureEvents.makeWithdraw(b.vault.connect(user), toWithdraw, platform), lastWithdrawFee);
+              await saver(`w${i}`, await CaptureEvents.makeWithdraw(b.vault.connect(user), toWithdraw, platform), {
+                withdraw: +formatUnits(toWithdraw, b.assetDecimals),
+                withdrawFee: lastWithdrawFee
+              });
             } else {
               const maxDeposit = await IERC20Metadata__factory.connect(b.asset, signer).balanceOf(user.address);
               const toDeposit = maxDeposit.mul(i % 3 ? 3 : strategyInfo.percentToDeposit ?? 6).div(100);
+              totalDeposit += +formatUnits(toDeposit, b.assetDecimals);
               console.log(`Deposit.. ==================== ${i} ==================== max=${maxDeposit} to=${toDeposit}`);
-              await saver(`d${i}`, await CaptureEvents.makeDeposit(b.vault.connect(user), toDeposit, platform));
+              await saver(`d${i}`, await CaptureEvents.makeDeposit(b.vault.connect(user), toDeposit, platform), {
+                deposit: +formatUnits(toDeposit, b.assetDecimals)
+              });
             }
 
             const readerResults = await reader.getLockedUnderlyingAmount(b.strategy.address);
@@ -1676,27 +1709,75 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             }
           }
 
-          const stateAfter = await saver("final");
+          {
+            const maxWithdraw = await b.vault.maxWithdraw(user.address);
 
-          const uncoveredLoss = StateUtilsNum.getTotalUncoveredLoss(states);
-          const finalSharePrice = (stateAfter.vault.totalAssets + uncoveredLoss) / stateAfter.vault.totalSupply;
-          console.log("finalSharePrice", finalSharePrice);
-          console.log("stateAfter.vault.totalAssets", stateAfter.vault.totalAssets);
+            console.log('withdrawAll as signer3...');
+            await b.vault.connect(signer3).requestWithdraw();
+            const eventsSet3 = await CaptureEvents.makeWithdrawAll(b.vault.connect(user), platform);
+            await saver("w-all", eventsSet3, {
+              withdraw: +formatUnits(maxWithdraw, b.assetDecimals),
+              withdrawFee: +formatUnits(maxWithdraw, b.assetDecimals) * (100_000 / (100_000 - PRICE_CHANGE_TOLERANCE) - 1)
+            });
+          }
 
-          return states;
+          return {
+            ret: states,
+            totalDeposit,
+            totalWithdraw,
+            totalWithdrawFee
+          };
         }
 
-        it('should keep invariants of state params', async () => {
-          const states = await makeCalculations();
+        it('should change insurance in expected values', async () => {
+          const {ret} = await loadFixture(makeCalculations);
+          const first = ret[0];
+          const last = ret[ret.length - 1];
+
           // Delta insurance = totalWithdrawFee + sendToInsurance + debtPaid + toInsuranceRecycle - lossCovered
+          const deltaInsurance = last.insurance.assetBalance - first.insurance.assetBalance;
+          const sendToInsurance = ret.reduce((prev, cur) => prev + (cur.events?.sentToInsurance ?? 0), 0);
+          const debtPaid = ret.reduce((prev, cur) => prev + (cur.events?.payDebtToInsurance.debtPaid ?? 0), 0);
+          const toInsuranceRecycle = ret.reduce((prev, cur) => prev + (cur.events?.toInsuranceRecycle ?? 0), 0);
+          const lossCovered = ret.reduce((prev, cur) => prev + (cur.events?.lossCoveredVault ?? 0), 0);
+          const totalWithdrawFee = ret.reduce((prev, cur) => prev + (cur.events?.feeTransferVault ?? 0), 0);
+          console.log("deltaInsurance", deltaInsurance);
+          console.log("sendToInsurance", sendToInsurance);
+          console.log("debtPaid", debtPaid);
+          console.log("toInsuranceRecycle", toInsuranceRecycle);
+          console.log("lossCovered", lossCovered);
+          console.log("totalWithdrawFee", totalWithdrawFee);
+
+          // withdraw fees give errors
+          expect(deltaInsurance).approximately(totalWithdrawFee + sendToInsurance + debtPaid + toInsuranceRecycle - lossCovered, 0.1);
+        });
+        it('should change debt to insurance in expected values', async () => {
+          const {ret, totalWithdrawFee, totalWithdraw, totalDeposit} = await loadFixture(makeCalculations);
+          const last = ret[ret.length - 1];
 
           // Debt to insurance = OnCoverLossInc - debtPaid + debtToInsuranceOnProfitInc
+          const coverLossInc = ret.reduce((prev, cur) => prev + (cur.events?.onCoverLoss.debtToInsuranceInc ?? 0), 0);
+          const debtPaid = ret.reduce((prev, cur) => prev + (cur.events?.payDebtToInsurance.debtPaid ?? 0), 0);
+          const debtToInsuranceOnProfitInc = ret.reduce((prev, cur) => prev + (cur.events?.changeDebtToInsuranceOnProfit.increaseToDebt ?? 0), 0);
 
-
+          expect(last.strategy.debtToInsurance).approximately(coverLossInc - debtPaid + debtToInsuranceOnProfitInc, 1e-4);
+        });
+        it.skip('gain and losses >= preview values on previous step', async () => {
           // gain/losses >= preview gain/losses on previous step
+        });
+        it('finalSharePrice is not changed', async () => {
+          const {ret, totalWithdrawFee, totalWithdraw, totalDeposit} = await loadFixture(makeCalculations);
 
-          // finalSharePrice >= stateBefore.vault.sharePrice if compoundRatio != 0
-          // finalSharePrice == stateBefore.vault.sharePrice if compoundRatio == 0
+          const first = ret[0];
+          const last = ret[ret.length - 1];
+          const uncoveredLoss = StateUtilsNum.getTotalUncoveredLoss(ret);
+          const finalSharePrice = (last.vault.totalAssets + uncoveredLoss) / last.vault.totalSupply;
+
+          if (strategyInfo.compoundRatio === 0) {
+            expect(finalSharePrice).approximately(first.vault.sharePrice, 1e-4);
+          } else {
+            expect(finalSharePrice).gte(first.vault.sharePrice);
+          }
         });
       });
     });

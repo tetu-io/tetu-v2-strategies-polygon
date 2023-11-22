@@ -27,7 +27,10 @@ import {
 } from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib2";
 import {formatUnits} from "ethers/lib/utils";
 import {LossEventObject} from "../../../typechain/@tetu_io/tetu-contracts-v2/contracts/vault/StrategySplitterV2";
-import {LossCoveredEventObject} from "../../../typechain/@tetu_io/tetu-contracts-v2/contracts/vault/TetuVaultV2";
+import {
+  FeeTransferEventObject,
+  LossCoveredEventObject
+} from "../../../typechain/@tetu_io/tetu-contracts-v2/contracts/vault/TetuVaultV2";
 import {
   OnCoverDebtToInsuranceEventObject,
   OnPayDebtToInsuranceEvent, OnPayDebtToInsuranceEventObject,
@@ -35,9 +38,7 @@ import {
 } from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
-/**
- * TetuVaultV2
- */
+/** TetuVaultV2 */
 interface ILossCoveredEvent {
   amount: number;
 }
@@ -211,6 +212,7 @@ interface IChangeDebtToInsuranceOnProfit {
 export interface IEventsSet {
   lossEvent?: ILossEvent[];
   lossCoveredEvent?: ILossCoveredEvent[];
+  feeTransferEvent?: IFeeTransferEvent[];
   uncoveredLossEvent?: IUncoveredLossEvent[];
   sendToInsurance?: ISendToInsurance[];
   coverLoss?: IOnCoverLoss[];
@@ -233,6 +235,7 @@ export interface IEventsSet {
 export interface ISummaryFromEventsSet {
   lossSplitter: number;
   lossCoveredVault: number;
+  feeTransferVault: number;
   onCoverLoss: {
     lossToCover: number;
     amountCovered: number;
@@ -535,6 +538,20 @@ export class CaptureEvents {
         });
       }
 
+      if (event.topics[0].toLowerCase() === tetuVaultV2LibI.getEventTopic('FeeTransfer').toLowerCase()) {
+        const log = (tetuVaultV2LibI.decodeEventLog(
+          tetuVaultV2LibI.getEvent('FeeTransfer'),
+          event.data,
+          event.topics,
+        ) as unknown) as FeeTransferEventObject;
+        if (! ret.feeTransferEvent) {
+          ret.feeTransferEvent = [];
+        }
+        ret.feeTransferEvent.push({
+          amount: +formatUnits(log.amount, decimals),
+        });
+      }
+
       if (event.topics[0].toLowerCase() === converterStrategyBaseLib2I.getEventTopic('FixPriceChanges').toLowerCase()) {
         const log = (converterStrategyBaseLib2I.decodeEventLog(
           converterStrategyBaseLib2I.getEvent('FixPriceChanges'),
@@ -634,6 +651,9 @@ export class CaptureEvents {
         : 0,
       lossCoveredVault: eventsSet?.lossCoveredEvent
         ? eventsSet.lossCoveredEvent.reduce((prev, cur) => prev + cur.amount, 0)
+        : 0,
+      feeTransferVault: eventsSet?.feeTransferEvent
+        ? eventsSet.feeTransferEvent.reduce((prev, cur) => prev + cur.amount, 0)
         : 0,
       lossUncoveredCutByMax: eventsSet?.uncoveredLossEvent
         ? eventsSet.uncoveredLossEvent.reduce((prev, cur) => prev + cur.lossUncovered, 0)

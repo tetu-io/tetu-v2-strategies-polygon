@@ -694,6 +694,7 @@ export class StateUtilsNum {
 
       'events.lossSplitter',
       'events.lossCoveredVault',
+      'events.feeTransferVault',
       'events.lossUncoveredCutByMax',
 
       'events.onCoverLoss.lossToCover',
@@ -827,6 +828,7 @@ export class StateUtilsNum {
 
       item.events?.lossSplitter,
       item.events?.lossCoveredVault,
+      item.events?.feeTransferVault,
       item.events?.lossUncoveredCutByMax,
 
       item.events?.onCoverLoss.lossToCover,
