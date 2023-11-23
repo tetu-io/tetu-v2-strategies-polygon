@@ -373,7 +373,7 @@ export class CaptureEvents {
     decimals: number,
     platform: string = PLATFORM_UNIV3
   ): Promise<IEventsSet> {
-    console.log('*** REBALANCE LOGS ***');
+    console.log('*** CAPTURE EVENTS LOGS ***');
     const splitterLibI = StrategySplitterV2__factory.createInterface();
     const tetuVaultV2LibI = TetuVaultV2__factory.createInterface();
     const pairLibI = PairBasedStrategyLib__factory.createInterface();
@@ -586,6 +586,7 @@ export class CaptureEvents {
       }
 
       if (event.topics[0].toLowerCase() === converterStrategyBaseLib2I.getEventTopic('BorrowResults').toLowerCase()) {
+        console.log(">> BorrowResults detected");
         const log = (converterStrategyBaseLib2I.decodeEventLog(
           converterStrategyBaseLib2I.getEvent('BorrowResults'),
           event.data,
@@ -595,6 +596,7 @@ export class CaptureEvents {
           gains: +formatUnits(log.gains, decimals),
           losses: +formatUnits(log.losses, decimals),
         }
+        console.log(">> BorrowResults ret", ret);
       }
 
       if (event.topics[0].toLowerCase() === converterStrategyBaseLibI.getEventTopic('Recycle').toLowerCase()) {

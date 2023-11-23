@@ -56,6 +56,8 @@ describe("ConverterStrategyBaseInt", () => {
     [signer, signer2] = await ethers.getSigners();
     gov = await Misc.impersonate(MaticAddresses.GOV_ADDRESS);
     core = Addresses.getCore() as CoreAddresses;
+
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
   });
 
   after(async function() {

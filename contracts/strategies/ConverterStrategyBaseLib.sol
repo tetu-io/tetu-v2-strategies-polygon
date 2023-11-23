@@ -644,7 +644,6 @@ library ConverterStrategyBaseLib {
     }
 
     (ITetuLiquidator.PoolData[] memory route,) = liquidator_.buildRoute(tokenIn_, tokenOut_);
-    console.log("route len, pool, swapper", route.length, route[0].pool, route[0].swapper);
 
     require(route.length != 0, AppErrors.NO_LIQUIDATION_ROUTE);
 

@@ -503,6 +503,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   /// @return earned Earned amount in terms of {asset}
   /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
+    console.log(">>>>>>>>>>>>>>>>>>>>>>>> _doHardWork is started");
     // ATTENTION! splitter will not cover the loss if it is lower than profit
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
     if (!_preHardWork(reInvest)) {
@@ -535,6 +536,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     // register amount paid for the debts and amount received for the provided collaterals
     ConverterStrategyBaseLib2.registerBorrowResults(_csbs.converter, baseState.asset);
 
+    console.log(">>>>>>>>>>>>>>>>>>>>>>>> _doHardWork is finished");
     return (earned, lost);
   }
   //endregion -------------------------------------------------------- Hardwork

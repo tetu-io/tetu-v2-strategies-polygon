@@ -1949,9 +1949,10 @@ describe('ConverterStrategyBaseLibTest2', () => {
         const ret = await loadFixture(makeTest);
         expect(ret.insuranceBalance).eq(199 - 192);
       });
-      it("should not emit NotEnoughInsurance", async () => {
+      it("should report zero uncovered amount", async () => {
         const ret = await loadFixture(makeTest);
-        expect(ret.uncoveredLoss === undefined).eq(true);
+        console.log(ret);
+        expect(ret.uncoveredLoss?.emittedLossUncovered === 0).eq(true);
       });
       it("should set expected debtToInsurance", async () => {
         const ret = await loadFixture(makeTest);

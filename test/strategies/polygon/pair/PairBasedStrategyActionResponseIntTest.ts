@@ -1473,6 +1473,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
   });
 
   describe("Check invariants on loops", () => {
+    const COUNT_CYCLES = 20;
+    const maxLockedPercent = 35;
     const WITHDRAW_FEE = 300;
     /** Currently withdraw-fee is used as priceChangeTolerance */
     const PRICE_CHANGE_TOLERANCE = WITHDRAW_FEE;
@@ -1503,9 +1505,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         initialAmountOnSignerBalance: "40000",
         investAmount: "10000",
         initialInsuranceBalance: "1000",
-        initialLastDirectionUp: false,
+        initialLastDirectionUp: true,
         countBlocksToAdvance: 2000,
-        dontChangePrices: false
+        dontChangePrices: true
       },
       { // small total assets, not enough insurance, large withdraw/deposits
         caseTag: "case2",
@@ -1582,8 +1584,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         }
 
         async function makeCalculations(): Promise<IResults> {
-          const COUNT_CYCLES = 10;
-          const maxLockedPercent = 35;
           const b = await loadFixture(prepareStrategy);
           const states: IStateNum[] = [];
           const user = signer3;
