@@ -42,7 +42,6 @@ describe('PairBasedStrategyEmergencyExitTest', function() {
 
   let signer: SignerWithAddress;
   let signer2: SignerWithAddress;
-  let signer3: SignerWithAddress;
 //endregion Variables
 
 //region before, after
@@ -54,7 +53,7 @@ describe('PairBasedStrategyEmergencyExitTest', function() {
     // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
     require("util").inspect.defaultOptions.depth = null;
 
-    [signer, signer2, signer3] = await ethers.getSigners();
+    [signer, signer2] = await ethers.getSigners();
   });
 
   after(async function() {
@@ -167,215 +166,6 @@ describe('PairBasedStrategyEmergencyExitTest', function() {
 //endregion Utils
 
 //region Unit tests
-  describe("Fuse off, need-rebalance off", () => {
-    interface IStrategyInfo {
-      name: string,
-      notUnderlyingToken: string;
-    }
-
-    const strategies: IStrategyInfo[] = [
-      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
-      {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
-      {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
-      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
-      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN},
-    ];
-
-    strategies.forEach(function (strategyInfo: IStrategyInfo) {
-
-      /**
-       * Initially signer deposits 1000 USDC, also he has additional 1000 USDC on the balance.
-       * Fuse OFF by default, rebalance is not needed
-       */
-      async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
-            strategyInfo.name,
-            signer,
-            signer2,
-        {
-              kyberPid: KYBER_PID_DEFAULT_BLOCK,
-              notUnderlying: strategyInfo.notUnderlyingToken
-            }
-        );
-
-        await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(signer, b.strategy.address);
-
-        // await InjectUtils.injectTetuConverter(signer);
-        await ConverterUtils.disableAaveV2(signer);
-        await InjectUtils.redeployAave3PoolAdapters(signer);
-
-        console.log('deposit...');
-        // make deposit and enter to the pool
-        for (let i = 0; i < 5; ++i) {
-          await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
-          await TokenUtils.getToken(b.asset, signer.address, parseUnits('2000', 6));
-          await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
-
-          const state = await PackedData.getDefaultState(b.strategy);
-          if (state.totalLiquidity.gt(0)) {
-            break;
-          }
-        }
-
-        return b;
-      }
-
-      describe(`${strategyInfo.name}:${tokenName(strategyInfo.notUnderlyingToken)}`, () => {
-        let snapshot: string;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
-
-        it("totalLiquidity should be > 0", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const state = await PackedData.getDefaultState(b.strategy);
-          expect(state.totalLiquidity.gt(0)).eq(true);
-        });
-        it("should deposit successfully", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-
-          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
-          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-
-          expect(stateAfter.vault.totalAssets).gt(stateBefore.vault.totalAssets);
-        });
-        it("should withdraw successfully", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-
-          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          await b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: 19_000_000});
-          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-
-          expect(stateAfter.user.assetBalance).eq(stateBefore.user.assetBalance + 300);
-        });
-        it("should withdraw-all successfully", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-
-          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
-          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-
-          console.log('stateBefore', stateBefore);
-          console.log('stateAfter', stateAfter);
-
-          expect(stateAfter.user.assetBalance).gt(stateBefore.user.assetBalance);
-          expect(stateBefore.vault.userShares).gt(0);
-          expect(stateAfter.vault.userShares).eq(0);
-        });
-        it("should revert on rebalance", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-
-          const needRebalanceBefore = await b.strategy.needRebalance();
-          expect(needRebalanceBefore).eq(false);
-
-          const platform = await converterStrategyBase.PLATFORM();
-          const expectedErrorMessage = platform === PLATFORM_UNIV3
-            ? "U3S-9 No rebalance needed"
-            : platform === PLATFORM_ALGEBRA
-              ? "AS-9 No rebalance needed"
-              : "KS-9 No rebalance needed";
-
-          await expect(
-            b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000})
-          ).revertedWith(expectedErrorMessage); // NO_REBALANCE_NEEDED
-        });
-        it("should rebalance debts successfully", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-
-          const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
-          const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
-
-          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          await b.strategy.withdrawByAggStep(
-            quote.tokenToSwap,
-            Misc.ZERO_ADDRESS,
-            quote.amountToSwap,
-            "0x",
-            planEntryData,
-            ENTRY_TO_POOL_IS_ALLOWED,
-            {gasLimit: 19_000_000}
-          );
-          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          console.log("stateBefore", stateBefore);
-          console.log("stateAfter", stateAfter);
-
-          expect(stateAfter.strategy.investedAssets).approximately(stateBefore.strategy.investedAssets, 100);
-        });
-        it("should hardwork successfully", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(
-            b.strategy.address,
-            await Misc.impersonate(b.splitter.address)
-          );
-
-          // put additional fee to profit holder bo make isReadyToHardwork returns true
-          await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
-
-          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          await converterStrategyBase.doHardWork({gasLimit: 19_000_000});
-          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-
-          expect(stateAfter.strategy.investedAssets).gte(stateBefore.strategy.investedAssets - 0.001);
-        });
-        it("should make emergency exit successfully", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-
-          await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
-          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-
-          expect(stateAfter.strategy.investedAssets).lt(10);
-        });
-        it("isReadyToHardWork should return expected value", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(
-            b.strategy.address,
-            await Misc.impersonate(b.splitter.address)
-          );
-          const platform = await converterStrategyBase.PLATFORM();
-
-          // currently kyber's isReadyToHardWork returns true without need to call prepareToHardwork
-          expect(await converterStrategyBase.isReadyToHardWork()).eq(platform === PLATFORM_KYBER);
-        });
-        /** scb-776: isReadyToHardWork can return true just after hardwork call */
-        it.skip("isReadyToHardWork should return expected value after hardwork", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(
-              b.strategy.address,
-              await Misc.impersonate(b.splitter.address)
-          );
-          const platform = await converterStrategyBase.PLATFORM();
-          await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
-
-          expect(await converterStrategyBase.isReadyToHardWork()).eq(true);
-          await converterStrategyBase.doHardWork({gasLimit: 19_000_000});
-          // currently kyber's isReadyToHardWork returns true without need to call prepareToHardwork
-          expect(await converterStrategyBase.isReadyToHardWork()).eq(platform === PLATFORM_KYBER);
-        });
-
-        it("withdraw should not exceed gas limits @skip-on-coverage", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-
-          const tx = await b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: 19_000_000});
-          const cr = await tx.wait();
-          controlGasLimitsEx(cr.gasUsed, GAS_LIMIT_PAIR_BASED_WITHDRAW, (u, t) => {
-            expect(u).to.be.below(t + 1);
-          });
-        });
-      });
-    });
-  });
-
   describe("Emergency exit", () => {
     interface IStrategyInfo {
       name: string,
@@ -457,6 +247,5 @@ describe('PairBasedStrategyEmergencyExitTest', function() {
       });
     });
   });
-
 //endregion Unit tests
 });
