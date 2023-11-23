@@ -54,11 +54,11 @@ contract BalancerBoostedDepositorFacade is BalancerBoostedDepositor {
   uint public lastAmountsOutLength;
   uint public lastLiquidityAmountIn;
 
-  function _depositorExitAccess(uint liquidityAmount_) external returns (uint[] memory) {
+  function _depositorExitAccess(uint liquidityAmount_, bool emergency) external returns (uint[] memory) {
     lastLiquidityAmountIn = liquidityAmount_ == 0  // 0 means that we should withdraw all liquidity
     ? _depositorLiquidity()
     : liquidityAmount_;
-    lastAmountsOut = _depositorExit(lastLiquidityAmountIn);
+    lastAmountsOut = _depositorExit(lastLiquidityAmountIn, emergency);
     lastAmountsOutLength = lastAmountsOut.length;
     return lastAmountsOut;
   }

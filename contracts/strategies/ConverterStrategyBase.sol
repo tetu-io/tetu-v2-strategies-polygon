@@ -39,7 +39,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   //region -------------------------------------------------------- CONSTANTS
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant CONVERTER_STRATEGY_BASE_VERSION = "3.0.0";
+  string public constant CONVERTER_STRATEGY_BASE_VERSION = "3.0.1";
 
   /// @notice 1% gap to cover possible liquidation inefficiency
   /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
@@ -269,7 +269,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     );
 
     if (liquidityAmountToWithdraw != 0) {
-      uint[] memory withdrawnAmounts = _depositorExit(liquidityAmountToWithdraw);
+      uint[] memory withdrawnAmounts = _depositorExit(liquidityAmountToWithdraw, false);
       // the depositor is able to use less liquidity than it was asked, i.e. Balancer-depositor leaves some BPT unused
       // use what exactly was withdrew instead of the expectation
       // assume that liquidity cannot increase in _depositorExit
@@ -392,23 +392,12 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     );
   }
 
-  /// @notice If pool supports emergency withdraw need to call it for emergencyExit()
+  /// @notice Withdraw all amounts from the pool using minimum actions (it skips claiming rewards, fees and so on)
   function _emergencyExitFromPool() override internal virtual {
     uint[] memory withdrawnAmounts = _depositorEmergencyExit();
     emit OnDepositorEmergencyExit(withdrawnAmounts);
-
-    // convert amounts to main asset
-    (address[] memory tokens, uint indexAsset) = _getTokens(baseState.asset);
-    ConverterStrategyBaseLib.closePositionsToGetAmount(
-      _csbs.converter,
-      AppLib._getLiquidator(controller()),
-      indexAsset,
-      liquidationThresholds,
-      type(uint).max,
-      tokens
-    );
-
-    // adjust _investedAssets
+    // we don't convert amounts to main asset to avoid any excess actions
+    // update of invested assets is necessary in any case
     _updateInvestedAssets();
   }
   //endregion -------------------------------------------------------- Withdraw from the pool

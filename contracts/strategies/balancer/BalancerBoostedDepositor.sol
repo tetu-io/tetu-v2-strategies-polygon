@@ -139,9 +139,10 @@ abstract contract BalancerBoostedDepositor is DepositorBase, Initializable {
   ///                         so it worth to add a gap to this amount, i.e. 1%
   /// @return amountsOut Result amounts of underlying (DAI, USDC..) that will be received from BalanceR
   ///         The order of assets is the same as in getPoolTokens, but there is no pool-bpt
-  function _depositorExit(uint liquidityAmount_) override internal virtual returns (
+  function _depositorExit(uint liquidityAmount_, bool emergency) override internal virtual returns (
     uint[] memory amountsOut
   ) {
+    emergency; // hide warning; todo: do we need different logic for normal and emergency cases?
     bytes32 _poolId = poolId;
     IBalancerGauge __gauge = gauge;
     IComposableStablePool pool = IComposableStablePool(BalancerLogicLib.getPoolAddress(_poolId));
