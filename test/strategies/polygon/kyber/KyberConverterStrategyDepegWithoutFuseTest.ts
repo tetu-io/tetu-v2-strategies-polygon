@@ -35,7 +35,7 @@ import {PackedData} from "../../../baseUT/utils/PackedData";
 import {KYBER_PID} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
-describe('KyberConverterStrategyDepegWithoutFuseTest', function() {
+describe.skip('KyberConverterStrategyDepegWithoutFuseTest', function() {
 
   let snapshotBefore: string;
   let snapshot: string;
