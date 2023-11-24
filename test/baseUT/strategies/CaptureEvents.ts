@@ -586,7 +586,6 @@ export class CaptureEvents {
       }
 
       if (event.topics[0].toLowerCase() === converterStrategyBaseLib2I.getEventTopic('BorrowResults').toLowerCase()) {
-        console.log(">> BorrowResults detected");
         const log = (converterStrategyBaseLib2I.decodeEventLog(
           converterStrategyBaseLib2I.getEvent('BorrowResults'),
           event.data,
@@ -596,7 +595,6 @@ export class CaptureEvents {
           gains: +formatUnits(log.gains, decimals),
           losses: +formatUnits(log.losses, decimals),
         }
-        console.log(">> BorrowResults ret", ret);
       }
 
       if (event.topics[0].toLowerCase() === converterStrategyBaseLibI.getEventTopic('Recycle').toLowerCase()) {
