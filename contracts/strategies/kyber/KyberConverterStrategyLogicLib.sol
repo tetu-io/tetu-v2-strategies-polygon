@@ -266,9 +266,11 @@ library KyberConverterStrategyLogicLib {
 
   //region ------------------------------------------------ Exit from the pool
 
+  /// @param emergency Emergency exit (only withdraw, don't claim any rewards or make any other additional actions)
   function exit(
     State storage state,
-    uint128 liquidityAmountToExit
+    uint128 liquidityAmountToExit,
+    bool emergency
   ) external returns (uint[] memory amountsOut) {
     amountsOut = new uint[](2);
 
@@ -293,15 +295,17 @@ library KyberConverterStrategyLogicLib {
 
     // get rewards
     if (staked) {
-      uint reward = _harvest(nftIds[0], vars.pId);
-      // send to profit holder
-      if (reward > 0) {
-        IERC20(KNC).safeTransfer(vars.strategyProfitHolder, reward);
-      }
+      if (!emergency) {
+        uint reward = _harvest(nftIds[0], vars.pId);
+        // send to profit holder
+        if (reward > 0) {
+          IERC20(KNC).safeTransfer(vars.strategyProfitHolder, reward);
+        }
 
-      // get fees
-      // when exiting, fees are collected twice so as not to lose anything when rebalancing (the position goes out of range)
-      (feeA, feeB) = _claimFees(state);
+        // get fees
+        // when exiting, fees are collected twice so as not to lose anything when rebalancing (the position goes out of range)
+        (feeA, feeB) = _claimFees(state);
+      }
 
       liqs[0] = uint(liquidity);
 
@@ -316,7 +320,7 @@ library KyberConverterStrategyLogicLib {
     uint rTokensOwed;
     (amountsOut[0], amountsOut[1], rTokensOwed) = KYBER_NFT.removeLiquidity(IBasePositionManager.RemoveLiquidityParams(nftIds[0], liquidityAmountToExit, 0, 0, block.timestamp));
 
-    if (rTokensOwed > 0) {
+    if (!emergency && rTokensOwed != 0) {
 //      KYBER_NFT.syncFeeGrowth(nftIds[0]);
       (,uint amount0, uint amount1) = KYBER_NFT.burnRTokens(IBasePositionManager.BurnRTokenParams(nftIds[0], 0, 0, block.timestamp));
       if (state.pair.depositorSwapTokens) {
@@ -345,7 +349,7 @@ library KyberConverterStrategyLogicLib {
     liquidity -= liquidityAmountToExit;
     state.pair.totalLiquidity = liquidity;
 
-    if (liquidity > 0 && !isFarmEnded(vars.pId)) {
+    if (liquidity != 0 && !isFarmEnded(vars.pId)) {
       liqs[0] = uint(liquidity);
       FARMING_CENTER.deposit(nftIds);
       state.staked = true;

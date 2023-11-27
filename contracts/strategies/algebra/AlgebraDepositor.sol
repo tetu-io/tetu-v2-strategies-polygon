@@ -100,9 +100,10 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
 
   /// @notice Handles the withdrawal operation.
   /// @param liquidityAmount The amount of liquidity to be withdrawn.
+  /// @param emergency Emergency exit (only withdraw, don't claim any rewards or make any other additional actions)
   /// @return amountsOut The amounts of the tokens withdrawn.
-  function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
-    amountsOut = AlgebraConverterStrategyLogicLib.exit(state, uint128(liquidityAmount));
+  function _depositorExit(uint liquidityAmount, bool emergency) override internal virtual returns (uint[] memory amountsOut) {
+    amountsOut = AlgebraConverterStrategyLogicLib.exit(state, uint128(liquidityAmount), emergency);
   }
 
   /// @notice Returns the amount of tokens that would be withdrawn based on the provided liquidity amount.

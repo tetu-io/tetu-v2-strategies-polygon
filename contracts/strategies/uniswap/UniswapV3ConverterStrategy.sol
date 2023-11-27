@@ -316,8 +316,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     // withdraw all liquidity from pool
     // after disableFuse() liquidity is zero
-    if (state.pair.totalLiquidity != 0) {
-      _depositorEmergencyExit();
+    uint liquidity = state.pair.totalLiquidity;
+    if (liquidity != 0) {
+      _depositorExit(liquidity, false);
     }
   }
 

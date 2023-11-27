@@ -292,7 +292,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-              expect(stateAfter.strategy.investedAssets).lt(10);
+              expect(stateAfter.strategy.liquidity).lt(10);
             });
             it("isReadyToHardWork should return expected value", async () => {
               const converterStrategyBase = ConverterStrategyBase__factory.connect(
@@ -454,7 +454,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-              expect(stateAfter.strategy.investedAssets).lt(10);
+              expect(stateAfter.strategy.liquidity).lt(10);
             });
             it("isReadyToHardWork should return false even if hardwork is really necessary", async () => {
               const converterStrategyBase = ConverterStrategyBase__factory.connect(
@@ -599,7 +599,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-              expect(stateAfter.strategy.investedAssets).lt(10);
+              expect(stateAfter.strategy.liquidity).lt(10);
             });
             it("isReadyToHardWork should return false even if hardwork is really necessary", async () => {
               const converterStrategyBase = ConverterStrategyBase__factory.connect(
@@ -860,7 +860,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-              expect(stateAfter.strategy.investedAssets).lt(10);
+              expect(stateAfter.strategy.liquidity).lt(10);
             });
           });
         });
@@ -1044,7 +1044,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
             const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-            expect(stateAfter.strategy.investedAssets).lt(10);
+            expect(stateAfter.strategy.liquidity).lt(10);
           });
         });
       });
