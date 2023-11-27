@@ -16,7 +16,6 @@ import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../libs/IterationPlanLib.sol";
 import "../interfaces/IConverterStrategyBase.sol";
-import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -674,8 +673,6 @@ library ConverterStrategyBaseLib {
 
     require(balanceAfter > balanceBefore, AppErrors.BALANCE_DECREASE);
     receivedAmountOut = balanceAfter - balanceBefore;
-    console.log("_liquidateWithRoute.amountIn_", amountIn_);
-    console.log("_liquidateWithRoute.receivedAmountOut", receivedAmountOut);
 
     // Oracle in TetuConverter "knows" only limited number of the assets
     // It may not know prices for reward assets, so for rewards this validation should be skipped to avoid TC-4 error
@@ -769,7 +766,6 @@ library ConverterStrategyBaseLib {
       IERC20(asset_).safeTransfer(receiver_, toPerf);
     }
     if (toInsurance != 0) {
-      console.log("_sendPerformanceFee.toInsurance", toInsurance);
       IERC20(asset_).safeTransfer(insurance, toInsurance);
     }
   }
@@ -929,7 +925,6 @@ library ConverterStrategyBaseLib {
       );
     }
 
-    console.log("_coverDebtToInsuranceFromRewards.amountToSend", amountToSend);
     IERC20(p.asset).safeTransfer(address(ITetuVaultV2(ISplitter(p.splitter).vault()).insurance()), amountToSend);
 
     rewardsLeftovers = AppLib.sub0(p.rewardAmounts[index], spentAmount);
@@ -1139,7 +1134,6 @@ library ConverterStrategyBaseLib {
   ) internal returns (
     uint expectedBalance
   ) {
-    console.log("_closePositionsToGetAmount.requestedBalance", requestedBalance);
     if (requestedBalance != 0) {
       //let's get a bit more amount on balance to prevent situation "zero balance, not-zero debts"
       requestedBalance = applyRequestedBalanceGap(requestedBalance);
@@ -1149,18 +1143,14 @@ library ConverterStrategyBaseLib {
       // v.planKind = IterationPlanLib.PLAN_SWAP_REPAY; // PLAN_SWAP_REPAY == 0, so we don't need this line
       v.balanceAdditions = new uint[](d_.len);
       expectedBalance = IERC20(v.asset).balanceOf(address(this));
-      console.log("_closePositionsToGetAmount.expectedBalance.1", expectedBalance);
 
       (v.prices, v.decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(d_.converter), d_.tokens, d_.len);
 
       for (uint i; i < d_.len; i = AppLib.uncheckedInc(i)) {
-        console.log("_closePositionsToGetAmount.i", i);
         if (i == d_.indexAsset) continue;
 
         v.balanceAsset = IERC20(v.asset).balanceOf(address(this));
         v.balanceToken = IERC20(d_.tokens[i]).balanceOf(address(this));
-        console.log("_closePositionsToGetAmount.v.balanceAsset", v.balanceAsset);
-        console.log("_closePositionsToGetAmount.v.balanceToken", v.balanceToken);
 
         // Make one or several iterations. Do single swap and single repaying (both are optional) on each iteration.
         // Calculate expectedAmount of received underlying. Swap leftovers at the end even if requestedAmount is 0 at that moment.
@@ -1175,9 +1165,6 @@ library ConverterStrategyBaseLib {
             v.balanceAdditions,
             [0, IterationPlanLib.PLAN_SWAP_REPAY, 0, requestedBalance, d_.indexAsset, i, 0]
           );
-          console.log("_closePositionsToGetAmount.v.amountToSwap", v.amountToSwap);
-          console.log("_closePositionsToGetAmount.v.idxToSwap1", v.idxToSwap1);
-          console.log("_closePositionsToGetAmount.v.idxToRepay1", v.idxToRepay1);
           if (v.idxToSwap1 == 0 && v.idxToRepay1 == 0) break;
 
           // make swap if necessary
@@ -1195,30 +1182,19 @@ library ConverterStrategyBaseLib {
               liquidationThresholds_[indexIn],
               false
             );
-            console.log("_closePositionsToGetAmount.spentAmountIn", spentAmountIn);
-            console.log("_closePositionsToGetAmount.v.prices[i],i", v.prices[i], i);
-            console.log("_closePositionsToGetAmount.v.prices[d_.indexAsset],d_.indexAsset", v.prices[d_.indexAsset], d_.indexAsset);
-            console.log("_closePositionsToGetAmount.v.prices[0]", AppLib._getPriceOracle(d_.converter).getAssetPrice(d_.tokens[0]));
-            console.log("_closePositionsToGetAmount.v.prices[1]", AppLib._getPriceOracle(d_.converter).getAssetPrice(d_.tokens[1]));
 
             if (indexIn == d_.indexAsset) {
               expectedBalance = AppLib.sub0(expectedBalance, spentAmountIn);
-              console.log("_closePositionsToGetAmount.expectedBalance.2", expectedBalance);
             } else if (indexOut == d_.indexAsset) {
               expectedBalance += spentAmountIn * v.prices[i] * v.decs[d_.indexAsset] / v.prices[d_.indexAsset] / v.decs[i];
-              console.log("_closePositionsToGetAmount.expectedBalance.3", expectedBalance);
-              console.log("_closePositionsToGetAmount.expectedBalance.increment", spentAmountIn * v.prices[i] * v.decs[d_.indexAsset] / v.prices[d_.indexAsset] / v.decs[i]);
 
               // if we already received enough amount on balance, we can avoid additional actions
               // to avoid high gas consumption in the cases like SCB-787
               uint balanceAsset = IERC20(v.asset).balanceOf(address(this));
-              console.log("_closePositionsToGetAmount.balanceAsset.1", balanceAsset);
               if (balanceAsset + liquidationThresholds_[d_.indexAsset] > requestedBalance) {
                 v.balanceAsset = balanceAsset;
-                console.log("_closePositionsToGetAmount.balanceAsset.break", balanceAsset);
                 break;
               }
-              console.log("_closePositionsToGetAmount.balanceAsset.2", balanceAsset);
             }
           }
 
@@ -1227,7 +1203,6 @@ library ConverterStrategyBaseLib {
             uint indexBorrow = v.idxToRepay1 - 1;
             uint indexCollateral = indexBorrow == d_.indexAsset ? i : d_.indexAsset;
             uint amountToRepay = IERC20(d_.tokens[indexBorrow]).balanceOf(address(this));
-            console.log("_closePositionsToGetAmount.amountToRepay", amountToRepay);
 
             (uint expectedAmountOut, uint repaidAmountOut, uint amountSendToRepay) = _repayDebt(
               d_.converter,
@@ -1235,24 +1210,18 @@ library ConverterStrategyBaseLib {
               d_.tokens[indexBorrow],
               amountToRepay
             );
-            console.log("_closePositionsToGetAmount.expectedAmountOut", expectedAmountOut);
-            console.log("_closePositionsToGetAmount.repaidAmountOut", repaidAmountOut);
-            console.log("_closePositionsToGetAmount.amountSendToRepay", amountSendToRepay);
 
             if (indexBorrow == d_.indexAsset) {
               expectedBalance = expectedBalance > amountSendToRepay
                 ? expectedBalance - amountSendToRepay
                 : 0;
-              console.log("_closePositionsToGetAmount.expectedBalance.4", expectedBalance);
             } else if (indexCollateral == d_.indexAsset) {
               require(expectedAmountOut >= spentAmountIn, AppErrors.BALANCE_DECREASE);
               if (repaidAmountOut < amountSendToRepay) {
                 // SCB-779: expectedAmountOut was estimated for amountToRepay, but we have paid repaidAmountOut only
                 expectedBalance += expectedAmountOut * repaidAmountOut / amountSendToRepay;
-                console.log("_closePositionsToGetAmount.expectedBalance.5", expectedBalance);
               } else {
                 expectedBalance += expectedAmountOut;
-                console.log("_closePositionsToGetAmount.expectedBalance.6", expectedBalance);
               }
             }
           }
@@ -1260,8 +1229,6 @@ library ConverterStrategyBaseLib {
           // update balances
           v.newBalanceAsset = IERC20(v.asset).balanceOf(address(this));
           v.newBalanceToken = IERC20(d_.tokens[i]).balanceOf(address(this));
-          console.log("_closePositionsToGetAmount.v.newBalanceAsset", v.newBalanceAsset);
-          console.log("_closePositionsToGetAmount.v.newBalanceToken", v.newBalanceToken);
 
           v.exitLoop = (v.balanceAsset == v.newBalanceAsset && v.balanceToken == v.newBalanceToken);
           v.balanceAsset = v.newBalanceAsset;

@@ -17,7 +17,6 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../interfaces/IConverterStrategyBase.sol";
-import "hardhat/console.sol";
 
 /// @notice Continuation of ConverterStrategyBaseLib (workaround for size limits)
 library ConverterStrategyBaseLib2 {
@@ -533,10 +532,6 @@ library ConverterStrategyBaseLib2 {
 
     // calculate prices, decimals
     (prices, decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, v.len);
-    console.log("_calcInvestedAssets.prices.prices[0]", prices[0]);
-    console.log("_calcInvestedAssets.prices.prices[1]", prices[1]);
-    console.log("_calcInvestedAssets.depositorQuoteExitAmountsOut[0]", depositorQuoteExitAmountsOut[0]);
-    console.log("_calcInvestedAssets.depositorQuoteExitAmountsOut[1]", depositorQuoteExitAmountsOut[1]);
 
     // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
     // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
@@ -549,8 +544,6 @@ library ConverterStrategyBaseLib2 {
         // possible reverse debt: collateralAsset = tokens[i], borrowAsset = underlying
         // investedAssets is calculated using exact debts, debt-gaps are not taken into account
         (uint toPay, uint collateral) = converter_.getDebtAmountCurrent(address(this), v.token, v.asset, false);
-        console.log("_calcInvestedAssets.reverse.getDebtAmountCurrent.collateral", collateral);
-        console.log("_calcInvestedAssets.reverse.getDebtAmountCurrent.toPay", toPay);
         if (amountOut < toPay) {
           setDebt(v, indexAsset, toPay);
         } else {
@@ -563,8 +556,6 @@ library ConverterStrategyBaseLib2 {
         // direct debt: collateralAsset = underlying, borrowAsset = tokens[i]
         // investedAssets is calculated using exact debts, debt-gaps are not taken into account
         (toPay, collateral) = converter_.getDebtAmountCurrent(address(this), v.asset, v.token, false);
-        console.log("_calcInvestedAssets.direct.getDebtAmountCurrent.collateral", collateral);
-        console.log("_calcInvestedAssets.direct.getDebtAmountCurrent.toPay", toPay);
         amountOut += collateral;
 
         if (toRepay >= toPay) {
@@ -600,7 +591,6 @@ library ConverterStrategyBaseLib2 {
       _callCheckpoint(tokens, converter_);
     }
 
-    console.log("_calcInvestedAssets.amountOut", amountOut);
     return (amountOut, prices, decs);
   }
 
@@ -712,8 +702,6 @@ library ConverterStrategyBaseLib2 {
 
     uint len = tokens.length;
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      console.log("_getIncreaseToDebt.deltaGains.i", i, deltaGains[i]);
-      console.log("_getIncreaseToDebt.deltaLosses.i", i, deltaLosses[i]);
       if (i == indexAsset) {
         increaseToDebt -= int(deltaGains[i]);
         increaseToDebt += int(deltaLosses[i]);
@@ -796,7 +784,6 @@ library ConverterStrategyBaseLib2 {
     uint lossToCover,
     int debtToInsuranceInc
   ) internal {
-    console.log("_coverLossAndCheckResults.lossToCover", lossToCover);
     address asset = ISplitter(splitter).asset();
     address vault = ISplitter(splitter).vault();
 
@@ -810,11 +797,6 @@ library ConverterStrategyBaseLib2 {
 
     uint delta = AppLib.sub0(balanceAfter, balanceBefore);
     uint uncovered = AppLib.sub0(lossToCover, delta);
-
-    console.log("_coverLossAndCheckResults.uncovered", uncovered);
-    console.log("_coverLossAndCheckResults.balanceBefore", balanceBefore);
-    console.log("_coverLossAndCheckResults.balanceAfter", balanceAfter);
-    console.log("_coverLossAndCheckResults.delta", delta);
 
     // we don't add uncovered amount to the debts to the insurance
     emit OnCoverLoss(
@@ -867,11 +849,6 @@ library ConverterStrategyBaseLib2 {
 
     int increaseToDebt = _getIncreaseToDebt(tokens, indexAsset, prices, decs, converter);
     earnedOut = _coverLossAfterPriceChanging(csbs, investedAssetsBefore, investedAssetsOut, increaseToDebt, baseState);
-
-    console.log("fixPriceChanges.increaseToDebt"); console.logInt(increaseToDebt);
-    console.log("fixPriceChanges.earnedOut", earnedOut);
-    console.log("fixPriceChanges.investedAssetsBefore", investedAssetsBefore);
-    console.log("fixPriceChanges.investedAssetsOut", investedAssetsOut);
   }
 
   /// @notice Register amounts received for supplying collaterals and amount paid for the debts
