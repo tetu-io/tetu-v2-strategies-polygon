@@ -29,6 +29,7 @@ export interface IPrepareOverCollateralParams {
   swapAmountRatio: number;
   amountToDepositBySigner2?: string; // default 0
   amountToDepositBySigner?: string; // default 0
+  changePricesInOppositeDirectionAtFirst?: boolean; // false by default
 }
 
 export interface IListStates {
@@ -326,6 +327,20 @@ export class PairBasedStrategyPrepareStateUtils {
   // we recalculate swapAmount once per new tick
   let upperTick: number | undefined;
   let swapAmount: BigNumber = BigNumber.from(0);
+
+  if (p.changePricesInOppositeDirectionAtFirst) {
+    console.log("Prepare: change prices in opposite direction at first");
+    const state = await PackedData.getDefaultState(b.strategy);
+    const swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
+      signer,
+      b,
+      state.tokenA,
+      state.tokenB,
+      p.movePricesUp, // weird, but we need to calculate swap amount for movePriceUp, not for !movePriceUp here
+      p.swapAmountRatio
+    );
+    await this.movePriceBySteps(signer, b, !p.movePricesUp, defaultState, swapAmount);
+  }
 
   while (countRebalances < p.countRebalances) {
     const state = await PackedData.getDefaultState(b.strategy);

@@ -71,8 +71,8 @@ describe('PairBasedNoSwapIntTest', function() {
 
 //region Unit tests
   const platforms: PlatformsType[] = [
-    PLATFORM_UNIV3,
     PLATFORM_ALGEBRA,
+    PLATFORM_UNIV3,
     // PLATFORM_KYBER, /// Kyber is not used after security incident nov-2023
   ];
   platforms.forEach(function (platformType: PlatformsType) {
@@ -125,7 +125,9 @@ describe('PairBasedNoSwapIntTest', function() {
               snapshotLevel0 = await TimeUtils.snapshot();
               ptr = await PairWithdrawByAggUtils.prepareWithdrawTest(signer, signer2, builderResults, {
                 movePricesUp: true,
-                pathTag: "#up1"
+                pathTag: "#up1",
+                changePricesInOppositeDirectionAtFirst: platformType === PLATFORM_ALGEBRA,
+                swapAmountRatio: 0.3
               });
             });
             after(async function () {
@@ -1145,7 +1147,7 @@ describe('PairBasedNoSwapIntTest', function() {
             {priceUp: false, countCycles: 3, depositAmount: "100000"},
           ],
           [PLATFORM_ALGEBRA]: [
-            {priceUp: true, countCycles: 2, depositAmount: "5000"}
+            {priceUp: false, countCycles: 2, depositAmount: "5000"}
           ],
           // [PLATFORM_KYBER]: [
           //   {priceUp: false, countCycles: 2, depositAmount: "1000"}
@@ -1175,7 +1177,7 @@ describe('PairBasedNoSwapIntTest', function() {
               const b = builderResults;
               const defaultState = await PackedData.getDefaultState(b.strategy);
               const states: IStateNum[] = [];
-              const pathOut = `./tmp/${testSetup}-${testSetup.priceUp ? "up" : "down"}-${testSetup.countCycles}-rebalance.csv`;
+              const pathOut = `./tmp/${platformType}-${testSetup.priceUp ? "up" : "down"}-${testSetup.countCycles}-rebalance.csv`;
 
               console.log('deposit...');
               await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);

@@ -615,9 +615,10 @@ describe('PairBasedStrategyLibIntTest', () => {
         "0x",
         true,
         p.planKind,
-        [Array.isArray(p.propNotUnderlying18)
-          ? Misc.MAX_UINT
-          : parseUnits(p.propNotUnderlying18 || "0", 18),
+        [
+          Array.isArray(p.propNotUnderlying18)
+            ? Misc.MAX_UINT
+            : parseUnits(p.propNotUnderlying18 || "0", 18),
           0
         ]
       );
@@ -636,8 +637,10 @@ describe('PairBasedStrategyLibIntTest', () => {
      * A + B < X because of not-zero debt-gap of the first borrow.
      * In this case, _borrowToProportions will revert with "TS-29 opposite debt exists".
      * We need one more repay instead, so we will have R-S-R-R scheme
+     *
+     * Skipped, because currently we have only single pool adapter (AAVE3) that is able to borrow USDT under USDC
      */
-    describe("SCB-777", () => {
+    describe.skip("SCB-777", () => {
       let snapshot: string;
       before(async function () {
         snapshot = await TimeUtils.snapshot();

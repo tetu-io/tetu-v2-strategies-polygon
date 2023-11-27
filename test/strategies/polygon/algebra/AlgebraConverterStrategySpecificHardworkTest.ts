@@ -30,9 +30,9 @@ describe.skip(`AlgebraConverterStrategyHardworkOnSpecifiedBlockTest`, function()
     snapshotBefore = await TimeUtils.snapshot();
 
     await HardhatUtils.switchToMostCurrentBlock();
-    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
     [signer] = await ethers.getSigners();
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
     asset = IERC20__factory.connect(PolygonAddresses.USDC_TOKEN, signer);
 

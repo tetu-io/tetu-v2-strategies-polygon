@@ -16,7 +16,8 @@ import {AggregatorUtils} from "../../utils/AggregatorUtils";
 import {MockAggregatorUtils} from "../../mocks/MockAggregatorUtils";
 import {CaptureEvents} from "../CaptureEvents";
 
-export const DEFAULT_SWAP_AMOUNT_RATIO = 0.3;
+export const SWAP_AMOUNT_DEFAULT = 0.3;
+export const SWAP_AMOUNT_ALGEBRA = 0.2;
 
 export interface IWithdrawParams {
   aggregator: string;
@@ -37,6 +38,9 @@ export interface IPrepareWithdrawTestParams {
   countRebalances?: number;
 
   skipOverCollateralStep?: boolean;
+
+  swapAmountRatio?: number;
+  changePricesInOppositeDirectionAtFirst?: boolean; // default false
 }
 export interface IPrepareWithdrawTestResults {
   pathOut: string;
@@ -164,9 +168,10 @@ export class PairWithdrawByAggUtils {
         {
           countRebalances: p.countRebalances ?? 2,
           movePricesUp: p.movePricesUp,
-          swapAmountRatio: DEFAULT_SWAP_AMOUNT_RATIO,
+          swapAmountRatio: p.swapAmountRatio ?? SWAP_AMOUNT_DEFAULT,
           amountToDepositBySigner2: "100",
           amountToDepositBySigner: "10000",
+          changePricesInOppositeDirectionAtFirst: p.changePricesInOppositeDirectionAtFirst
         },
         pathOut,
         signer,

@@ -185,9 +185,9 @@ describe('AlgebraConverterStrategyTest', function() {
             pool: MaticAddresses.ALGEBRA_USDC_USDT,
             swapHelper: await MockHelper.createSwapperHelper(signer)
           },
-          true,
+          false,
           state,
-          parseUnits('1100000', 6),
+          parseUnits('110000', 6),
           undefined,
           5
       );

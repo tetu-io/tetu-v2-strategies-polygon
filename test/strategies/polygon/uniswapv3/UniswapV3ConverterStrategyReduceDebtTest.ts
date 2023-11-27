@@ -21,6 +21,7 @@ import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatU
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
 import {BigNumber} from "ethers";
+import {InjectUtils} from '../../../baseUT/strategies/InjectUtils';
 
 describe('UniswapV3ConverterStrategy reduce debt by agg test', function() {
   let snapshotBefore: string;
@@ -38,6 +39,7 @@ describe('UniswapV3ConverterStrategy reduce debt by agg test', function() {
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
     const core = Addresses.getCore();
     const controller = DeployerUtilsLocal.getController(signer);
