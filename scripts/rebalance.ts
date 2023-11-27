@@ -19,6 +19,7 @@ import { subscribeTgBot } from './telegram/tg-subscribe';
 import { Misc } from './utils/Misc';
 import { NSRUtils } from './utils/NSRUtils';
 import { formatUnits } from 'ethers/lib/utils';
+import { splitterHardWork } from './utils/splitter-hardwork';
 
 // test rebalance debt
 // NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtW3F.ts
@@ -90,6 +91,7 @@ async function main() {
 
   let lastNSR: number = 0;
   const needNSRTimestamp: { [addr: string]: number } = {};
+  let lastFuseTriggerReport = 0
 
   // noinspection InfiniteLoopJS
   while (true) {
@@ -100,6 +102,10 @@ async function main() {
 
       for (const vault of vaults) {
         const splitter = await TetuVaultV2__factory.connect(vault, ethers.provider).splitter();
+
+        // #### DO HARD WORK ####
+        await splitterHardWork(splitter);
+
         const splitterContract = StrategySplitterV2__factory.connect(splitter, ethers.provider);
         const strategies = await splitterContract.allStrategies();
         console.log('strategies', strategies.length);
@@ -118,6 +124,24 @@ async function main() {
             console.log('Processing strategy', strategyName, strategyAddress);
 
             let now = await Misc.getBlockTsFromChain();
+
+            const defaultState = await strategy.getDefaultState()
+            const isFuseTriggered =
+              defaultState[2][1].toString() === '2'
+              || defaultState[2][1].toString() === '3'
+              || defaultState[2][2].toString() === '2'
+              || defaultState[2][2].toString() === '3';
+            if (isFuseTriggered) {
+              if (lastFuseTriggerReport === 0) {
+                await sendMessageToTelegram(`Fuse triggered for ${strategyName} ${strategyAddress}`);
+                lastFuseTriggerReport = now
+              } else if (now - lastFuseTriggerReport >= 3600) {
+                await sendMessageToTelegram(`Fuse still triggered ${strategyName} ${strategyAddress}`);
+                lastFuseTriggerReport = now
+              }
+            } else {
+              lastFuseTriggerReport = 0
+            }
 
             // NSR
             const isPausedStrategy = await splitterContract.pausedStrategies(strategyAddress);

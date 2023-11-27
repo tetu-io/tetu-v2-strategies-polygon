@@ -23,13 +23,13 @@ import {HardhatUtils} from "../../test/baseUT/utils/HardhatUtils";
  *      npx hardhat run scripts/tasks/withdrawAllByAgg.ts
  */
 async function main() {
-  const STRATEGY = "0x4b8bd2623d7480850e406b9f2960305f44c7adeb";
+  const STRATEGY = "0x792bcc2f14fdcb9faf7e12223a564e7459ea4201";
   const pathOut = "./tmp/withdrawAllByAgg-states.csv";
 
-  await HardhatUtils.switchToBlock(47961845);
+  // await HardhatUtils.switchToBlock(47961845);
 
-  // const operator =  (await ethers.getSigners())[0];
-  const operator =  await Misc.impersonate("0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94");
+  const operator =  (await ethers.getSigners())[0];
+  // const operator =  await Misc.impersonate("0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94");
 
   const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, operator);
   const converterStrategyBase = ConverterStrategyBase__factory.connect(STRATEGY, operator);

@@ -52,6 +52,10 @@ const libraries = new Map<string, string[]>([
     'KyberConverterStrategy',
     ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'KyberConverterStrategyLogicLib', 'PairBasedStrategyLib', 'PairBasedStrategyLogicLib'],
   ],
+  [
+    'KyberConverterStrategyEmergency',
+    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'KyberConverterStrategyLogicLib', 'PairBasedStrategyLogicLib'],
+  ],
   ['KyberConverterStrategyLogicLib', ['KyberLib', 'KyberDebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib', 'PairBasedStrategyLib']],
   ['KyberDebtLib', ['KyberLib', 'ConverterStrategyBaseLib2', 'BorrowLib', 'PairBasedStrategyLogicLib']],
 
@@ -105,7 +109,7 @@ export async function deployContractSilently<T extends ContractFactory>(
 
   const receipt = await ethers.provider.getTransactionReceipt(instance.deployTransaction.hash);
 
-  if (hre.network.name !== 'hardhat' && hre.network.name !== 'foundry' && hre.network.name !== 'zktest') {
+  if (false && hre.network.name !== 'hardhat' && hre.network.name !== 'foundry' && hre.network.name !== 'zktest') {
     await wait(hre, 10);
     if (args.length === 0) {
       await verify(hre, receipt.contractAddress);
@@ -171,7 +175,7 @@ export async function deployContract<T extends ContractFactory>(
   const receipt = await ethers.provider.getTransactionReceipt(instance.deployTransaction.hash);
   console.log('DEPLOYED: ', name, receipt.contractAddress);
 
-  if (hre.network.name !== 'hardhat' && hre.network.name !== 'foundry' && hre.network.name !== 'zktest') {
+  if (false && hre.network.name !== 'hardhat' && hre.network.name !== 'foundry' && hre.network.name !== 'zktest') {
     await wait(hre, 10);
     if (args.length === 0) {
       await verify(hre, receipt.contractAddress);

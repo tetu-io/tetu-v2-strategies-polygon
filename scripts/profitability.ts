@@ -3,20 +3,21 @@ import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { getApr } from './uniswapV3Backtester/strategyBacktest';
 import { writeFileSyncRestoreFolder } from '../test/baseUT/utils/FileUtils';
 import fs, { writeFileSync } from 'fs';
-import { MaticAddresses } from './addresses/MaticAddresses';
 import { ethers } from 'hardhat';
 import {
+  IERC20__factory, IERC20Metadata__factory,
   IPairBasedDefaultStateProvider__factory,
   ITetuConverter__factory,
   ITetuLiquidator__factory,
 } from '../typechain';
 import { JsonRpcProvider } from '@ethersproject/providers/src.ts/json-rpc-provider';
 import { BigNumber } from 'ethers';
+import { Misc } from './utils/Misc';
+import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 
-const whitelistedVaultsForInvesting = ['tUSDC'];
-const SUBGRAPH = 'https://api.thegraph.com/subgraphs/name/a17/tetu-v2?version=pending';
-const CONVERTER = MaticAddresses.TETU_CONVERTER;
-const HISTORY_DAYS = 3;
+const whitelistedVaultsForInvesting = ['tUSDC', 'tUSDbC'];
+const SUBGRAPH = Misc.getSubgraphUrl();
+const HISTORY_DAYS = 7;
 
 interface IDebtState {
   tokenACollateral: string;
@@ -38,8 +39,8 @@ async function getDebtState(
     tokenBCollateral: '0',
     tokenBDebt: '0',
   };
-
-  const converter = ITetuConverter__factory.connect(CONVERTER, provider);
+  const tools = Addresses.getTools();
+  const converter = ITetuConverter__factory.connect(tools.converter, provider);
 
   const rAB = await converter.getDebtAmountStored(strategyAddress, tokenA, tokenB, false, { blockTag: block });
   const rBA = await converter.getDebtAmountStored(strategyAddress, tokenB, tokenA, false, { blockTag: block });
@@ -54,7 +55,9 @@ async function main() {
   console.log('Tetu V2 strategies profitability');
 
   const provider = ethers.provider;
-  const liquidator = ITetuLiquidator__factory.connect(MaticAddresses.TETU_LIQUIDATOR, provider);
+  const tools = Addresses.getTools();
+
+  const liquidator = ITetuLiquidator__factory.connect(tools.liquidator, provider);
 
   const pathOut = `./tmp/profitability/${Date.now()}.csv`;
   const headers = [
@@ -62,6 +65,8 @@ async function main() {
     'Date',
     'Real APR',
     'TVL',
+    'tokenA Balance',
+    'tokenB Balance',
     'Claimed fees(without covered by profit)',
     'Claimed rewards(without covered by profit)',
     'Covered by profit',
@@ -81,6 +86,7 @@ async function main() {
   const DAY = 60 * 60 * 24;
   const data = await client.query(getStrategiesData((Math.round(Date.now() / 1000 / DAY) * DAY) - DAY *
     HISTORY_DAYS), {}).toPromise();
+  // console.log(data.data)
   if (!data?.data?.vaultEntities) {
     console.log('Error fetching from subgraph');
     return;
@@ -96,6 +102,8 @@ async function main() {
           .getDefaultState();
         const tokenA = defaultState.addr[0];
         const tokenB = defaultState.addr[1];
+        const tokenADecimals = await IERC20Metadata__factory.connect(tokenA, provider).decimals();
+        const tokenBDecimals = await IERC20Metadata__factory.connect(tokenB, provider).decimals();
 
         let debtState: IDebtState | undefined = undefined;
 
@@ -109,6 +117,8 @@ async function main() {
           lossCoveredFromInsurance: string
           lossCoveredFromRewards: string
           debtCost: string
+          tokenABalance: string
+          tokenBBalance: string
           lastHistory: {
             time: number
             tvl: string
@@ -147,6 +157,8 @@ async function main() {
               lossCoveredFromInsurance: '0',
               lossCoveredFromRewards: '0',
               debtCost: '0',
+              tokenABalance: formatUnits(await IERC20__factory.connect(tokenA, provider).balanceOf(strategy.id), tokenADecimals),
+              tokenBBalance: formatUnits(await IERC20__factory.connect(tokenB, provider).balanceOf(strategy.id), tokenBDecimals),
             });
 
             if (dayIndex > 0) {
@@ -245,6 +257,8 @@ async function main() {
             dayHistories[dayIndex].lastHistory = history;
           }
 
+
+
           if (debtState === undefined) {
             debtState = await getDebtState(strategy.id, tokenA, tokenB, history.block + 1, provider);
           } else {
@@ -296,6 +310,8 @@ async function main() {
           day.day,
           '' + day.realApr,
           day.lastHistory.tvl,
+          day.tokenABalance,
+          day.tokenBBalance,
           day.feesClaimed,
           day.rewardsClaimed,
           day.profitCovered,
