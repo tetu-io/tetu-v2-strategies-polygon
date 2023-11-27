@@ -1473,10 +1473,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
   });
 
   describe("Check invariants on loops", () => {
-    const COUNT_CYCLES = 2;
+    const COUNT_CYCLES = 10;
     const maxLockedPercent = 35;
     const WITHDRAW_FEE = 300;
-    /** Currently withdraw-fee is used as priceChangeTolerance */
+    /** Currently withdraw-fee is used as priceChangeTolerance for security reasons */
     const PRICE_CHANGE_TOLERANCE = WITHDRAW_FEE;
 
     interface IStrategyInfo {
@@ -1497,40 +1497,20 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     }
 
     const strategies: IStrategyInfo[] = [
-      { // not enough insurance, large user
-        caseTag: "case3",
-        name: PLATFORM_UNIV3,
-        notUnderlyingToken: MaticAddresses.USDT_TOKEN,
-        compoundRatio: 0,
-        initialAmountOnSignerBalance: "2000",
-        investAmount: "1000",
-        initialAmountOnSignerBalanceUser: "80000",
-        investAmountSignerUser: "50000",
-        initialInsuranceBalance: "0",
-        initialLastDirectionUp: false,
-        countBlocksToAdvance: 7000,
-        percentToWithdraw: 10,
-        percentToDeposit: 80,
-        dontChangePrices: true
-      },
-      // { // not enough insurance, small user
-      //   caseTag: "case2",
+      // { // large total assets, enough insurance to cover any losses, small withdraw/deposits, change prices
+      //   caseTag: "case5",
       //   name: PLATFORM_UNIV3,
       //   notUnderlyingToken: MaticAddresses.USDT_TOKEN,
       //   compoundRatio: 0,
       //   initialAmountOnSignerBalance: "80000",
       //   investAmount: "50000",
-      //   initialAmountOnSignerBalanceUser: "2000",
-      //   investAmountSignerUser: "1000",
-      //   initialInsuranceBalance: "0",
-      //   initialLastDirectionUp: false,
-      //   countBlocksToAdvance: 7000,
-      //   percentToWithdraw: 10,
-      //   percentToDeposit: 80,
-      //   dontChangePrices: true
+      //   initialInsuranceBalance: "1000",
+      //   initialLastDirectionUp: true,
+      //   countBlocksToAdvance: 10000,
+      //   dontChangePrices: false
       // },
-      // { // large total assets, enough insurance to cover any losses, small withdraw/deposits
-      //   caseTag: "case1",
+      // { // large total assets, enough insurance to cover any losses, small withdraw/deposits, change prices
+      //   caseTag: "case4",
       //   name: PLATFORM_UNIV3,
       //   notUnderlyingToken: MaticAddresses.USDT_TOKEN,
       //   compoundRatio: 0,
@@ -1539,6 +1519,50 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       //   initialInsuranceBalance: "1000",
       //   initialLastDirectionUp: false,
       //   countBlocksToAdvance: 10000,
+      //   dontChangePrices: false
+      // },
+      { // large total assets, enough insurance to cover any losses, small withdraw/deposits, don't change prices
+        caseTag: "case1",
+        name: PLATFORM_UNIV3,
+        notUnderlyingToken: MaticAddresses.USDT_TOKEN,
+        compoundRatio: 0,
+        initialAmountOnSignerBalance: "80000",
+        investAmount: "50000",
+        initialInsuranceBalance: "1000",
+        initialLastDirectionUp: false,
+        countBlocksToAdvance: 10000,
+        dontChangePrices: true
+      },
+      { // not enough insurance, small user, don't change prices
+        caseTag: "case2",
+        name: PLATFORM_UNIV3,
+        notUnderlyingToken: MaticAddresses.USDT_TOKEN,
+        compoundRatio: 0,
+        initialAmountOnSignerBalance: "80000",
+        investAmount: "50000",
+        initialAmountOnSignerBalanceUser: "2000",
+        investAmountSignerUser: "1000",
+        initialInsuranceBalance: "0",
+        initialLastDirectionUp: false,
+        countBlocksToAdvance: 7000,
+        percentToWithdraw: 10,
+        percentToDeposit: 80,
+        dontChangePrices: true
+      },
+      // { // not enough insurance, large user, change prices
+      //   caseTag: "case3",
+      //   name: PLATFORM_UNIV3,
+      //   notUnderlyingToken: MaticAddresses.USDT_TOKEN,
+      //   compoundRatio: 0,
+      //   initialAmountOnSignerBalance: "2000",
+      //   investAmount: "1000",
+      //   initialAmountOnSignerBalanceUser: "80000",
+      //   investAmountSignerUser: "50000",
+      //   initialInsuranceBalance: "0",
+      //   initialLastDirectionUp: false,
+      //   countBlocksToAdvance: 7000,
+      //   percentToWithdraw: 10,
+      //   percentToDeposit: 80,
       //   dontChangePrices: true
       // },
     ];
@@ -1780,37 +1804,51 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           expect(last.strategy.debtToInsurance - notEnoughInsurance).approximately(coverLossInc - debtPaid + debtToInsuranceOnProfitInc, 1e-4);
         });
-        it('borrow losses + swap losses = covered losses', async () => {
-          const {ret} = await loadFixture(makeCalculations);
-          const last = ret[ret.length - 1];
 
-          const swapLosses = ret.reduce((prev, cur) => prev + (cur.events?.lossSplitter ?? 0), 0);
-          const increaseToDebts = ret.reduce((prev, cur) => prev + (cur.events?.fixPriceChanges.increaseToDebt ?? 0), 0);
-          const notEnoughInsurance = ret.reduce((prev, cur) => prev + (cur.events?.onCoverLoss.lossUncoveredNotEnoughInsurance ?? 0), 0);
+        if (strategyInfo.initialInsuranceBalance !== "0") {
+          it('borrow losses + swap losses = covered losses', async () => {
+            const {ret} = await loadFixture(makeCalculations);
+            const last = ret[ret.length - 1];
 
-          const coveredLoss = ret.reduce((prev, cur) => prev + (cur.events?.onCoverLoss.lossToCover ?? 0), 0);
+            const swapLosses = ret.reduce((prev, cur) => prev + (cur.events?.lossSplitter ?? 0), 0);
+            const increaseToDebts = ret.reduce((prev, cur) => prev + (cur.events?.fixPriceChanges.increaseToDebt ?? 0), 0);
+            const notEnoughInsurance = ret.reduce((prev, cur) => prev + (cur.events?.onCoverLoss.lossUncoveredNotEnoughInsurance ?? 0), 0);
+            const coveredLoss = ret.reduce((prev, cur) => prev + (cur.events?.onCoverLoss.lossToCover ?? 0), 0);
+            const currentDebtsExist = (last.converterReverse.amountsToRepay.length !== 0 && last.converterReverse.amountsToRepay[0] > 0)
+              || (last.converterDirect.amountsToRepay.length !== 0 && last.converterDirect.amountsToRepay[0] > 0);
+            const paidDebts = (last.events?.borrowResults.losses ?? 0) - (last.events?.borrowResults.gains ?? 0)
+              + (last.previewBorrowResults?.borrowLosses ?? 0) - (last.previewBorrowResults?.borrowGains ?? 0);
+            const lossesForBorrowing = currentDebtsExist ? increaseToDebts : paidDebts;
 
-          console.log("swapLosses", swapLosses);
-          console.log("increaseToDebts", increaseToDebts);
-          console.log("notEnoughInsurance", notEnoughInsurance);
-          console.log("coveredLoss", coveredLoss);
+            console.log("swapLosses", swapLosses);
+            console.log("notEnoughInsurance", notEnoughInsurance);
+            console.log("coveredLoss", coveredLoss);
+            console.log("increaseToDebts", increaseToDebts);
+            console.log("paidDebts", paidDebts);
+            console.log("lossesForBorrowing", lossesForBorrowing);
 
-          expect(coveredLoss).approximately(increaseToDebts + swapLosses + notEnoughInsurance, 1e-4);
-        });
-        it('finalSharePrice is not changed', async () => {
-          const {ret, totalWithdrawFee, totalWithdraw, totalDeposit} = await loadFixture(makeCalculations);
+            if (strategyInfo.dontChangePrices === true) {
+              expect(coveredLoss).approximately(lossesForBorrowing + swapLosses + notEnoughInsurance, 1e-4);
+            } else {
+              expect(coveredLoss).gt(lossesForBorrowing + swapLosses + notEnoughInsurance);
+            }
+          });
 
-          const first = ret[0];
-          const last = ret[ret.length - 1];
-          const uncoveredLoss = StateUtilsNum.getTotalUncoveredLoss(ret);
-          const finalSharePrice = (last.vault.totalAssets + uncoveredLoss) / last.vault.totalSupply;
+          it('finalSharePrice is not changed', async () => {
+            const {ret, totalWithdrawFee, totalWithdraw, totalDeposit} = await loadFixture(makeCalculations);
 
-          if (strategyInfo.compoundRatio === 0) {
-            expect(finalSharePrice).approximately(first.vault.sharePrice, 1e-4);
-          } else {
-            expect(finalSharePrice).gte(first.vault.sharePrice);
-          }
-        });
+            const first = ret[0];
+            const last = ret[ret.length - 1];
+            const uncoveredLoss = StateUtilsNum.getTotalUncoveredLoss(ret);
+            const finalSharePrice = (last.vault.totalAssets + uncoveredLoss) / last.vault.totalSupply;
+
+            if (strategyInfo.compoundRatio === 0) {
+              expect(finalSharePrice).approximately(first.vault.sharePrice, 1e-4);
+            } else {
+              expect(finalSharePrice).gte(first.vault.sharePrice);
+            }
+          });
+        }
       });
     });
   });
