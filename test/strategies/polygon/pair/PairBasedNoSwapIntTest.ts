@@ -13,7 +13,7 @@ import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../../baseUT/strategies/pair/PairBasedStrategyBuilder";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
-import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3, PlatformsType} from "../../../baseUT/strategies/AppPlatforms";
+import {PLATFORM_ALGEBRA, PLATFORM_UNIV3, PlatformsType} from "../../../baseUT/strategies/AppPlatforms";
 import {differenceInPercentsNumLessThan} from "../../../baseUT/utils/MathUtils";
 import {PairStrategyFixtures} from "../../../baseUT/strategies/pair/PairStrategyFixtures";
 import {
@@ -70,7 +70,11 @@ describe('PairBasedNoSwapIntTest', function() {
 //endregion before, after
 
 //region Unit tests
-  const platforms: PlatformsType[] = [PLATFORM_UNIV3, PLATFORM_ALGEBRA, PLATFORM_KYBER,];
+  const platforms: PlatformsType[] = [
+    PLATFORM_UNIV3,
+    PLATFORM_ALGEBRA,
+    // PLATFORM_KYBER, /// Kyber is not used after security incident nov-2023
+  ];
   platforms.forEach(function (platformType: PlatformsType) {
     async function createStrategy(): Promise<IBuilderResults> {
       const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
@@ -110,7 +114,7 @@ describe('PairBasedNoSwapIntTest', function() {
            * The reason is unclear, there are no such problems on the same block locally
            * So, let's try to just reduce deviation value
            */
-          [PLATFORM_KYBER]: {sharePriceDeviation: 1e-4},
+          // [PLATFORM_KYBER]: {sharePriceDeviation: 1e-4},
         };
 
         [TEST_SETUPS[platformType]].forEach(function (testSetup: ITestSetup) {
@@ -954,7 +958,7 @@ describe('PairBasedNoSwapIntTest', function() {
               {sharePriceDeviation: 2e-8, increaseOutput: false},
           ],
           [PLATFORM_ALGEBRA]: [{sharePriceDeviation: 2e-8, increaseOutput: true}],
-          [PLATFORM_KYBER]: [{sharePriceDeviation: 2e-8, increaseOutput: true}],
+          // [PLATFORM_KYBER]: [{sharePriceDeviation: 2e-8, increaseOutput: true}],
         };
 
         TEST_SETUPS[platformType].forEach(function (testSetup: ITestSetup) {
@@ -1143,9 +1147,9 @@ describe('PairBasedNoSwapIntTest', function() {
           [PLATFORM_ALGEBRA]: [
             {priceUp: true, countCycles: 2, depositAmount: "5000"}
           ],
-          [PLATFORM_KYBER]: [
-            {priceUp: false, countCycles: 2, depositAmount: "1000"}
-          ]
+          // [PLATFORM_KYBER]: [
+          //   {priceUp: false, countCycles: 2, depositAmount: "1000"}
+          // ]
         };
 
         TEST_SETUPS[platformType].forEach(function (testSetup: ITestSetup) {

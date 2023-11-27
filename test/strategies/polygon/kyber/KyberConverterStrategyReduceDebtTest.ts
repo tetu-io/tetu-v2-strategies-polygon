@@ -28,7 +28,8 @@ import {PLAN_REPAY_SWAP_REPAY_1} from "../../../baseUT/AppConstants";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
 
-describe('KyberConverterStrategy reduce debt by agg test', function() {
+/// Kyber is not used after security incident nov-2023
+describe.skip('KyberConverterStrategy reduce debt by agg test', function() {
 
   let snapshotBefore: string;
   let snapshot: string;

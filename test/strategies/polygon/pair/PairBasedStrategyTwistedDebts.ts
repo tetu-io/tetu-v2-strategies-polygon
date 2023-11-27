@@ -216,7 +216,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
     // {name: PLATFORM_UNIV3, amountDepositBySigner: "250000"},
     {name: PLATFORM_UNIV3, amountDepositBySigner: "25000"},
     {name: PLATFORM_ALGEBRA,},
-    {name: PLATFORM_KYBER,},
+    // {name: PLATFORM_KYBER,}, /// Kyber is not used after security incident nov-2023
   ];
 
   describe("Prices up", () => {

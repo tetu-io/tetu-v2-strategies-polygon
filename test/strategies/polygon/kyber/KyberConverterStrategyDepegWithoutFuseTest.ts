@@ -36,7 +36,8 @@ import {KYBER_PID} from "../../../baseUT/strategies/pair/PairBasedStrategyBuilde
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
-describe('KyberConverterStrategyDepegWithoutFuseTest', function() {
+/// Kyber is not used after security incident nov-2023
+describe.skip('KyberConverterStrategyDepegWithoutFuseTest', function() {
 
   let snapshotBefore: string;
   let snapshot: string;

@@ -32,7 +32,8 @@ import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 // const {expect} = chai;
 chai.use(chaiAsPromised);
 
-describe('KyberConverterStrategyUniversalTest', async () => {
+/// Kyber is not used after security incident nov-2023
+describe.skip('KyberConverterStrategyUniversalTest', async () => {
   // [asset, pool, tickRange, rebalanceTickRange, incentiveKey]
   const targets: [string, string, number, number, number][] = [
     [MaticAddresses.USDC_TOKEN, MaticAddresses.KYBER_USDC_USDT, 0, 0, KYBER_PID_DEFAULT_BLOCK],

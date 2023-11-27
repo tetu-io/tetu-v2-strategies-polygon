@@ -109,7 +109,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     const strategies: IStrategyInfo[] = [
       {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
       {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
-      {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      // {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN}, /// Kyber is not used after security incident nov-2023
       // todo Uncomment when volatile pairs will be used  {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
       // todo Uncomment when volatile pairs will be used {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN},
     ];

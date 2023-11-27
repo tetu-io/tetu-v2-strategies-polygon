@@ -223,7 +223,8 @@ describe('PairBasedStrategySetupIntTest', () => {
       });
     });
 
-    describe("Kyber", () => {
+    /// Kyber is not used after security incident nov-2023
+    describe.skip("Kyber", () => {
       it("should set expected values", async () => {
         const ret = await callSetFuseStatus(strategyKyber, {
           fuseStatus: 1,
@@ -302,7 +303,8 @@ describe('PairBasedStrategySetupIntTest', () => {
       });
     });
 
-    describe("Kyber", () => {
+    /// Kyber is not used after security incident nov-2023
+    describe.skip("Kyber", () => {
       it("should set expected values", async () => {
         const ret = await callSetFuseStatus(strategyKyber, {
           thresholds: ["1", "2", "4", "3"],
@@ -375,7 +377,8 @@ describe('PairBasedStrategySetupIntTest', () => {
       });
     });
 
-    describe("Kyber", () => {
+    /// Kyber is not used after security incident nov-2023
+    describe.skip("Kyber", () => {
       it("should set expected values", async () => {
         const profitHolder = ethers.Wallet.createRandom().address;
         const ret = await callSetProfitHolder(strategyKyber, {profitHolder});
@@ -446,7 +449,8 @@ describe('PairBasedStrategySetupIntTest', () => {
       });
     });
 
-    describe("Kyber", () => {
+    /// Kyber is not used after security incident nov-2023
+    describe.skip("Kyber", () => {
       it("should set expected values", async () => {
         const profitHolder = ethers.Wallet.createRandom().address;
         const ret = await callSetProfitHolder(strategyKyber, {done: 1});

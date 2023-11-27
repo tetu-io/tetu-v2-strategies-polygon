@@ -34,7 +34,8 @@ import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/pai
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
-describe('KyberConverterStrategyTest', function() {
+/// Kyber is not used after security incident nov-2023
+describe.skip('KyberConverterStrategyTest', function() {
 
   let snapshotBefore: string;
   let snapshot: string;
