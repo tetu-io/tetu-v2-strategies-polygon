@@ -20,7 +20,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   string public constant override NAME = "UniswapV3 Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.UNIV3;
-  string public constant override STRATEGY_VERSION = "3.0.0";
+  string public constant override STRATEGY_VERSION = "3.0.1";
 
   //endregion ------------------------------------------------- Constants
 
@@ -314,8 +314,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     // withdraw all liquidity from pool
     // after disableFuse() liquidity is zero
-    if (state.pair.totalLiquidity != 0) {
-      _depositorEmergencyExit();
+    uint liquidity = state.pair.totalLiquidity;
+    if (liquidity != 0) {
+      _depositorExit(liquidity, false);
     }
   }
 

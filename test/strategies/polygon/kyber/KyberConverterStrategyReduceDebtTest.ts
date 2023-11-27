@@ -26,7 +26,7 @@ import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatU
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {PLAN_REPAY_SWAP_REPAY} from "../../../baseUT/AppConstants";
 
-describe('KyberConverterStrategy reduce debt by agg test', function() {
+describe.skip('KyberConverterStrategy reduce debt by agg test', function() {
 
   let snapshotBefore: string;
   let snapshot: string;

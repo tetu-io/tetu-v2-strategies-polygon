@@ -20,9 +20,8 @@ abstract contract DepositorTestBase is DepositorBase {
 
   /// @dev Withdraw given lp amount from the pool.
   /// @notice if requested liquidityAmount >= invested, then should make full exit
-  function depositorExit(uint liquidityAmount)
-  external returns (uint[] memory amountsOut) {
-    return _depositorExit(liquidityAmount);
+  function depositorExit(uint liquidityAmount) external returns (uint[] memory amountsOut) {
+    return _depositorExit(liquidityAmount, false);
   }
 
   /// @dev Quotes output for given lp amount from the pool.
@@ -31,8 +30,7 @@ abstract contract DepositorTestBase is DepositorBase {
   }
 
   /// @dev If pool supports emergency withdraw need to call it for emergencyExit()
-  function depositorEmergencyExit()
-  external returns (uint[] memory amountsOut) {
+  function depositorEmergencyExit() external returns (uint[] memory amountsOut) {
     return _depositorEmergencyExit();
   }
 

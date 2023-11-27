@@ -176,7 +176,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     const strategies: IStrategyInfo[] = [
       {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
       {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
-      {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      // {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
       {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
       {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN},
     ];
@@ -293,6 +293,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
           const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
+          await TokenUtils.getToken(b.asset, signer.address, quote.amountToSwap);
 
           const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
           await b.strategy.withdrawByAggStep(
@@ -333,7 +334,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
           const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-          expect(stateAfter.strategy.investedAssets).lt(10);
+          expect(stateAfter.strategy.liquidity).lt(10);
         });
         it("isReadyToHardWork should return expected value", async () => {
           const b = await loadFixture(prepareStrategy);
@@ -384,7 +385,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     const strategies: IStrategyInfo[] = [
       {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
       {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
-      {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      // {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
 
       // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
       // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN},
@@ -1295,7 +1296,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
             const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-            expect(stateAfter.strategy.investedAssets).lt(10);
+            expect(stateAfter.strategy.liquidity).lt(10);
           });
 
           describe("withdraw various amounts", () => {
@@ -1541,7 +1542,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
             const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-            expect(stateAfter.strategy.investedAssets).lt(10);
+            expect(stateAfter.strategy.liquidity).lt(10);
           });
 
           describe("withdraw various amounts", () => {

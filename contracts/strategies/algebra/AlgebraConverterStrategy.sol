@@ -16,7 +16,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
   string public constant override NAME = "Algebra Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.ALGEBRA;
-  string public constant override STRATEGY_VERSION = "3.0.0";
+  string public constant override STRATEGY_VERSION = "3.0.1";
 
   //endregion ------------------------------------------------- Constants
 
@@ -321,8 +321,9 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
     // withdraw all liquidity from pool
     // after disableFuse() liquidity is zero
-    if (state.pair.totalLiquidity > 0) {
-      _depositorEmergencyExit();
+    uint liquidity = state.pair.totalLiquidity;
+    if (liquidity != 0) {
+      _depositorExit(liquidity, false);
     }
   }
 

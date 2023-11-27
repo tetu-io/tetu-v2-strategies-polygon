@@ -30,7 +30,7 @@ library AlgebraConverterStrategyLogicLib {
   /// @param loss Total amount of loss
   /// @param coveredByRewards Part of the loss covered by rewards
   event CoverLoss(uint loss, uint coveredByRewards);
-  //endregion ------------------------------------------------ Data types
+  //endregion ------------------------------------------------ Events
 
   //region ------------------------------------------------ Data types
 
@@ -81,6 +81,13 @@ library AlgebraConverterStrategyLogicLib {
     uint bonusRewardInTermOfTokenA;
     uint fee0;
     uint fee1;
+  }
+
+  struct ExitLocal {
+    address strategyProfitHolder;
+    uint128 liquidity;
+    uint reward;
+    uint bonusReward;
   }
   //endregion ------------------------------------------------ Data types
 
@@ -282,38 +289,44 @@ library AlgebraConverterStrategyLogicLib {
 
   //region ------------------------------------------------ Exit the pool
 
+  /// @param emergency Emergency exit (only withdraw, don't claim any rewards or make any other additional actions)
   function exit(
     State storage state,
-    uint128 liquidityAmountToExit
+    uint128 liquidityAmountToExit,
+    bool emergency
   ) external returns (uint[] memory amountsOut) {
+    ExitLocal memory v;
+
     amountsOut = new uint[](2);
-    address strategyProfitHolder = state.pair.strategyProfitHolder;
+    v.strategyProfitHolder = state.pair.strategyProfitHolder;
     IncentiveKey memory key = getIncentiveKey(state);
 
-    uint128 liquidity = state.pair.totalLiquidity;
+    v.liquidity = state.pair.totalLiquidity;
 
-    require(liquidity >= liquidityAmountToExit, AlgebraStrategyErrors.WRONG_LIQUIDITY);
+    require(v.liquidity >= liquidityAmountToExit, AlgebraStrategyErrors.WRONG_LIQUIDITY);
 
     // we assume here, that liquidity is not zero (otherwise it doesn't worth to call exit)
     uint tokenId = state.tokenId;
 
     // get reward amounts
-    (uint reward, uint bonusReward) = FARMING_CENTER.collectRewards(key, tokenId);
+    if (! emergency) {
+      (v.reward, v.bonusReward) = FARMING_CENTER.collectRewards(key, tokenId);
+    }
 
     // exit farming (undeposit)
     FARMING_CENTER.exitFarming(getIncentiveKey(state), state.tokenId, false);
 
     // claim rewards and send to profit holder
-    {
-      if (reward > 0) {
+    if (! emergency) {
+      if (v.reward > 0) {
         address token = state.rewardToken;
-        reward = FARMING_CENTER.claimReward(token, address(this), 0, reward);
-        IERC20(token).safeTransfer(strategyProfitHolder, reward);
+        v.reward = FARMING_CENTER.claimReward(token, address(this), 0, v.reward);
+        IERC20(token).safeTransfer(v.strategyProfitHolder, v.reward);
       }
-      if (bonusReward > 0) {
+      if (v.bonusReward > 0) {
         address token = state.bonusRewardToken;
-        bonusReward = FARMING_CENTER.claimReward(token, address(this), 0, bonusReward);
-        IERC20(token).safeTransfer(strategyProfitHolder, bonusReward);
+        v.bonusReward = FARMING_CENTER.claimReward(token, address(this), 0, v.bonusReward);
+        IERC20(token).safeTransfer(v.strategyProfitHolder, v.bonusReward);
       }
     }
 
@@ -339,17 +352,17 @@ library AlgebraConverterStrategyLogicLib {
 
       // send fees to profit holder
       if (fee0 > 0) {
-        IERC20(state.pair.tokenA).safeTransfer(strategyProfitHolder, fee0);
+        IERC20(state.pair.tokenA).safeTransfer(v.strategyProfitHolder, fee0);
       }
       if (fee1 > 0) {
-        IERC20(state.pair.tokenB).safeTransfer(strategyProfitHolder, fee1);
+        IERC20(state.pair.tokenB).safeTransfer(v.strategyProfitHolder, fee1);
       }
     }
 
-    liquidity -= liquidityAmountToExit;
-    state.pair.totalLiquidity = liquidity;
+    v.liquidity -= liquidityAmountToExit;
+    state.pair.totalLiquidity = v.liquidity;
 
-    if (liquidity > 0) {
+    if (v.liquidity != 0) {
       ALGEBRA_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), tokenId);
       FARMING_CENTER.enterFarming(key, tokenId, 0, false);
     }
