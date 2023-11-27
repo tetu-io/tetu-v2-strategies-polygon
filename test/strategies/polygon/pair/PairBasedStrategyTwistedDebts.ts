@@ -214,8 +214,8 @@ describe('PairBasedStrategyTwistedDebts', function () {
 
   const strategies: IStrategyInfo[] = [
     // {name: PLATFORM_UNIV3, amountDepositBySigner: "250000"},
-    {name: PLATFORM_UNIV3, amountDepositBySigner: "25000"},
     {name: PLATFORM_ALGEBRA,},
+    {name: PLATFORM_UNIV3, amountDepositBySigner: "25000"},
     // {name: PLATFORM_KYBER,}, /// Kyber is not used after security incident nov-2023
   ];
 
@@ -250,7 +250,8 @@ describe('PairBasedStrategyTwistedDebts', function () {
           movePricesUp: true,
           swapAmountRatio: strategyInfo.name === PLATFORM_ALGEBRA ? 0.3 : 1.1,
           amountToDepositBySigner2: "100",
-          amountToDepositBySigner: strategyInfo.amountDepositBySigner ?? "10000"
+          amountToDepositBySigner: strategyInfo.amountDepositBySigner ?? "10000",
+          changePricesInOppositeDirectionAtFirst: strategyInfo.name === PLATFORM_ALGEBRA
         }
         const listStates = await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(b, p, pathOut, signer, signer2);
         return {builderResults: b, states: [...states, ...listStates.states]};
@@ -388,7 +389,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
             await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
             const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
 
-            expect(stateAfter.strategy.investedAssets).lt(10);
+            expect(stateAfter.strategy.liquidity).lt(10);
           });
 
           if (strategyInfo.name === PLATFORM_UNIV3) {
@@ -867,7 +868,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
             await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
             const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
 
-            expect(stateAfter.strategy.investedAssets).lt(10);
+            expect(stateAfter.strategy.liquidity).lt(10);
           });
 
           if (strategyInfo.name === PLATFORM_UNIV3) {

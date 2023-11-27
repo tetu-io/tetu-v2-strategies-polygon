@@ -222,6 +222,7 @@ describe.skip('BalancerBoostedDepositorFacadeTest', function() {
     const tx = await facade._depositorExitAccess(
       // 0 means that we withdraw all liquidity, see _depositorExitAccess implementation
       liquidityAmountToWithdraw || 0,
+      false
     );
     const gasUsed = (await tx.wait()).gasUsed;
 

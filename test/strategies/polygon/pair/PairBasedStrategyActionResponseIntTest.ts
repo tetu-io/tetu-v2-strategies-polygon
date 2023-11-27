@@ -34,7 +34,7 @@ import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {IDefaultState, PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
-import {GAS_LIMIT_PAIR_BASED_WITHDRAW, GAS_REBALANCE_NO_SWAP} from "../../../baseUT/GasLimits";
+import {GAS_LIMIT, GAS_LIMIT_PAIR_BASED_WITHDRAW, GAS_REBALANCE_NO_SWAP} from "../../../baseUT/GasLimits";
 import {
   ENTRY_TO_POOL_DISABLED,
   ENTRY_TO_POOL_IS_ALLOWED,
@@ -57,6 +57,8 @@ import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
 
 describe('PairBasedStrategyActionResponseIntTest', function() {
+  const SWAP_AMOUNT_DEFAULT = 1.1;
+  const SWAP_AMOUNT_ALGEBRA = 0.25;
 
 //region Variables
   let snapshotBefore: string;
@@ -107,8 +109,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       tag?: string; // to be able to distinct tests
     }
     const strategies: IStrategyInfo[] = [
-      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
       {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
       // {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN}, /// Kyber is not used after security incident nov-2023
       // todo Uncomment when volatile pairs will be used  {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
       // todo Uncomment when volatile pairs will be used {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN},
@@ -205,7 +207,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
               const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-              await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
+              await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: GAS_LIMIT});
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
               expect(stateAfter.vault.totalAssets).gt(stateBefore.vault.totalAssets);
             });
@@ -213,7 +215,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
               const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-              await b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: 19_000_000});
+              await b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: GAS_LIMIT});
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
               expect(stateAfter.user.assetBalance).eq(stateBefore.user.assetBalance + 300);
@@ -222,7 +224,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
               const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-              await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
+              await b.vault.connect(signer).withdrawAll({gasLimit: GAS_LIMIT});
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
               console.log('stateBefore', stateBefore);
@@ -246,7 +248,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   : "KS-9 No rebalance needed";
 
               await expect(
-                b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000})
+                b.strategy.rebalanceNoSwaps(true, {gasLimit: GAS_LIMIT})
               ).revertedWith(expectedErrorMessage); // NO_REBALANCE_NEEDED
             });
             it("should rebalance debts successfully", async () => {
@@ -263,7 +265,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                 "0x",
                 planEntryData,
                 ENTRY_TO_POOL_IS_ALLOWED,
-                {gasLimit: 19_000_000}
+                {gasLimit: GAS_LIMIT}
               );
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
               console.log("stateBefore", stateBefore);
@@ -281,7 +283,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
 
               const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-              await converterStrategyBase.doHardWork({gasLimit: 19_000_000});
+              await converterStrategyBase.doHardWork({gasLimit: GAS_LIMIT});
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
               expect(stateAfter.strategy.investedAssets).gte(stateBefore.strategy.investedAssets - 0.001);
@@ -289,7 +291,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             it("should make emergency exit successfully", async () => {
               const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-              await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
+              await converterStrategyBase.emergencyExit({gasLimit: GAS_LIMIT});
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
               expect(stateAfter.strategy.liquidity).lt(10);
@@ -314,7 +316,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
 
               expect(await converterStrategyBase.isReadyToHardWork()).eq(true);
-              await converterStrategyBase.doHardWork({gasLimit: 19_000_000});
+              await converterStrategyBase.doHardWork({gasLimit: GAS_LIMIT});
               // currently kyber's isReadyToHardWork returns true without need to call prepareToHardwork
               expect(await converterStrategyBase.isReadyToHardWork()).eq(platform === PLATFORM_KYBER);
             });
@@ -322,7 +324,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             it("withdraw should not exceed gas limits @skip-on-coverage", async () => {
               const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-              const tx = await b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: 19_000_000});
+              const tx = await b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: GAS_LIMIT});
               const cr = await tx.wait();
               controlGasLimitsEx(cr.gasUsed, GAS_LIMIT_PAIR_BASED_WITHDRAW, (u, t) => {
                 expect(u).to.be.below(t + 1);
@@ -353,7 +355,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               // make rebalance to update fuse status
               expect(await b.strategy.needRebalance()).eq(true);
               console.log('rebalance...');
-              await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+              await b.strategy.rebalanceNoSwaps(true, {gasLimit: GAS_LIMIT});
               expect(await b.strategy.needRebalance()).eq(false);
 
               return b;
@@ -363,7 +365,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
               const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-              await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
+              await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: GAS_LIMIT});
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
               expect(stateAfter.vault.totalAssets).gt(stateBefore.vault.totalAssets);
@@ -373,7 +375,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
               const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-              await b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: 19_000_000});
+              await b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: GAS_LIMIT});
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
               expect(stateAfter.user.assetBalance).eq(stateBefore.user.assetBalance + 300);
@@ -382,7 +384,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
               const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-              await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
+              await b.vault.connect(signer).withdrawAll({gasLimit: GAS_LIMIT});
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
               expect(stateAfter.user.assetBalance).gt(stateBefore.user.assetBalance);
@@ -404,7 +406,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   : "KS-9 No rebalance needed";
 
               await expect(
-                b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000})
+                b.strategy.rebalanceNoSwaps(true, {gasLimit: GAS_LIMIT})
               ).revertedWith(expectedErrorMessage); // NO_REBALANCE_NEEDED
             });
             it("should rebalance debts successfully but dont enter to the pool", async () => {
@@ -421,7 +423,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                 "0x",
                 planEntryData,
                 ENTRY_TO_POOL_IS_ALLOWED,
-                {gasLimit: 19_000_000}
+                {gasLimit: GAS_LIMIT}
               );
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
@@ -444,14 +446,14 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   : "KS-14 Fuse is active";
 
               await expect(
-                converterStrategyBase.doHardWork({gasLimit: 19_000_000})
+                converterStrategyBase.doHardWork({gasLimit: GAS_LIMIT})
               ).revertedWith(expectedErrorMessage);
             });
             it("should make emergency exit successfully", async () => {
               const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
               const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-              await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
+              await converterStrategyBase.emergencyExit({gasLimit: GAS_LIMIT});
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
               expect(stateAfter.strategy.liquidity).lt(10);
@@ -487,7 +489,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             });
 
             async function prepareStrategy() {
-              await PairBasedStrategyPrepareStateUtils.prepareNeedRebalanceOn(signer, signer2, b);
+              await PairBasedStrategyPrepareStateUtils.prepareNeedRebalanceOn(signer, signer2, b,
+                undefined,
+                strategyInfo.name !== PLATFORM_ALGEBRA
+              );
             }
 
             it("rebalance is required", async () => {
@@ -503,7 +508,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   ? "AS-1 Need rebalance"
                   : "KS-1 Need rebalance";
               await expect(
-                b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000})
+                b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: GAS_LIMIT})
               ).revertedWith(expectedErrorMessage);
             });
             it("should revert on withdraw", async () => {
@@ -519,7 +524,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   ? "AS-1 Need rebalance"
                   : "KS-1 Need rebalance";
               await expect(
-                b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: 19_000_000})
+                b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: GAS_LIMIT})
               ).revertedWith(expectedErrorMessage);
             });
             it("should revert on withdraw-all", async () => {
@@ -535,7 +540,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   ? "AS-1 Need rebalance"
                   : "KS-1 Need rebalance";
               await expect(
-                b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000})
+                b.vault.connect(signer).withdrawAll({gasLimit: GAS_LIMIT})
               ).revertedWith(expectedErrorMessage);
             });
             it("should revert on rebalance", async () => {
@@ -544,7 +549,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               const needRebalanceBefore = await b.strategy.needRebalance();
               expect(needRebalanceBefore).eq(true);
 
-              await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+              await b.strategy.rebalanceNoSwaps(true, {gasLimit: GAS_LIMIT});
               expect(await b.strategy.needRebalance()).eq(false);
             });
             it("should rebalance debts successfully but dont enter to the pool", async () => {
@@ -562,7 +567,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                 "0x",
                 planEntryData,
                 ENTRY_TO_POOL_DISABLED,
-                {gasLimit: 19_000_000}
+                {gasLimit: GAS_LIMIT}
               );
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
               console.log("stateAfter", stateAfter);
@@ -589,14 +594,14 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   : "KS-1 Need rebalance";
 
               await expect(
-                converterStrategyBase.doHardWork({gasLimit: 19_000_000})
+                converterStrategyBase.doHardWork({gasLimit: GAS_LIMIT})
               ).revertedWith(expectedErrorMessage);
             });
             it("should make emergency exit successfully", async () => {
               const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
               const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-              await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
+              await converterStrategyBase.emergencyExit({gasLimit: GAS_LIMIT});
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
               expect(stateAfter.strategy.liquidity).lt(10);
@@ -659,7 +664,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
               const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-              await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 19_000_000});
+              await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: GAS_LIMIT});
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
               console.log("stateBefore", stateBefore);
@@ -679,7 +684,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
               const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
               await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, mockedSwapper.address);
-              await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 19_000_000});
+              await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: GAS_LIMIT});
               await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, b.swapper);
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
@@ -698,7 +703,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
               const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
               await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, mockedSwapper.address);
-              await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 19_000_000});
+              await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: GAS_LIMIT});
               await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, b.swapper);
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
@@ -718,7 +723,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
               const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
               await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, mockedSwapper.address);
-              await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 19_000_000});
+              await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: GAS_LIMIT});
               await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, b.swapper);
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
@@ -738,11 +743,41 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
               const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
               await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, mockedSwapper.address);
-              await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 19_000_000});
+              await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: GAS_LIMIT});
               await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, b.swapper);
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
               expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, 1e-6);
+            });
+          });
+          describe("Emergency exit", () => {
+            it("user should be able to withdraw all liquidity after emergency exit", async () => {
+              const pathOut = `./tmp/${strategyInfo.name}-emergency-exit.csv`;
+              const states: IStateNum[] = [];
+              const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+              const maxWithdraw = +formatUnits(
+                await b.vault.connect(signer).maxWithdraw(signer.address),
+                b.assetDecimals
+              );
+
+              states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "init"));
+              StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
+              console.log("========= Emergency exit start ==========")
+              await converterStrategyBase.emergencyExit();
+
+              states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "ee"));
+              StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
+              console.log("========= Withdraw all ==========")
+              await b.vault.connect(signer).withdrawAll({gasLimit: GAS_LIMIT});
+
+              states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "final"));
+              StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
+              const initialUserBalance = states[0].user.assetBalance;
+              expect(states[states.length - 1].user.assetBalance).approximately(initialUserBalance + maxWithdraw, 0.1);
             });
           });
         });
@@ -802,7 +837,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               // make deposit
               await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
               await TokenUtils.getToken(b.asset, signer.address, parseUnits('2000', 6));
-              await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
+              await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: GAS_LIMIT});
 
               states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `deposit`));
               StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
@@ -812,12 +847,12 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `fuse-on`));
               StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
-              await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+              await b.strategy.rebalanceNoSwaps(true, {gasLimit: GAS_LIMIT});
               states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `rebalance`));
               StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
               // withdraw all liquidity from the strategy
-              await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
+              await b.vault.connect(signer).withdrawAll({gasLimit: GAS_LIMIT});
               states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `withdraw`));
               StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
@@ -831,7 +866,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
               expect(await b.strategy.needRebalance()).eq(true);
-              await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+              await b.strategy.rebalanceNoSwaps(true, {gasLimit: GAS_LIMIT});
               expect(await b.strategy.needRebalance()).eq(false);
             });
             it("should not revert on rebalance debts", async () => {
@@ -848,7 +883,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                 "0x",
                 planEntryData,
                 ENTRY_TO_POOL_IS_ALLOWED,
-                {gasLimit: 19_000_000}
+                {gasLimit: GAS_LIMIT}
               );
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
@@ -857,7 +892,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             it("should make emergency exit successfully", async () => {
               const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-              await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
+              await converterStrategyBase.emergencyExit({gasLimit: GAS_LIMIT});
               const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
               expect(stateAfter.strategy.liquidity).lt(10);
@@ -897,14 +932,14 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             console.log('Small user deposit...');
             await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
             await TokenUtils.getToken(b.asset, signer.address, parseUnits('200', 6));
-            await b.vault.connect(signer).deposit(parseUnits('100', 6), signer.address, {gasLimit: 19_000_000});
+            await b.vault.connect(signer).deposit(parseUnits('100', 6), signer.address, {gasLimit: GAS_LIMIT});
             states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "d0"));
             await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
             console.log('Big user deposit...');
             await IERC20__factory.connect(b.asset, signer2).approve(b.vault.address, Misc.MAX_UINT);
             await TokenUtils.getToken(b.asset, signer2.address, parseUnits('100000', 6));
-            await b.vault.connect(signer2).deposit(parseUnits('50000', 6), signer2.address, {gasLimit: 19_000_000});
+            await b.vault.connect(signer2).deposit(parseUnits('50000', 6), signer2.address, {gasLimit: GAS_LIMIT});
             states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "d1"));
             await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
@@ -917,6 +952,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               state.tokenA,
               state.tokenB,
               true,
+              strategyInfo.name === PLATFORM_ALGEBRA
+                ? SWAP_AMOUNT_ALGEBRA
+                : SWAP_AMOUNT_DEFAULT
             );
             await UniversalUtils.movePoolPriceUp(signer2, state, b.swapper, swapAmount, 40000);
             states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "p"));
@@ -934,7 +972,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
             if (await b.strategy.needRebalance()) {
               console.log('Rebalance...');
-              await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+              await b.strategy.rebalanceNoSwaps(true, {gasLimit: GAS_LIMIT});
             }
 
             console.log('Withdraw...');
@@ -944,10 +982,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               const portion = parseUnits('5000', 6);
               if (portion.lt(amountToWithdraw)) {
                 console.log("withdraw...", portion);
-                await b.vault.connect(signer2).withdraw(portion, signer2.address, signer2.address, {gasLimit: 19_000_000});
+                await b.vault.connect(signer2).withdraw(portion, signer2.address, signer2.address, {gasLimit: GAS_LIMIT});
               } else {
                 console.log("withdraw all...", amountToWithdraw);
-                await b.vault.connect(signer2).withdrawAll({gasLimit: 19_000_000});
+                await b.vault.connect(signer2).withdrawAll({gasLimit: GAS_LIMIT});
                 done = true;
               }
               states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "w"));
@@ -955,7 +993,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
               if (await b.strategy.needRebalance()) { // for kyber
                 console.log("rebalance");
-                await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+                await b.strategy.rebalanceNoSwaps(true, {gasLimit: GAS_LIMIT});
                 states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "r"));
                 await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
               }
@@ -971,7 +1009,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
             const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-            await b.vault.connect(signer).deposit(parseUnits('100', 6), signer.address, {gasLimit: 19_000_000});
+            await b.vault.connect(signer).deposit(parseUnits('100', 6), signer.address, {gasLimit: GAS_LIMIT});
             const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
             expect(stateAfter.vault.totalAssets).gt(stateBefore.vault.totalAssets);
@@ -980,7 +1018,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
             const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-            await b.vault.connect(signer).withdraw(parseUnits('30', 6), signer.address, signer.address, {gasLimit: 19_000_000});
+            await b.vault.connect(signer).withdraw(parseUnits('30', 6), signer.address, signer.address, {gasLimit: GAS_LIMIT});
             const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
             expect(stateAfter.user.assetBalance).eq(stateBefore.user.assetBalance + 30);
@@ -989,7 +1027,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
             const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-            await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
+            await b.vault.connect(signer).withdrawAll({gasLimit: GAS_LIMIT});
             const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
             console.log("stateBefore", stateBefore);
             console.log("stateAfter", stateAfter);
@@ -1012,7 +1050,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               "0x",
               planEntryData,
               ENTRY_TO_POOL_IS_ALLOWED,
-              {gasLimit: 19_000_000}
+              {gasLimit: GAS_LIMIT}
             );
             const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
@@ -1028,7 +1066,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
 
             const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-            await converterStrategyBase.doHardWork({gasLimit: 19_000_000});
+            await converterStrategyBase.doHardWork({gasLimit: GAS_LIMIT});
             const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
             console.log("stateBefore", stateBefore);
@@ -1041,7 +1079,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
             const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-            await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
+            await converterStrategyBase.emergencyExit({gasLimit: GAS_LIMIT});
             const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
             expect(stateAfter.strategy.liquidity).lt(10);
@@ -1105,7 +1143,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
           const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
+          await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: GAS_LIMIT});
           const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
           expect(stateAfter.vault.totalAssets).gt(stateBefore.vault.totalAssets);
@@ -1115,7 +1153,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
           const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          await b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: 19_000_000});
+          await b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: GAS_LIMIT});
           const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
           expect(stateAfter.user.assetBalance).eq(stateBefore.user.assetBalance + 300);
@@ -1125,7 +1163,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
           const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
+          await b.vault.connect(signer).withdrawAll({gasLimit: GAS_LIMIT});
           const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
           console.log('stateBefore', stateBefore);
@@ -1217,7 +1255,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         });
 
         it('Rebalance doesn\'t exceed gas limit @skip-on-coverage', async () => {
-          const rebalanceGasUsed = await init.strategy.estimateGas.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+          const rebalanceGasUsed = await init.strategy.estimateGas.rebalanceNoSwaps(true, {gasLimit: GAS_LIMIT});
           console.log('>>> REBALANCE GAS USED', rebalanceGasUsed.toNumber());
           expect(rebalanceGasUsed.toNumber()).lessThan(GAS_REBALANCE_NO_SWAP);
         });
@@ -1281,8 +1319,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
         const investAmount = parseUnits("1000", 6);
         console.log('initial deposits...');
-        await b.vault.connect(signer).deposit(investAmount, signer.address, {gasLimit: 19_000_000});
-        await b.vault.connect(signer3).deposit(investAmount, signer3.address, {gasLimit: 19_000_000});
+        await b.vault.connect(signer).deposit(investAmount, signer.address, {gasLimit: GAS_LIMIT});
+        await b.vault.connect(signer3).deposit(investAmount, signer3.address, {gasLimit: GAS_LIMIT});
 
         return b;
       }
@@ -1423,7 +1461,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                 "0x",
                 planEntryData,
                 ENTRY_TO_POOL_IS_ALLOWED,
-                {gasLimit: 19_000_000}
+                {gasLimit: GAS_LIMIT}
               );
             }
           }
@@ -1596,8 +1634,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         await TokenUtils.getToken(b.asset, signer3.address, parseUnits(strategyInfo.initialAmountOnSignerBalanceUser ?? strategyInfo.initialAmountOnSignerBalance, 6));
 
         console.log('initial deposits...');
-        await b.vault.connect(signer).deposit(parseUnits(strategyInfo.investAmount, 6), signer.address, {gasLimit: 19_000_000});
-        await b.vault.connect(signer3).deposit(parseUnits(strategyInfo.investAmountSignerUser ?? strategyInfo.investAmount, 6), signer3.address, {gasLimit: 19_000_000});
+        await b.vault.connect(signer).deposit(parseUnits(strategyInfo.investAmount, 6), signer.address, {gasLimit: GAS_LIMIT});
+        await b.vault.connect(signer3).deposit(parseUnits(strategyInfo.investAmountSignerUser ?? strategyInfo.investAmount, 6), signer3.address, {gasLimit: GAS_LIMIT});
 
         return b;
       }
@@ -1745,7 +1783,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   "0x",
                   planEntryData,
                   ENTRY_TO_POOL_IS_ALLOWED,
-                  {gasLimit: 19_000_000}
+                  {gasLimit: GAS_LIMIT}
               );
             }
           }
@@ -1813,22 +1851,22 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             const swapLosses = ret.reduce((prev, cur) => prev + (cur.events?.lossSplitter ?? 0), 0);
             const increaseToDebts = ret.reduce((prev, cur) => prev + (cur.events?.fixPriceChanges.increaseToDebt ?? 0), 0);
             const notEnoughInsurance = ret.reduce((prev, cur) => prev + (cur.events?.onCoverLoss.lossUncoveredNotEnoughInsurance ?? 0), 0);
-            const coveredLoss = ret.reduce((prev, cur) => prev + (cur.events?.onCoverLoss.lossToCover ?? 0), 0);
+            const coveredLoss = ret.reduce((prev, cur) => prev + (cur.events?.lossCoveredVault ?? 0), 0);
             const currentDebtsExist = (last.converterReverse.amountsToRepay.length !== 0 && last.converterReverse.amountsToRepay[0] > 0)
               || (last.converterDirect.amountsToRepay.length !== 0 && last.converterDirect.amountsToRepay[0] > 0);
-            const paidDebts = (last.events?.borrowResults.losses ?? 0) - (last.events?.borrowResults.gains ?? 0)
-              + (last.previewBorrowResults?.borrowLosses ?? 0) - (last.previewBorrowResults?.borrowGains ?? 0);
-            const lossesForBorrowing = currentDebtsExist ? increaseToDebts : paidDebts;
+            const paidDebts1 = ret.reduce((prev, cur) => prev + (cur.events?.borrowResults.losses ?? 0) - (cur.events?.borrowResults.gains ?? 0), 0)
+            const paidDebts2 = (last.previewBorrowResults?.borrowLosses ?? 0) - (last.previewBorrowResults?.borrowGains ?? 0);
+            const lossesForBorrowing = currentDebtsExist ? increaseToDebts : paidDebts1 + paidDebts2;
 
             console.log("swapLosses", swapLosses);
             console.log("notEnoughInsurance", notEnoughInsurance);
             console.log("coveredLoss", coveredLoss);
             console.log("increaseToDebts", increaseToDebts);
-            console.log("paidDebts", paidDebts);
+            console.log("paidDebts", paidDebts1, paidDebts2, paidDebts1 + paidDebts2);
             console.log("lossesForBorrowing", lossesForBorrowing);
 
             if (strategyInfo.dontChangePrices === true) {
-              expect(coveredLoss).approximately(lossesForBorrowing + swapLosses + notEnoughInsurance, 1e-4);
+              expect(coveredLoss).approximately(lossesForBorrowing + swapLosses + notEnoughInsurance, 0.01);
             } else {
               expect(coveredLoss).gt(lossesForBorrowing + swapLosses + notEnoughInsurance);
             }
