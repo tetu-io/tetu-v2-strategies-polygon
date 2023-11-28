@@ -134,7 +134,9 @@ export class PairBasedStrategyBuilder {
 
     await vault.setWithdrawRequestBlocks(0);
 
-    await controllerAsGov.registerOperator(signer.address);
+    if (! await controllerAsGov.isOperator(signer.address)) {
+      await controllerAsGov.registerOperator(signer.address);
+    }
     const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer)
 
     // set profit holder

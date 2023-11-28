@@ -110,7 +110,10 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     await IERC20__factory.connect(asset, signer).approve(vault.address, Misc.MAX_UINT);
     await IERC20__factory.connect(asset, signer2).approve(vault.address, Misc.MAX_UINT);
 
-    await ControllerV2__factory.connect(core.controller, gov).registerOperator(signer.address);
+    const controllerAsGov = ControllerV2__factory.connect(core.controller, gov);
+    if (! await controllerAsGov.isOperator(signer.address)) {
+      await controllerAsGov.registerOperator(signer.address);
+    }
 
     await vault.setWithdrawRequestBlocks(0);
 

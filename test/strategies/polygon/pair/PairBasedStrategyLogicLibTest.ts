@@ -822,7 +822,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
           await TimeUtils.rollback(snapshot);
         });
 
-        function initWithdrawLocalTest(): Promise<IInitWithdrawLocalResults> {
+        async function initWithdrawLocalTest(): Promise<IInitWithdrawLocalResults> {
           const planEntryData = defaultAbiCoder.encode(
             ['uint256', 'uint256'],
             [PLAN_SWAP_REPAY_0, Misc.ONE18.div(10)]
@@ -860,7 +860,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
           await TimeUtils.rollback(snapshot);
         });
 
-        function initWithdrawLocalTest(): Promise<IInitWithdrawLocalResults> {
+        async function initWithdrawLocalTest(): Promise<IInitWithdrawLocalResults> {
           const planEntryData = buildEntryData1();
           return callInitWithdrawLocal({
             tokens: [usdc, weth],

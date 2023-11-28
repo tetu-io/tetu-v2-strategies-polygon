@@ -485,11 +485,11 @@ describe('PairBasedStrategyLibIntTest', () => {
 
         it("should revert if price impact is too high", async () => {
           const mockConverter = await MockHelper.createMockTetuConverter(signer);
-          (await mockConverter).setIsConversionValid(
+          await mockConverter.setIsConversionValid(
             MaticAddresses.USDC_TOKEN,
             parseUnits("100", 6),
             MaticAddresses.DAI_TOKEN,
-            0, // arbitrary (unknown before-hand) amount-out
+            0, // arbitrary (unknown beforehand) amount-out
             0 // FAILED_0
           );
 
