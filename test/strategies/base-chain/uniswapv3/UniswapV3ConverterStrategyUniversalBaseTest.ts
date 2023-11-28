@@ -35,6 +35,7 @@ import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {BaseAddresses} from "../../../../scripts/addresses/BaseAddresses";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 // const {expect} = chai;
 chai.use(chaiAsPromised);
@@ -47,13 +48,13 @@ describe('UniswapV3ConverterStrategyUniversalBaseTest', async () => {
     [BaseAddresses.USDbC_TOKEN, BaseAddresses.UNISWAPV3_USDC_USDbC_100, 0, 0],
     [BaseAddresses.USDbC_TOKEN, BaseAddresses.UNISWAPV3_DAI_USDbC_100, 0, 0],
   ]
-
-  const deployInfo: DeployInfo = new DeployInfo();
-  let core: CoreAddresses;
   const tetuConverterAddress = ethers.utils.getAddress(BaseAddresses.TETU_CONVERTER)
   const states: {[poolId: string]: IState[]} = {};
   const statesParams: {[poolId: string]: IStateParams} = {}
+
   let snapshotBefore: string;
+  const deployInfo: DeployInfo = new DeployInfo();
+  let core: CoreAddresses;
 
   before(async function() {
     await HardhatUtils.setupBeforeTest(BASE_NETWORK_ID);
@@ -62,7 +63,7 @@ describe('UniswapV3ConverterStrategyUniversalBaseTest', async () => {
     core = Addresses.CORE.get(Misc.getChainId()) as CoreAddresses;
 
     const [signer] = await ethers.getSigners();
-
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer, core, tetuConverterAddress);
     await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
 
     const pools = [
@@ -256,7 +257,10 @@ describe('UniswapV3ConverterStrategyUniversalBaseTest', async () => {
         }
         const state = await PackedData.getDefaultState(strategy);
         const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [state.tokenA, state.tokenB])
-        await ControllerV2__factory.connect(core.controller, await DeployerUtilsLocal.getControllerGovernance(signer)).registerOperator(signer.address)
+        const controllerV2 = await ControllerV2__factory.connect(core.controller, await DeployerUtilsLocal.getControllerGovernance(signer));
+        if (! await controllerV2.isOperator(signer.address)) {
+          await controllerV2.registerOperator(signer.address);
+        }
         await strategy.setStrategyProfitHolder(profitHolder.address)
         return strategy as unknown as IStrategyV2;
       },

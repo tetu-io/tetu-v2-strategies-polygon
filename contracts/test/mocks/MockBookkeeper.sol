@@ -2,8 +2,9 @@
 pragma solidity 0.8.17;
 
 import "hardhat/console.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/IBookkeeper.sol";
 
-contract MockBookkeeper {
+contract MockBookkeeper is IBookkeeper {
   uint[] private _deltaGains;
   uint[] private _deltaLosses;
   address[] private _tokensPassed;
@@ -29,5 +30,38 @@ contract MockBookkeeper {
     console.log("len tokens", tokens_.length, address(this));
     _tokensPassed = tokens_;
     return (_deltaGains, _deltaLosses);
+  }
+
+  function onBorrow(uint collateralAmount, uint borrowedAmount) external pure {
+    collateralAmount;
+    borrowedAmount;
+  }
+
+  function onRepay(uint withdrawnCollateral, uint paidAmount) external pure {
+    withdrawnCollateral;
+    paidAmount;
+  }
+
+  function previewCheckpoint(address user, address[] memory tokens_) external pure returns (
+    uint[] memory deltaGains,
+    uint[] memory deltaLosses
+  ) {
+    user;
+    tokens_;
+    return (deltaGains, deltaLosses);
+  }
+
+  function startPeriod(address underlying_) external pure returns (
+    uint gains,
+    uint losses
+  ) {
+    underlying_;
+    return (gains, losses);
+  }
+
+  function previewPeriod(address underlying_, address user_) external pure returns (uint gains, uint losses) {
+    underlying_;
+    user_;
+    return (gains, losses);
   }
 }

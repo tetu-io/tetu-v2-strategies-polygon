@@ -167,29 +167,34 @@ export function getConverterAddress() {
 /**
  * Address of DForce platform adapter registered in TetuConveter
  */
-export async function getDForcePlatformAdapter(signer: SignerWithAddress): Promise<string> {
-  return (await getPlatformAdapter(signer, LendingPlatformKinds.DFORCE_1)).address;
+export async function getDForcePlatformAdapter(signer: SignerWithAddress, converter0?: string): Promise<string> {
+  return (await getPlatformAdapter(signer, LendingPlatformKinds.DFORCE_1, converter0)).address;
 }
 
-export async function getAaveTwoPlatformAdapter(signer: SignerWithAddress): Promise<string> {
-  return (await getPlatformAdapter(signer, LendingPlatformKinds.AAVE2_2)).address;
+export async function getAaveTwoPlatformAdapter(signer: SignerWithAddress, converter0?: string): Promise<string> {
+  return (await getPlatformAdapter(signer, LendingPlatformKinds.AAVE2_2, converter0)).address;
 }
 
-export async function getAaveThreePlatformAdapter(signer: SignerWithAddress): Promise<string> {
-  return (await getPlatformAdapter(signer, LendingPlatformKinds.AAVE3_3)).address;
+export async function getAaveThreePlatformAdapter(signer: SignerWithAddress, converter0?: string): Promise<string> {
+  return (await getPlatformAdapter(signer, LendingPlatformKinds.AAVE3_3, converter0)).address;
 }
 
-export async function getCompoundThreePlatformAdapter(signer: SignerWithAddress): Promise<string> {
-  return (await getPlatformAdapter(signer, LendingPlatformKinds.COMPOUND3_5)).address;
+export async function getCompoundThreePlatformAdapter(signer: SignerWithAddress, converter0?: string): Promise<string> {
+  return (await getPlatformAdapter(signer, LendingPlatformKinds.COMPOUND3_5, converter0)).address;
+}
+
+export async function getMoonwellPlatformAdapter(signer: SignerWithAddress, converter0?: string): Promise<string> {
+  return (await getPlatformAdapter(signer, LendingPlatformKinds.MOONWELL_6, converter0)).address;
 }
 
 async function getPlatformAdapter(
   signer: SignerWithAddress,
   lendingPlatformKind: LendingPlatformKinds,
+  converter0?: string
 ): Promise<IPlatformAdapter> {
   const borrowManager = await BorrowManager__factory.connect(
     await IConverterController__factory.connect(
-      await ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer).controller(),
+      await ITetuConverter__factory.connect(converter0 ?? MaticAddresses.TETU_CONVERTER, signer).controller(),
       signer,
     ).borrowManager(),
     signer,

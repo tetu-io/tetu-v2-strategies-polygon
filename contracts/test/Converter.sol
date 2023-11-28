@@ -22,5 +22,7 @@ import "@tetu_io/tetu-converter/contracts/protocols/aave3/Aave3PoolAdapter.sol";
 import "@tetu_io/tetu-converter/contracts/protocols/aave3/Aave3PoolAdapterEMode.sol";
 import "@tetu_io/tetu-converter/contracts/protocols/aaveTwo/AaveTwoPlatformAdapter.sol";
 import "@tetu_io/tetu-converter/contracts/protocols/aaveTwo/AaveTwoPoolAdapter.sol";
+import "@tetu_io/tetu-converter/contracts/protocols/moonwell/MoonwellPlatformAdapter.sol";
+import "@tetu_io/tetu-converter/contracts/protocols/moonwell/MoonwellPoolAdapter.sol";
 //import "@tetu_io/tetu-converter/contracts/protocols/dforce/DForcePlatformAdapter.sol";
 //import "@tetu_io/tetu-converter/contracts/protocols/dforce/DForcePoolAdapter.sol";

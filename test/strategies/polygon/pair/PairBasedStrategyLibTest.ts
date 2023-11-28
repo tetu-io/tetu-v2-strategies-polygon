@@ -65,8 +65,6 @@ describe('PairBasedStrategyLibTest', () => {
     );
     const controller = await MockHelper.createMockTetuConverterController(signer, priceOracleMock.address);
     await converter.setController(controller.address);
-
-    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
   });
 
   after(async function () {

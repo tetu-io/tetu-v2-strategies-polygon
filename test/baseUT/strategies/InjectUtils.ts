@@ -16,6 +16,8 @@ import {ConverterUtils} from "../utils/ConverterUtils";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 import {CustomConverterDeployHelper} from "../converter/CustomConverterDeployHelper";
 import {RunHelper} from "../../../scripts/utils/RunHelper";
+import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
+import {BaseAddresses} from "../../../scripts/addresses/BaseAddresses";
 
 /** Utils to replace currently deployed implementation of contracts by most recent versions */
 export class InjectUtils {
@@ -24,18 +26,22 @@ export class InjectUtils {
    * if such preparations are necessary. Don't remove injectTetuConverterBeforeAnyTest from tests,
    * just comment body of injectTetuConverterBeforeAnyTest if no preparations are required.
    */
-  static async injectTetuConverterBeforeAnyTest(signer: SignerWithAddress) {
-    await InjectUtils.injectTetuConverter(signer);
-    await ConverterUtils.disableAaveV2(signer);
-    await InjectUtils.redeployAave3PoolAdapters(signer);
+  static async injectTetuConverterBeforeAnyTest(signer: SignerWithAddress, core0?: CoreAddresses, converter0?: string) {
+    await InjectUtils.injectTetuConverter(signer, core0, converter0);
+    if (converter0 === MaticAddresses.TETU_CONVERTER) {
+      await ConverterUtils.disableAaveV2(signer, converter0);
+      await InjectUtils.redeployAave3PoolAdapters(signer, converter0);
+    } else if (converter0 === BaseAddresses.TETU_CONVERTER) {
+      await InjectUtils.redeployMoonwellPoolAdapters(signer, converter0);
+    }
   }
 
-  static async injectTetuConverter(signer: SignerWithAddress) {
+  static async injectTetuConverter(signer: SignerWithAddress, core0?: CoreAddresses, converter0?: string) {
 
 
     // -------------------------------------------- Deploy new version of TetuConverter
-    const core = await DeployerUtilsLocal.getCoreAddresses();
-    const tetuConverter = getConverterAddress();
+    const core = core0 ?? await DeployerUtilsLocal.getCoreAddresses();
+    const tetuConverter = converter0 ?? getConverterAddress();
     const converterController = await TetuConverter__factory.connect(tetuConverter, signer).controller();
 
     const debtMonitor = await ConverterController__factory.connect(converterController, signer).debtMonitor();
@@ -48,6 +54,7 @@ export class InjectUtils {
     const bookkeeperLogic = await DeployerUtils.deployContract(signer, "Bookkeeper");
     const controller = ControllerV2__factory.connect(core.controller, signer);
     const governance = await controller.governance();
+    const operator = (await controller.operatorsList())[0];
     const controllerAsGov = controller.connect(await Misc.impersonate(governance));
 
     await controllerAsGov.announceProxyUpgrade(
@@ -55,7 +62,7 @@ export class InjectUtils {
       [converterControllerLogic.address, converterLogic.address, debtMonitorLogic.address, borrowManagerLogic.address]
     );
     await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
-    await controllerAsGov.upgradeProxy([converterController, tetuConverter, debtMonitor, borrowManager]);
+    await controller.connect(await Misc.impersonate(operator)).upgradeProxy([converterController, tetuConverter, debtMonitor, borrowManager]);
 
     const converterGovernance = await Misc.impersonate(await ConverterController__factory.connect(converterController, signer).governance());
     const converterControllerAsGov = ConverterController__factory.connect(converterController, converterGovernance);
@@ -115,8 +122,9 @@ export class InjectUtils {
   }
 
   /** Disable currently deployed pool/platform adapters for AAVE3, deploy and register new versions */
-  static async redeployAave3PoolAdapters(signer: SignerWithAddress) {
-    const tetuConverter = getConverterAddress();
+  static async redeployAave3PoolAdapters(signer: SignerWithAddress, converter0?: string) {
+    console.log("redeployAave3PoolAdapters");
+    const tetuConverter = converter0 ?? getConverterAddress();
     const controller = await TetuConverter__factory.connect(tetuConverter, signer).controller();
     const converterGovernance = await Misc.impersonate(
       await ConverterController__factory.connect(controller, signer).governance()
@@ -143,7 +151,7 @@ export class InjectUtils {
     const platformAdapter = await CustomConverterDeployHelper.createAave3PlatformAdapter(
       signer,
       controller,
-      MaticAddresses.AAVE3_POOL,
+      MaticAddresses.AAVE3_POOL, // todo support of base-chain
       converterNormal.address,
       converterEMode.address,
     );
@@ -156,8 +164,8 @@ export class InjectUtils {
     );
   }
 
-  static async redeployAaveTwoPoolAdapters(signer: SignerWithAddress) {
-    const tetuConverter = getConverterAddress();
+  static async redeployAaveTwoPoolAdapters(signer: SignerWithAddress, converter0?: string) {
+    const tetuConverter = converter0 ?? getConverterAddress();
     const controller = await TetuConverter__factory.connect(tetuConverter, signer).controller();
     const converterGovernance = await Misc.impersonate(
       await ConverterController__factory.connect(controller, signer).governance()
@@ -179,22 +187,62 @@ export class InjectUtils {
     }
 
     // create new platform adapter for AAVE2
-    // const converterNormal = await CustomConverterDeployHelper.createAave3PoolAdapter(signer);
-    // const converterEMode = await CustomConverterDeployHelper.createAave3PoolAdapterEMode(signer);
-    // const platformAdapter = await CustomConverterDeployHelper.createAave3PlatformAdapter(
-    //   signer,
-    //   controller,
-    //   MaticAddresses.AAVE3_POOL,
-    //   converterNormal.address,
-    //   converterEMode.address,
-    // );
+    const converterNormal = await CustomConverterDeployHelper.createAave3PoolAdapter(signer);
+    const converterEMode = await CustomConverterDeployHelper.createAave3PoolAdapterEMode(signer);
+    const platformAdapter = await CustomConverterDeployHelper.createAave3PlatformAdapter(
+      signer,
+      controller,
+      MaticAddresses.AAVE3_POOL,
+      converterNormal.address,
+      converterEMode.address,
+    );
 
     // register all pairs with new platform adapter
-    console.log("0xD0879ABD0f2EAFaBa07A0701cC1AD2f70e69a069");
     await borrowManager.addAssetPairs(
-      "0xD0879ABD0f2EAFaBa07A0701cC1AD2f70e69a069", // platformAdapter.address,
+      platformAdapter.address,
       pairs.map(x => x.assetLeft),
       pairs.map(x => x.assetRight)
     );
   }
+
+  /** Disable currently deployed pool/platform adapters for Moonwell, deploy and register new versions */
+  static async redeployMoonwellPoolAdapters(signer: SignerWithAddress, converter0?: string) {
+    console.log("redeployMoonwellPoolAdapters");
+    const tetuConverter = converter0 ?? getConverterAddress();
+    const controller = await TetuConverter__factory.connect(tetuConverter, signer).controller();
+    const converterGovernance = await Misc.impersonate(
+      await ConverterController__factory.connect(controller, signer).governance()
+    );
+    const borrowManager = BorrowManager__factory.connect(
+      await ConverterController__factory.connect(controller, signer).borrowManager(),
+      converterGovernance
+    );
+
+    // freeze current version of Moonwell pool adapter
+    const oldPlatformAdapterMoonwell = await ConverterUtils.disableMoonwell(signer, converter0);
+
+    // unregister all asset pairs for AAVE3 pool adapter
+    const countPairs = (await borrowManager.platformAdapterPairsLength(oldPlatformAdapterMoonwell)).toNumber();
+    const pairs: BorrowManager.AssetPairStructOutput[] = [];
+    for (let i = 0; i < countPairs; ++i) {
+      const pair = await borrowManager.platformAdapterPairsAt(oldPlatformAdapterMoonwell, i);
+      pairs.push(pair);
+    }
+
+    // create new platform adapter for Moonwell
+    const converterNormal = await CustomConverterDeployHelper.createMoonwellPoolAdapter(signer);
+    const platformAdapter = await CustomConverterDeployHelper.createMoonwellPlatformAdapter(
+      signer,
+      controller,
+      converterNormal.address,
+    );
+
+    // register all pairs with new platform adapter
+    await borrowManager.addAssetPairs(
+      platformAdapter.address,
+      pairs.map(x => x.assetLeft),
+      pairs.map(x => x.assetRight)
+    );
+  }
+
 }
