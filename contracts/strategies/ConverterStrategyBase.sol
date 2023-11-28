@@ -13,6 +13,9 @@ import "../interfaces/IConverterStrategyBase.sol";
 ///  Main asset == underlying: the asset deposited to the vault by users
 ///  Secondary assets: all assets deposited to the internal pool except the main asset
 /////////////////////////////////////////////////////////////////////
+// History:
+// 3.0.1 refactoring of emergency exit
+// 3.1.0 use bookkeeper, new set of events
 
 /// @title Abstract contract for base Converter strategy functionality
 /// @notice All depositor assets must be correlated (ie USDC/USDT/DAI)
@@ -39,7 +42,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   //region -------------------------------------------------------- CONSTANTS
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant CONVERTER_STRATEGY_BASE_VERSION = "3.0.1";
+  string public constant CONVERTER_STRATEGY_BASE_VERSION = "3.1.0";
 
   /// @notice 1% gap to cover possible liquidation inefficiency
   /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap

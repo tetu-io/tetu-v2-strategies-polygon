@@ -26,7 +26,6 @@ import {
 } from "../../../baseUT/AppConstants";
 import {HARDHAT_NETWORK_ID, HardhatUtils} from '../../../baseUT/utils/HardhatUtils';
 import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
-import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 describe('PairBasedStrategyLibTest', () => {
   /** prop0 + prop1 */
