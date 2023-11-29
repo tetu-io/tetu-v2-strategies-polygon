@@ -33,8 +33,8 @@ async function main() {
   const STRATEGY = "0x792Bcc2f14FdCB9FAf7E12223a564e7459eA4201"; // Strategy_KyberConverterStrategy_UsdcUsdt
 
   // const signer = (await ethers.getSigners())[0];\
-  // const signer = await DeployerUtilsLocal.impersonate("0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94"); // uncomment for debug
-  // await InjectUtils.injectStrategy(signer, STRATEGY, "KyberConverterStrategyEmergency"); // uncomment for debug
+  const signer = await DeployerUtilsLocal.impersonate("0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94"); // for debug
+  await InjectUtils.injectStrategy(signer, STRATEGY, "KyberConverterStrategyEmergency"); // for debug
 
   const converterStrategyBase = ConverterStrategyBase__factory.connect(STRATEGY, signer);
   const vault = TetuVaultV2__factory.connect(
