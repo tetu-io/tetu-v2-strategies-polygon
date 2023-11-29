@@ -33,7 +33,8 @@ import {PackedData} from "../../../baseUT/utils/PackedData";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
-import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 // const {expect} = chai;
 chai.use(chaiAsPromised);
@@ -61,6 +62,8 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
     core = Addresses.CORE.get(Misc.getChainId()) as CoreAddresses;
 
     const [signer] = await ethers.getSigners();
+
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
     await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
     await StrategyTestUtils.deployAndSetCustomSplitter(signer, core);

@@ -113,7 +113,10 @@ export class ConverterStrategyBaseContracts {
     await IERC20__factory.connect(asset, signer).approve(data.vault.address, Misc.MAX_UINT);
     await IERC20__factory.connect(asset, signer2).approve(data.vault.address, Misc.MAX_UINT);
 
-    await ControllerV2__factory.connect(core.controller, gov).registerOperator(signer.address);
+    const controllerAsGov = ControllerV2__factory.connect(core.controller, gov);
+    if (! await controllerAsGov.isOperator(signer.address)) {
+      await controllerAsGov.registerOperator(signer.address);
+    }
     await data.vault.setWithdrawRequestBlocks(0);
 
     await ConverterUtils.disableAaveV2(signer)
@@ -170,10 +173,12 @@ export class ConverterStrategyBaseContracts {
     await IERC20__factory.connect(asset, signer).approve(data.vault.address, Misc.MAX_UINT);
     await IERC20__factory.connect(asset, signer2).approve(data.vault.address, Misc.MAX_UINT);
 
-    await ControllerV2__factory.connect(core.controller, gov).registerOperator(signer.address);
+    const controllerAsGov = ControllerV2__factory.connect(core.controller, gov);
+    if (! await controllerAsGov.isOperator(signer.address)) {
+      await controllerAsGov.registerOperator(signer.address);
+    }
 
     await data.vault.setWithdrawRequestBlocks(0);
-
 
     const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
     await UniversalTestUtils.setCompoundRatio(strategy as unknown as IStrategyV2, signer2, COMPOUND_RATIO);

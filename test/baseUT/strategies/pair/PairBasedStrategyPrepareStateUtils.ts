@@ -1,27 +1,27 @@
 import {IBuilderResults, IStrategyBasicInfo} from "./PairBasedStrategyBuilder";
 import {
-  ConverterStrategyBase,
   ConverterStrategyBase__factory,
-  IRebalancingV2Strategy, StrategyBaseV2__factory
-} from "../../../typechain";
-import {IDefaultState, PackedData} from "../utils/PackedData";
+  IRebalancingV2Strategy, PairBasedStrategyReader, StrategyBaseV2__factory
+} from "../../../../typechain";
+import {IDefaultState, PackedData} from "../../utils/PackedData";
 import {BigNumber, BytesLike} from "ethers";
 import {PairStrategyLiquidityUtils} from "./PairStrategyLiquidityUtils";
-import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
+import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
-import {IPriceChanges, UniversalUtils} from "./UniversalUtils";
-import {TokenUtils} from "../../../scripts/utils/TokenUtils";
-import {IERC20Metadata__factory} from "../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
-import {Misc} from "../../../scripts/utils/Misc";
-import {TimeUtils} from "../../../scripts/utils/TimeUtils";
+import {IPriceChanges, UniversalUtils} from "../UniversalUtils";
+import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
+import {IERC20Metadata__factory} from "../../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
+import {Misc} from "../../../../scripts/utils/Misc";
+import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {IController__factory} from "../../../typechain/factories/@tetu_io/tetu-converter/contracts/interfaces";
-import {AggregatorUtils} from "../utils/AggregatorUtils";
-import {IStateNum, StateUtilsNum} from "../utils/StateUtilsNum";
-import {depositToVault, printVaultState} from "../universalTestUtils/StrategyTestUtils";
-import {CaptureEvents, IEventsSet} from "./CaptureEvents";
-import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../AppConstants";
-import {UniversalTestUtils} from "../utils/UniversalTestUtils";
+import {IController__factory} from "../../../../typechain/factories/@tetu_io/tetu-converter/contracts/interfaces";
+import {AggregatorUtils} from "../../utils/AggregatorUtils";
+import {IStateNum, StateUtilsNum} from "../../utils/StateUtilsNum";
+import {depositToVault, printVaultState} from "../../universalTestUtils/StrategyTestUtils";
+import {CaptureEvents, IEventsSet} from "../CaptureEvents";
+import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY_1} from "../../AppConstants";
+import {UniversalTestUtils} from "../../utils/UniversalTestUtils";
+import {trimDecimals} from "../../utils/MathUtils";
 
 export interface IPrepareOverCollateralParams {
   countRebalances: number;
@@ -29,6 +29,7 @@ export interface IPrepareOverCollateralParams {
   swapAmountRatio: number;
   amountToDepositBySigner2?: string; // default 0
   amountToDepositBySigner?: string; // default 0
+  changePricesInOppositeDirectionAtFirst?: boolean; // false by default
 }
 
 export interface IListStates {
@@ -216,18 +217,27 @@ export class PairBasedStrategyPrepareStateUtils {
   static async unfoldBorrowsRepaySwapRepay(
     strategyAsOperator: IRebalancingV2Strategy,
     aggregator: string,
-    isWithdrawCompleted: () => boolean,
-    saveState?: (title: string, eventsState: IEventsSet) => Promise<void>,
+    isWithdrawCompleted: (lastState?: IStateNum) => boolean,
+    saveState?: (title: string, eventsState: IEventsSet) => Promise<IStateNum>,
+    requiredAmountToReduceDebtCalculator?: () => Promise<BigNumber>
   ) {
     const state = await PackedData.getDefaultState(strategyAsOperator);
 
-    const planEntryData = defaultAbiCoder.encode(
-        ["uint256", "uint256"],
-        [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]
-    );
-
     let step = 0;
     while (true) {
+      const requiredAmountToReduceDebt: BigNumber = requiredAmountToReduceDebtCalculator
+        ? await requiredAmountToReduceDebtCalculator()
+        : BigNumber.from(0);
+
+      const planEntryData = defaultAbiCoder.encode(
+        ["uint256", "uint256", "uint256"],
+        [
+          PLAN_REPAY_SWAP_REPAY_1,
+          Misc.MAX_UINT,
+          requiredAmountToReduceDebt
+        ]
+      );
+
       console.log("unfoldBorrows.quoteWithdrawByAgg.callStatic --------------------------------");
       const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
       console.log("unfoldBorrows.quoteWithdrawByAgg.FINISH --------------------------------", quote);
@@ -255,11 +265,11 @@ export class PairBasedStrategyPrepareStateUtils {
         }
       }
       console.log("unfoldBorrows.withdrawByAggStep.execute --------------------------------");
-      console.log("tokenToSwap", tokenToSwap);
-      console.log("AGGREGATOR", aggregator) ;
+      // console.log("tokenToSwap", tokenToSwap);
+      // console.log("AGGREGATOR", aggregator) ;
       console.log("amountToSwap", amountToSwap);
-      console.log("swapData", swapData);
-      console.log("planEntryData", planEntryData);
+      // console.log("swapData", swapData);
+      // console.log("planEntryData", planEntryData);
 
       const eventsSet = await CaptureEvents.makeWithdrawByAggStep(
         strategyAsOperator,
@@ -272,10 +282,11 @@ export class PairBasedStrategyPrepareStateUtils {
       );
       console.log("unfoldBorrows.withdrawByAggStep.FINISH --------------------------------");
 
+      let lastState: IStateNum | undefined;
       if (saveState) {
-        await saveState(`u${++step}`, eventsSet);
+        lastState = await saveState(`u${++step}`, eventsSet);
       }
-      if (isWithdrawCompleted()) break; // completed
+      if (isWithdrawCompleted(lastState)) break; // completed
     }
   }
 
@@ -316,6 +327,20 @@ export class PairBasedStrategyPrepareStateUtils {
   // we recalculate swapAmount once per new tick
   let upperTick: number | undefined;
   let swapAmount: BigNumber = BigNumber.from(0);
+
+  if (p.changePricesInOppositeDirectionAtFirst) {
+    console.log("Prepare: change prices in opposite direction at first");
+    const state = await PackedData.getDefaultState(b.strategy);
+    const swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
+      signer,
+      b,
+      state.tokenA,
+      state.tokenB,
+      p.movePricesUp, // weird, but we need to calculate swap amount for movePriceUp, not for !movePriceUp here
+      p.swapAmountRatio
+    );
+    await this.movePriceBySteps(signer, b, !p.movePricesUp, defaultState, swapAmount);
+  }
 
   while (countRebalances < p.countRebalances) {
     const state = await PackedData.getDefaultState(b.strategy);
@@ -402,5 +427,59 @@ export class PairBasedStrategyPrepareStateUtils {
     await converterStrategyBase.connect(operator).setLiquidationThreshold(MaticAddresses.USDT_TOKEN, parseUnits(value, 6));
     await converterStrategyBase.connect(operator).setLiquidationThreshold(MaticAddresses.USDC_TOKEN, parseUnits(value, 6));
     await converterStrategyBase.connect(operator).setLiquidationThreshold(MaticAddresses.DAI_TOKEN, parseUnits(value, 18));
+  }
+
+  static async getAmountToReduceDebtForStrategy(
+    strategy: string,
+    reader: PairBasedStrategyReader,
+    targetLockedPercent: number,
+  ): Promise<BigNumber> {
+    return reader.getAmountToReduceDebtForStrategy(strategy,  Math.max(1, Math.round(targetLockedPercent)));
+  }
+
+  static async getRequiredAmountToReduceDebt(
+    signer: SignerWithAddress,
+    state0: IStateNum,
+    reader:PairBasedStrategyReader,
+    targetLockedPercent: number,
+    underlying: string,
+  ): Promise<BigNumber> {
+    const directBorrow = state0.converterDirect.collaterals[0] > 0;
+    const assetIndex = directBorrow ? 0 : 1;
+    const borrowAssetIndex = directBorrow ? 1 : 0;
+    const assetDecimals = await IERC20Metadata__factory.connect(underlying, signer).decimals();
+    const decimalBorrowAsset = await IERC20Metadata__factory.connect(state0.converterDirect.borrowAssets[borrowAssetIndex], signer).decimals();
+
+    if (directBorrow) {
+        const requiredAmountToReduceDebt = await reader.getAmountToReduceDebt(
+            parseUnits(state0.strategy.totalAssets.toString(), assetDecimals),
+            true,
+            parseUnits(state0.converterDirect.collaterals[0].toString(), assetDecimals),
+            parseUnits(state0.converterDirect.amountsToRepay[0].toString(), assetDecimals),
+            [
+                parseUnits(state0.converterDirect.borrowAssetsPrices[0].toString(), 18),
+                parseUnits(state0.converterDirect.borrowAssetsPrices[1].toString(), 18),
+            ],
+            [parseUnits("1", assetDecimals), parseUnits("1", decimalBorrowAsset)],
+            Math.max(1, Math.round(targetLockedPercent))
+        );
+        console.log("requiredAmountToReduceDebt (direct debt)", requiredAmountToReduceDebt);
+        return requiredAmountToReduceDebt;
+    } else {
+        const requiredAmountToReduceDebt = await reader.getAmountToReduceDebt(
+            parseUnits(state0.strategy.totalAssets.toString(), decimalBorrowAsset),
+            false,
+            parseUnits(state0.converterReverse.collaterals[0].toString(), assetDecimals),
+            parseUnits(state0.converterReverse.amountsToRepay[0].toString(), assetDecimals),
+            [
+                parseUnits(state0.converterReverse.borrowAssetsPrices[0].toString(), 18),
+                parseUnits(state0.converterReverse.borrowAssetsPrices[1].toString(), 18),
+            ],
+            [parseUnits("1", decimalBorrowAsset), parseUnits("1", assetDecimals)],
+            Math.max(1, Math.round(targetLockedPercent))
+        );
+        console.log("requiredAmountToReduceDebt (reverse debt)", requiredAmountToReduceDebt);
+        return requiredAmountToReduceDebt;
+    }
   }
 }

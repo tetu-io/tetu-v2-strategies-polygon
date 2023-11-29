@@ -24,7 +24,7 @@ import {UniversalUtils} from "../../test/baseUT/strategies/UniversalUtils";
 import {MockHelper} from "../../test/baseUT/helpers/MockHelper";
 import {UniswapV3LiquidityUtils} from "../../test/baseUT/strategies/univ3/UniswapV3LiquidityUtils";
 import {TimeUtils} from "../utils/TimeUtils";
-import {PairStrategyLiquidityUtils} from "../../test/baseUT/strategies/PairStrategyLiquidityUtils";
+import {PairStrategyLiquidityUtils} from "../../test/baseUT/strategies/pair/PairStrategyLiquidityUtils";
 import {PriceOracleImitatorUtils} from "../../test/baseUT/converter/PriceOracleImitatorUtils";
 import {BigNumber} from "ethers";
 import {PackedData} from "../../test/baseUT/utils/PackedData";

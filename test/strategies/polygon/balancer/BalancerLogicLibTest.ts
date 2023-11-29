@@ -8,7 +8,6 @@ import { MockHelper } from '../../../baseUT/helpers/MockHelper';
 import { DeployerUtils } from '../../../../scripts/utils/DeployerUtils';
 import { parseUnits } from 'ethers/lib/utils';
 import { BigNumber } from 'ethers';
-import { areAlmostEqual } from '../../../baseUT/utils/MathUtils';
 import { controlGasLimitsEx } from '../../../../scripts/utils/GasLimitUtils';
 import { BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_BPT_AMOUNTS_OUT } from '../../../baseUT/GasLimits';
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
@@ -314,20 +313,9 @@ describe.skip('BalancerLogicLibTest', function() {
               1,
             );
 
-            const ret = [
-              areAlmostEqual(amountsOut[0], amountDai, 6),
-              amountsOut[1].toString(),
-              areAlmostEqual(amountsOut[2], amountUSDT, 6),
-            ].join();
-
-            const expected = [
-              true,
-              amountUSDC,
-              true,
-            ].map(x => x.toString()).join();
-
-            console.log('ret', ret, 'expected', expected);
-            expect(ret).eq(expected);
+            expect(amountsOut[0]).approximately(amountDai, 1);
+            expect(amountsOut[1]).approximately(amountUSDC, 1);
+            expect(amountsOut[0]).approximately(amountUSDT, 1);
           });
         });
       });

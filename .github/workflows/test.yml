@@ -29,6 +29,7 @@ jobs:
 #        env:
 #          TETU_INFURA_KEY: ${{secrets.TETU_INFURA_KEY}}
 #          TETU_MATIC_RPC_URL: ${{secrets.TETU_MATIC_RPC_URL}}
+#          TETU_BASE_RPC_URL: ${{secrets.TETU_BASE_RPC_URL}}
 
   coverage:
     runs-on: ubuntu-latest
@@ -52,11 +53,13 @@ jobs:
           NODE_OPTIONS: --max_old_space_size=4096
           TETU_LOCAL_SOLC: true
           TETU_MATIC_RPC_URL: ${{secrets.TETU_MATIC_RPC_URL}}
+          TETU_BASE_RPC_URL: ${{secrets.TETU_BASE_RPC_URL}}
           TETU_HARDHAT_CHAIN_ID: ${{secrets.TETU_HARDHAT_CHAIN_ID}}
       - run: npm run coverage
         env:
           NODE_OPTIONS: --max_old_space_size=4096
           TETU_LOCAL_SOLC: true
           TETU_MATIC_RPC_URL: ${{secrets.TETU_MATIC_RPC_URL}}
+          TETU_BASE_RPC_URL: ${{secrets.TETU_BASE_RPC_URL}}
           TETU_HARDHAT_CHAIN_ID: ${{secrets.TETU_HARDHAT_CHAIN_ID}}
       - uses: codecov/codecov-action@v2

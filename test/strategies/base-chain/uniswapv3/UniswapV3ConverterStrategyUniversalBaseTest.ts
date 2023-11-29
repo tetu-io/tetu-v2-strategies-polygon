@@ -32,28 +32,33 @@ import {PackedData} from "../../../baseUT/utils/PackedData";
 import {BASE_NETWORK_ID, HardhatUtils} from '../../../baseUT/utils/HardhatUtils';
 import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
-import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {BaseAddresses} from "../../../../scripts/addresses/BaseAddresses";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
+import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 // const {expect} = chai;
 chai.use(chaiAsPromised);
 
 
-describe('UniswapV3ConverterStrategyUniversalTest', async () => {
+describe('UniswapV3ConverterStrategyUniversalBaseTest', async () => {
+  const COUNT_ITERATIONS_IN_MOVING_PRICE = 2;
+  const SWAP_AMOUNT_1 = "20000";
+  const SWAP_AMOUNT_2 = "15000";
 
   // [asset, pool, tickRange, rebalanceTickRange]
   const targets: [string, string, number, number][] = [
-    [BaseAddresses.USDbC_TOKEN, BaseAddresses.UNISWAPV3_USDC_USDbC_100, 0, 0],
     [BaseAddresses.USDbC_TOKEN, BaseAddresses.UNISWAPV3_DAI_USDbC_100, 0, 0],
+    [BaseAddresses.USDbC_TOKEN, BaseAddresses.UNISWAPV3_USDC_USDbC_100, 0, 0],
   ]
-
-  const deployInfo: DeployInfo = new DeployInfo();
-  let core: CoreAddresses;
   const tetuConverterAddress = ethers.utils.getAddress(BaseAddresses.TETU_CONVERTER)
   const states: {[poolId: string]: IState[]} = {};
   const statesParams: {[poolId: string]: IStateParams} = {}
+
   let snapshotBefore: string;
+  const deployInfo: DeployInfo = new DeployInfo();
+  let core: CoreAddresses;
+  let uniswapV3Lib: UniswapV3Lib;
 
   before(async function() {
     await HardhatUtils.setupBeforeTest(BASE_NETWORK_ID);
@@ -62,7 +67,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
     core = Addresses.CORE.get(Misc.getChainId()) as CoreAddresses;
 
     const [signer] = await ethers.getSigners();
-
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer, core, tetuConverterAddress);
     await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
 
     const pools = [
@@ -78,6 +83,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
     await tools.liquidator.connect(operator).addLargestPools(pools, true);
 
     await StrategyTestUtils.deployAndSetCustomSplitter(signer, core);
+    uniswapV3Lib = await DeployerUtils.deployContract(signer, 'UniswapV3Lib') as UniswapV3Lib;
   });
 
   after(async function() {
@@ -140,34 +146,20 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
           },
         );
         await ConverterUtils.addToWhitelist(user, tetuConverterAddress, strategy.address);
-
-        // await PriceOracleImitatorUtils.uniswapV3(user, t[1], t[0])
       },
       swap1: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const univ3Strategy = strategy as unknown as UniswapV3ConverterStrategy
         const state = await PackedData.getDefaultState(univ3Strategy);
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
-        const swapAmount = BigNumber.from(parseUnits('20000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
-        // const swapAmountPortion = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
-        //   swapUser,
-        //   {
-        //     strategy: IRebalancingV2Strategy__factory.connect(univ3Strategy.address, strategy.signer),
-        //     quoter: MaticAddresses.UNISWAPV3_QUOTER,
-        //     lib: await DeployerUtils.deployContract(swapUser, 'UniswapV3Lib') as UniswapV3Lib,
-        //     pool: MaticAddresses.UNISWAPV3_USDC_USDT_100,
-        //     swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER
-        //   },
-        //   state.tokenA,
-        //   state.tokenB,
-        //   true,
-        // );
+        const swapAmount = BigNumber.from(parseUnits(SWAP_AMOUNT_1, 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
+
         await PairBasedStrategyPrepareStateUtils.movePriceBySteps(
           swapUser,
           {
             strategy: IRebalancingV2Strategy__factory.connect(univ3Strategy.address, strategy.signer),
             quoter: BaseAddresses.UNISWAPV3_QUOTER_V2,
-            lib: await DeployerUtils.deployContract(swapUser, 'UniswapV3Lib') as UniswapV3Lib,
+            lib: uniswapV3Lib,
             pool: t[1],
             swapper: BaseAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER
           },
@@ -175,40 +167,23 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
           state,
           swapAmount,
           undefined,
-          3 // swapAmountPortion.gte(swapAmount) ? 1 : swapAmount.div(swapAmountPortion).toNumber()
+          COUNT_ITERATIONS_IN_MOVING_PRICE // swapAmountPortion.gte(swapAmount) ? 1 : swapAmount.div(swapAmountPortion).toNumber()
         );
-        // await UniversalUtils.movePoolPriceUp(
-        //   swapUser,
-        //   state,
-        //   MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-        //   swapAmount,
-        // );
+
       },
       swap2: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const univ3Strategy = strategy as unknown as UniswapV3ConverterStrategy
         const state = await PackedData.getDefaultState(univ3Strategy);
         const tokenBPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenB)
         const tokenBDecimals = await IERC20Metadata__factory.connect(state.tokenB, swapUser).decimals()
-        const swapAmount = BigNumber.from(parseUnits('20000', 8)).div(tokenBPrice).mul(parseUnits('1', tokenBDecimals))
-        // const swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
-        //   swapUser,
-        //   {
-        //     strategy: IRebalancingV2Strategy__factory.connect(univ3Strategy.address, strategy.signer),
-        //     quoter: MaticAddresses.UNISWAPV3_QUOTER,
-        //     lib: await DeployerUtils.deployContract(swapUser, 'UniswapV3Lib') as UniswapV3Lib,
-        //     pool: MaticAddresses.UNISWAPV3_USDC_USDT_100,
-        //     swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER
-        //   },
-        //   state.tokenA,
-        //   state.tokenB,
-        //   false,
-        // );
+        const swapAmount = BigNumber.from(parseUnits(SWAP_AMOUNT_2, 8)).div(tokenBPrice).mul(parseUnits('1', tokenBDecimals))
+
         await PairBasedStrategyPrepareStateUtils.movePriceBySteps(
           swapUser,
           {
             strategy: IRebalancingV2Strategy__factory.connect(univ3Strategy.address, strategy.signer),
             quoter: BaseAddresses.UNISWAPV3_QUOTER_V2,
-            lib: await DeployerUtils.deployContract(swapUser, 'UniswapV3Lib') as UniswapV3Lib,
+            lib: uniswapV3Lib,
             pool: t[1],
             swapper: BaseAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER
           },
@@ -216,14 +191,8 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
           state,
           swapAmount,
           undefined,
-          3
+          COUNT_ITERATIONS_IN_MOVING_PRICE
         );
-        // await UniversalUtils.movePoolPriceDown(
-        //   swapUser,
-        //   state,
-        //   MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-        //   swapAmount,
-        // );
       },
       rebalancingStrategy: true,
       makeVolume: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
@@ -231,7 +200,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
         const state = await PackedData.getDefaultState(univ3Strategy);
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
-        const swapAmount = BigNumber.from(parseUnits('50000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
+        const swapAmount = BigNumber.from(parseUnits('10000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
         await UniversalUtils.makePoolVolume(
           swapUser,
           state,
@@ -256,7 +225,10 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
         }
         const state = await PackedData.getDefaultState(strategy);
         const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [state.tokenA, state.tokenB])
-        await ControllerV2__factory.connect(core.controller, await DeployerUtilsLocal.getControllerGovernance(signer)).registerOperator(signer.address)
+        const controllerV2 = await ControllerV2__factory.connect(core.controller, await DeployerUtilsLocal.getControllerGovernance(signer));
+        if (! await controllerV2.isOperator(signer.address)) {
+          await controllerV2.registerOperator(signer.address);
+        }
         await strategy.setStrategyProfitHolder(profitHolder.address)
         return strategy as unknown as IStrategyV2;
       },

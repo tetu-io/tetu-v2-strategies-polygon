@@ -19,12 +19,11 @@ import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
+import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
+import {BigNumber} from "ethers";
+import {InjectUtils} from '../../../baseUT/strategies/InjectUtils';
 
 describe('UniswapV3ConverterStrategy reduce debt by agg test', function() {
-  const PLAN_SWAP_REPAY = 0;
-  const PLAN_REPAY_SWAP_REPAY = 1;
-  const PLAN_SWAP_ONLY = 2;
-
   let snapshotBefore: string;
   let snapshot: string;
   let signer: SignerWithAddress;
@@ -40,6 +39,7 @@ describe('UniswapV3ConverterStrategy reduce debt by agg test', function() {
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
     const core = Addresses.getCore();
     const controller = DeployerUtilsLocal.getController(signer);
@@ -133,24 +133,31 @@ describe('UniswapV3ConverterStrategy reduce debt by agg test', function() {
 
     expect(await s.needRebalance()).eq(false)
 
-    const planEntryData = defaultAbiCoder.encode(
-      ["uint256", "uint256"],
-      [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]
-    );
+    const planEntryData =  buildEntryData1();
     const quote = await strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
     console.log('Quote', quote);
 
-    const swapData = await AggregatorUtils.buildSwapTransactionData(
-      quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-      quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-      quote.amountToSwap,
-      s.address,
-    );
+
+    // let's use liquidator as aggregator - this test is not intended to check how 1inch works
+
+    const swapData = AggregatorUtils.buildTxForSwapUsingLiquidatorAsAggregator({
+      tokenIn: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+      tokenOut: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+      amount: quote.amountToSwap,
+      slippage: BigNumber.from(1000)
+    });
+
+    // const swapData = await AggregatorUtils.buildSwapTransactionData(
+    //   quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+    //   quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+    //   quote.amountToSwap,
+    //   s.address,
+    // );
 
     await strategy.withdrawByAggStep(
       quote.tokenToSwap,
-      MaticAddresses.AGG_ONEINCH_V5,
+      MaticAddresses.TETU_LIQUIDATOR, //  MaticAddresses.AGG_ONEINCH_V5,
       quote.amountToSwap,
       swapData,
       planEntryData,

@@ -159,6 +159,9 @@ describe('ConverterStrategyBaseTest', () => {
     )) as PriceOracleMock;
     const tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
     await tetuConverter.setController(tetuConverterController.address);
+    const bookkeeper = await MockHelper.createMockBookkeeper(signer);
+    await tetuConverterController.setBookkeeper(bookkeeper.address);
+    await bookkeeper.setCheckpoint([0, 0], [0, 0]);
 
     // set up mock liquidator and mock forwarder
     const controllerGov = ControllerV2__factory.connect(controller.address, governance);

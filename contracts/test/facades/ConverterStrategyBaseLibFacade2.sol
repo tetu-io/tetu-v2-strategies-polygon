@@ -9,9 +9,30 @@ import "../../strategies/ConverterStrategyBaseLib2.sol";
 contract ConverterStrategyBaseLibFacade2 {
   mapping(address => uint) private liquidationThresholds;
   IStrategyV3.BaseState private baseState;
+  IConverterStrategyBase.ConverterStrategyBaseState private _csbs;
 
   function setLiquidationThreshold(address asset, uint values) external {
     liquidationThresholds[asset] = values;
+  }
+
+  function setCsbs(
+    uint investedAssets,
+    ITetuConverter converter,
+    uint reinvestThresholdPercent,
+    int debtToInsurance
+  ) external {
+    _csbs.investedAssets = investedAssets;
+    _csbs.converter = converter;
+    _csbs.reinvestThresholdPercent = reinvestThresholdPercent;
+    _csbs.debtToInsurance = debtToInsurance;
+  }
+
+  function setDebtToInsurance(int debtToInsurance_) external {
+    _csbs.debtToInsurance = debtToInsurance_;
+  }
+
+  function getCsb() external view returns (IConverterStrategyBase.ConverterStrategyBaseState memory) {
+    return _csbs;
   }
 
   function getExpectedWithdrawnAmounts(
@@ -57,11 +78,14 @@ contract ConverterStrategyBaseLibFacade2 {
     address[] memory tokens,
     uint[] memory amountsOut,
     uint indexAsset,
-    ITetuConverter converter_
+    ITetuConverter converter_,
+    bool makeCheckout_
   ) external returns (
-    uint amountOut
+    uint amountOut,
+    uint[] memory prices,
+    uint[] memory decs
   ) {
-    return ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amountsOut, indexAsset, converter_);
+    return ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amountsOut, indexAsset, converter_, makeCheckout_);
   }
 
   function registerIncome(uint assetBefore, uint assetAfter) external pure returns (uint earned, uint lost) {
@@ -142,7 +166,7 @@ contract ConverterStrategyBaseLibFacade2 {
     uint lossToCover,
     uint lossUncovered
   ) {
-    return ConverterStrategyBaseLib2.getSafeLossToCover(loss, totalAssets_);
+    return ConverterStrategyBaseLib2._getSafeLossToCover(loss, totalAssets_);
   }
 
   function setBaseState(
@@ -193,20 +217,23 @@ contract ConverterStrategyBaseLibFacade2 {
   function coverLossAfterPriceChanging(
     uint investedAssetsBefore,
     uint investedAssetsAfter,
+    int increaseToDebt,
     address asset,
     address splitter
   ) external returns (uint earned) {
     baseState.asset = asset;
     baseState.splitter = splitter;
-    return ConverterStrategyBaseLib2.coverLossAfterPriceChanging(
+    return ConverterStrategyBaseLib2._coverLossAfterPriceChanging(
+      _csbs,
       investedAssetsBefore,
       investedAssetsAfter,
+      increaseToDebt,
       baseState
     );
   }
 
-  function _coverLossAndCheckResults(address splitter, uint earned, uint lossToCover) external {
-    ConverterStrategyBaseLib2._coverLossAndCheckResults(splitter, earned, lossToCover);
+  function _coverLossAndCheckResults(address splitter, uint lossToCover, int debtToInsuranceInc) external {
+    ConverterStrategyBaseLib2._coverLossAndCheckResults(_csbs, splitter, lossToCover, debtToInsuranceInc);
   }
 
   function sendProfitGetAssetBalance(
@@ -218,5 +245,28 @@ contract ConverterStrategyBaseLibFacade2 {
     uint balanceTheAssetOut
   ) {
     return ConverterStrategyBaseLib2.sendProfitGetAssetBalance(theAsset_, balanceTheAsset_, investedAssets_, earnedByPrices_, baseState);
+  }
+
+  function _getIncreaseToDebt(
+    address[] memory tokens,
+    uint indexAsset,
+    uint[] memory prices,
+    uint[] memory decs,
+    ITetuConverter converter
+  ) external returns (
+    int increaseToDebt
+  ) {
+    return ConverterStrategyBaseLib2._getIncreaseToDebt(tokens, indexAsset, prices, decs, converter);
+  }
+
+  function fixPriceChanges(
+    uint[] memory depositorQuoteExitAmountsOut,
+    address[] memory tokens,
+    uint indexAsset
+  ) external returns (
+    uint investedAssetsOut,
+    uint earnedOut
+  ) {
+    return ConverterStrategyBaseLib2.fixPriceChanges(_csbs, baseState, depositorQuoteExitAmountsOut, tokens, indexAsset);
   }
 }

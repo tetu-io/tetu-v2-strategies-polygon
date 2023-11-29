@@ -56,6 +56,8 @@ describe("ConverterStrategyBaseInt", () => {
     [signer, signer2] = await ethers.getSigners();
     gov = await Misc.impersonate(MaticAddresses.GOV_ADDRESS);
     core = Addresses.getCore() as CoreAddresses;
+
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
   });
 
   after(async function() {
@@ -435,7 +437,7 @@ describe("ConverterStrategyBaseInt", () => {
       await cc.vault.setDoHardWorkOnInvest(false);
 
       // possibility to view debug messages of converter
-      // await InjectUtils.injectTetuConverter(signer);
+      await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
       // make deposits
       await TokenUtils.getToken(cc.asset, signer2.address, BigNumber.from(10000));
@@ -770,7 +772,7 @@ describe("ConverterStrategyBaseInt", () => {
       before(async function () {
         snapshotRoot = await TimeUtils.snapshot();
         await InjectUtils.injectTetuConverter(signer);
-        await InjectUtils.redeployAave3PoolAdapters(signer);
+        // await InjectUtils.redeployAave3PoolAdapters(signer);
       });
       after(async function () {
         await TimeUtils.rollback(snapshotRoot);
