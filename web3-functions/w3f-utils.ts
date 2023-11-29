@@ -1,6 +1,6 @@
 import { StaticJsonRpcProvider } from '@ethersproject/providers/src.ts/url-json-rpc-provider';
 import { BigNumber, Contract } from 'ethers';
-import { defaultAbiCoder, formatUnits } from 'ethers/lib/utils';
+import {defaultAbiCoder, formatUnits, parseUnits} from 'ethers/lib/utils';
 import { Web3FunctionResult } from '@gelatonetwork/web3-functions-sdk/dist/lib/types/Web3FunctionResult';
 
 const MAX_UINT = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
@@ -18,6 +18,7 @@ const ERC20_ABI = [
 
 const READER_ABI = [
   'function getLockedUnderlyingAmount(address strategy_) external view returns (uint estimatedUnderlyingAmount, uint totalAssets)',
+  'function getAmountToReduceDebtForStrategy(address strategy_, uint requiredLockedAmountPercent18) external view returns (uint requiredAmountToReduceDebt)',
 ];
 
 const CONFIG_ABI = [
@@ -218,10 +219,14 @@ export async function runResolver(
   const PLAN_SWAP_REPAY = 0;
   const PLAN_REPAY_SWAP_REPAY = 1;
 
+  const requiredAmountToReduceDebt = isFuseTriggered
+    ? BigNumber.from(0)
+    : await reader.getAmountToReduceDebtForStrategy(strategyAddress, allowedLockedPercent) as BigNumber;
+
   const planEntryData = !isFuseTriggered
     ? defaultAbiCoder.encode(
-      ['uint256', 'uint256'],
-      [PLAN_REPAY_SWAP_REPAY, MAX_UINT],
+      ['uint256', 'uint256', 'uint256'],
+      [PLAN_REPAY_SWAP_REPAY, MAX_UINT, requiredAmountToReduceDebt],
     )
     : defaultAbiCoder.encode(
       ['uint256', 'uint256'],

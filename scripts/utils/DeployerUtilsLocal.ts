@@ -344,7 +344,7 @@ export class DeployerUtilsLocal {
     // ADD STRATEGY
     const strategy = await strategyDeployer(splitterAddress);
 
-    await splitter.addStrategies([strategy.address], [0], [0]);
+    await splitter.addStrategies([strategy.address], [0], [Misc.MAX_UINT]);
 
     return { vault, splitter, strategy };
   }

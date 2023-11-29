@@ -6,6 +6,7 @@ import {UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory,} from "
 import {Web3FunctionHardhat} from "@gelatonetwork/web3-functions-sdk/hardhat-plugin";
 import {Web3FunctionResultV2, Web3FunctionUserArgs} from "@gelatonetwork/web3-functions-sdk";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 const { w3f } = hre;
 
 // How to:
@@ -25,6 +26,7 @@ describe('UniswapV3ConverterStrategyAggRebalanceW3FTest', function() {
     [signer] = await ethers.getSigners();
 
     strategy = UniswapV3ConverterStrategy__factory.connect('0x29ce0ca8d0A625Ebe1d0A2F94a2aC9Cc0f9948F1', signer)
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
     rebalanceW3f = w3f.get("uniswapv3-rebalance");
     userArgs = {

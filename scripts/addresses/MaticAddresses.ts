@@ -216,7 +216,12 @@ export class MaticAddresses {
   public static sPolDAI_TOKEN = "0xd94112B5B62d53C9402e7A60289c6810dEF1dC9B".toLowerCase();
   public static vPolDAI_TOKEN = "0x8619d80FB0141ba7F184CbF22fd724116D9f7ffC".toLowerCase();
   public static AAVE3_PRICE_ORACLE = "0xb023e699F5a33916Ea823A16485e259257cA8Bd1".toLowerCase();
-  public static AAVE3_POOL_OWNER = "0xdc9a35b16db4e126cfedc41322b3a36454b1f772".toLowerCase();
+  /** See pool owner in Address provider, https://polygonscan.com/address/0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb#readContract */
+  public static AAVE3_POOL_OWNER = "0xDf7d0e6454DB638881302729F5ba99936EaAB233".toLowerCase();
+  /** See list of events of ACLManager,https://polygonscan.com/address/0xa72636CbcAa8F5FF95B2cc47F3CDEe83F3294a0B#events */
+  public static AAVE3_POOL_ADMIN = "0xdf7d0e6454db638881302729f5ba99936eaab233".toLowerCase();
+  // Flash borrower: b58fd91558fa213d97ac94c97f831c7289278084
+  // Risk admin: a7b40ed4dfac9255ea9dd218a3874f380d9fbbeb
 
   // qidao
   public static camWMATICVault = '0x88d84a85A87ED12B8f098e8953B322fF789fCD1a'.toLowerCase();

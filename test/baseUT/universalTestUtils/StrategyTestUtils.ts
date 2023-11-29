@@ -98,7 +98,7 @@ export async function doHardWorkForStrategy(
     }
   }
 
-  return CaptureEvents.handleReceipt(receipt, decimals, PLATFORM_UNIV3);
+  return CaptureEvents.handleReceipt(signer, receipt, decimals, PLATFORM_UNIV3);
 }
 
 const { expect } = chai;
@@ -118,6 +118,7 @@ export async function rebalancePairBasedStrategyNoSwaps(
   const tx = await strategy.connect(signer).rebalanceNoSwaps(checkNeedRebalance, {gasLimit: 10_000_000});
   const receipt = await tx.wait();
   const ret = await handleReceiptRebalance(
+    signer,
     receipt,
     decimals,
     await strategy.PLATFORM()
@@ -167,7 +168,7 @@ export async function depositToVault(
   expect(insuranceBefore - insuranceAfter).below(100);
   expect(sharesBefore.add(expectedShares)).eq(await vault.balanceOf(signer.address));
 
-  return CaptureEvents.handleReceipt(receiptDeposit, decimals, PLATFORM_UNIV3);
+  return CaptureEvents.handleReceipt(signer, receiptDeposit, decimals, PLATFORM_UNIV3);
 }
 
 
@@ -205,7 +206,7 @@ export async function redeemFromVault(
   expect(insuranceBefore - insuranceAfter).below(100);
   expect(assetsBefore.add(expectedAssets)).eq(await assetCtr.balanceOf(signer.address));
 
-  return CaptureEvents.handleReceipt(receipt, decimals, PLATFORM_UNIV3);
+  return CaptureEvents.handleReceipt(signer, receipt, decimals, PLATFORM_UNIV3);
 }
 
 export async function handleReceiptDeposit(receipt: ContractReceipt, decimals: number): Promise<void> {
@@ -307,12 +308,13 @@ export async function handleReceiptRedeem(receipt: ContractReceipt, decimals: nu
 
 /**
  *
+ * @param signer
  * @param receipt
  * @param decimals
  * @param platform One of PLATFORM_XXX, i.e. PLATFORM_UNIV3
  */
-export async function handleReceiptRebalance(receipt: ContractReceipt, decimals: number, platform: string): Promise<IEventsSet> {
-  return CaptureEvents.handleReceipt(receipt, decimals, platform);
+export async function handleReceiptRebalance(signer: SignerWithAddress, receipt: ContractReceipt, decimals: number, platform: string): Promise<IEventsSet> {
+  return CaptureEvents.handleReceipt(signer, receipt, decimals, platform);
 }
 
 export async function handleReceiptDoHardWork(receipt: ContractReceipt, decimals: number) : Promise<IStateHardworkEvents> {

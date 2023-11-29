@@ -22,6 +22,7 @@ import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 
 const { expect } = chai;
@@ -58,6 +59,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     snapshotBefore = await TimeUtils.snapshot();
     [signer, signer2] = await ethers.getSigners();
     gov = await Misc.impersonate(MaticAddresses.GOV_ADDRESS);
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
     core = Addresses.getCore() as CoreAddresses;
     pool = MaticAddresses.UNISWAPV3_USDC_USDT_100;
@@ -108,7 +110,10 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     await IERC20__factory.connect(asset, signer).approve(vault.address, Misc.MAX_UINT);
     await IERC20__factory.connect(asset, signer2).approve(vault.address, Misc.MAX_UINT);
 
-    await ControllerV2__factory.connect(core.controller, gov).registerOperator(signer.address);
+    const controllerAsGov = ControllerV2__factory.connect(core.controller, gov);
+    if (! await controllerAsGov.isOperator(signer.address)) {
+      await controllerAsGov.registerOperator(signer.address);
+    }
 
     await vault.setWithdrawRequestBlocks(0);
 

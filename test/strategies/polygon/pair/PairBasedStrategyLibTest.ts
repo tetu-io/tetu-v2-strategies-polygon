@@ -21,10 +21,11 @@ import {
   FUSE_OFF_1,
   FUSE_ON_LOWER_LIMIT_2,
   FUSE_ON_UPPER_LIMIT_3,
-  PLAN_REPAY_SWAP_REPAY, PLAN_SWAP_ONLY,
-  PLAN_SWAP_REPAY
+  PLAN_REPAY_SWAP_REPAY_1, PLAN_SWAP_ONLY_2,
+  PLAN_SWAP_REPAY_0
 } from "../../../baseUT/AppConstants";
 import {HARDHAT_NETWORK_ID, HardhatUtils} from '../../../baseUT/utils/HardhatUtils';
+import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
 
 describe('PairBasedStrategyLibTest', () => {
   /** prop0 + prop1 */
@@ -141,7 +142,10 @@ describe('PairBasedStrategyLibTest', () => {
           p.balanceAdditions ? parseUnits(p.balanceAdditions[1], await p.tokenX.decimals()) : 0
         ],
         p.planKind,
-        parseUnits(p.propNotUnderlying18 || "0", 18),
+        [
+          parseUnits(p.propNotUnderlying18 || "0", 18),
+          0 // todo entry data param value
+        ]
       );
 
       return {
@@ -167,7 +171,7 @@ describe('PairBasedStrategyLibTest', () => {
 
               async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                 return makeQuoteWithdrawStep({
-                  planKind: PLAN_SWAP_REPAY,
+                  planKind: PLAN_SWAP_REPAY_0,
 
                   tokenX: usdc,
                   tokenY: usdt,
@@ -206,7 +210,7 @@ describe('PairBasedStrategyLibTest', () => {
 
               async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                 return makeQuoteWithdrawStep({
-                  planKind: PLAN_SWAP_REPAY,
+                  planKind: PLAN_SWAP_REPAY_0,
 
                   tokenX: usdc,
                   tokenY: usdt,
@@ -246,7 +250,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                   return makeQuoteWithdrawStep({
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
 
                     tokenX: usdc,
                     tokenY: usdt,
@@ -280,7 +284,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                   return makeQuoteWithdrawStep({
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
 
                     tokenX: usdc,
                     tokenY: usdt,
@@ -315,7 +319,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                   return makeQuoteWithdrawStep({
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
 
                     tokenX: usdc,
                     tokenY: usdt,
@@ -350,7 +354,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                   return makeQuoteWithdrawStep({
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
 
                     tokenX: usdc,
                     tokenY: usdt,
@@ -388,7 +392,7 @@ describe('PairBasedStrategyLibTest', () => {
 
               async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                 return makeQuoteWithdrawStep({
-                  planKind: PLAN_SWAP_REPAY,
+                  planKind: PLAN_SWAP_REPAY_0,
 
                   tokenX: usdc,
                   tokenY: usdt,
@@ -427,7 +431,7 @@ describe('PairBasedStrategyLibTest', () => {
 
               async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                 return makeQuoteWithdrawStep({
-                  planKind: PLAN_SWAP_REPAY,
+                  planKind: PLAN_SWAP_REPAY_0,
 
                   tokenX: usdc,
                   tokenY: usdt,
@@ -467,7 +471,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                   return makeQuoteWithdrawStep({
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
 
                     tokenX: usdc,
                     tokenY: usdt,
@@ -501,7 +505,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                   return makeQuoteWithdrawStep({
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
 
                     tokenX: usdc,
                     tokenY: usdt,
@@ -536,7 +540,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                   return makeQuoteWithdrawStep({
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
 
                     tokenX: usdc,
                     tokenY: usdt,
@@ -576,7 +580,7 @@ describe('PairBasedStrategyLibTest', () => {
 
               async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                 return makeQuoteWithdrawStep({
-                  planKind: PLAN_SWAP_REPAY,
+                  planKind: PLAN_SWAP_REPAY_0,
 
                   tokenX: usdc,
                   tokenY: usdt,
@@ -615,7 +619,7 @@ describe('PairBasedStrategyLibTest', () => {
 
               async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                 return makeQuoteWithdrawStep({
-                  planKind: PLAN_SWAP_REPAY,
+                  planKind: PLAN_SWAP_REPAY_0,
 
                   tokenX: usdc,
                   tokenY: usdt,
@@ -655,7 +659,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                   return makeQuoteWithdrawStep({
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
 
                     tokenX: usdc,
                     tokenY: usdt,
@@ -689,7 +693,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                   return makeQuoteWithdrawStep({
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
 
                     tokenX: usdc,
                     tokenY: usdt,
@@ -724,7 +728,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                   return makeQuoteWithdrawStep({
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
 
                     tokenX: usdc,
                     tokenY: usdt,
@@ -764,7 +768,7 @@ describe('PairBasedStrategyLibTest', () => {
 
               async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                 return makeQuoteWithdrawStep({
-                  planKind: PLAN_SWAP_REPAY,
+                  planKind: PLAN_SWAP_REPAY_0,
 
                   tokenX: usdc,
                   tokenY: usdt,
@@ -803,7 +807,7 @@ describe('PairBasedStrategyLibTest', () => {
 
               async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                 return makeQuoteWithdrawStep({
-                  planKind: PLAN_SWAP_REPAY,
+                  planKind: PLAN_SWAP_REPAY_0,
 
                   tokenX: usdc,
                   tokenY: usdt,
@@ -843,7 +847,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                   return makeQuoteWithdrawStep({
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
 
                     tokenX: usdc,
                     tokenY: usdt,
@@ -877,7 +881,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                   return makeQuoteWithdrawStep({
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
 
                     tokenX: usdc,
                     tokenY: usdt,
@@ -912,7 +916,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                   return makeQuoteWithdrawStep({
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
 
                     tokenX: usdc,
                     tokenY: usdt,
@@ -954,7 +958,7 @@ describe('PairBasedStrategyLibTest', () => {
 
               async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                 return makeQuoteWithdrawStep({
-                  planKind: PLAN_SWAP_REPAY,
+                  planKind: PLAN_SWAP_REPAY_0,
 
                   tokenX: usdc,
                   tokenY: usdt,
@@ -995,7 +999,7 @@ describe('PairBasedStrategyLibTest', () => {
 
               async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                 return makeQuoteWithdrawStep({
-                  planKind: PLAN_SWAP_REPAY,
+                  planKind: PLAN_SWAP_REPAY_0,
 
                   tokenX: usdc,
                   tokenY: usdt,
@@ -1037,7 +1041,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                   return makeQuoteWithdrawStep({
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
 
                     tokenX: usdc,
                     tokenY: usdt,
@@ -1073,7 +1077,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                   return makeQuoteWithdrawStep({
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
 
                     tokenX: usdc,
                     tokenY: usdt,
@@ -1110,7 +1114,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                   return makeQuoteWithdrawStep({
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
 
                     tokenX: usdc,
                     tokenY: usdt,
@@ -1150,7 +1154,7 @@ describe('PairBasedStrategyLibTest', () => {
 
               async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                 return makeQuoteWithdrawStep({
-                  planKind: PLAN_SWAP_REPAY,
+                  planKind: PLAN_SWAP_REPAY_0,
 
                   tokenX: usdc,
                   tokenY: usdt,
@@ -1191,7 +1195,7 @@ describe('PairBasedStrategyLibTest', () => {
 
               async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                 return makeQuoteWithdrawStep({
-                  planKind: PLAN_SWAP_REPAY,
+                  planKind: PLAN_SWAP_REPAY_0,
 
                   tokenX: usdc,
                   tokenY: usdt,
@@ -1231,7 +1235,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                   return makeQuoteWithdrawStep({
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
 
                     tokenX: usdc,
                     tokenY: usdt,
@@ -1267,7 +1271,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                   return makeQuoteWithdrawStep({
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
 
                     tokenX: usdc,
                     tokenY: usdt,
@@ -1304,7 +1308,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
                   return makeQuoteWithdrawStep({
-                    planKind: PLAN_SWAP_REPAY,
+                    planKind: PLAN_SWAP_REPAY_0,
 
                     tokenX: usdc,
                     tokenY: usdt,
@@ -1349,7 +1353,7 @@ describe('PairBasedStrategyLibTest', () => {
 
           async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
             return makeQuoteWithdrawStep({
-              planKind: PLAN_REPAY_SWAP_REPAY,
+              planKind: PLAN_REPAY_SWAP_REPAY_1,
 
               tokenX: usdc,
               tokenY: usdt,
@@ -1398,7 +1402,7 @@ describe('PairBasedStrategyLibTest', () => {
 
           async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
             return makeQuoteWithdrawStep({
-              planKind: PLAN_REPAY_SWAP_REPAY,
+              planKind: PLAN_REPAY_SWAP_REPAY_1,
 
               tokenX: usdc,
               tokenY: usdt,
@@ -1444,7 +1448,7 @@ describe('PairBasedStrategyLibTest', () => {
 
           async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
             return makeQuoteWithdrawStep({
-              planKind: PLAN_REPAY_SWAP_REPAY,
+              planKind: PLAN_REPAY_SWAP_REPAY_1,
 
               tokenX: usdc,
               tokenY: usdt,
@@ -1484,7 +1488,7 @@ describe('PairBasedStrategyLibTest', () => {
 
       async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
         return makeQuoteWithdrawStep({
-          planKind: PLAN_SWAP_ONLY,
+          planKind: PLAN_SWAP_ONLY_2,
 
           tokenX: usdc,
           tokenY: usdt,
@@ -1650,9 +1654,12 @@ describe('PairBasedStrategyLibTest', () => {
         "0x",
         true,
         p.planKind,
-        Array.isArray(p.propNotUnderlying18)
-          ? Misc.MAX_UINT
-          : parseUnits(p.propNotUnderlying18 || "0", 18)
+        [
+          Array.isArray(p.propNotUnderlying18)
+            ? Misc.MAX_UINT
+            : parseUnits(p.propNotUnderlying18 || "0", 18),
+          0 // todo entry data param value
+        ]
       );
 
       await facade.withdrawStep(
@@ -1670,9 +1677,12 @@ describe('PairBasedStrategyLibTest', () => {
         "0x",
         true,
         p.planKind,
-        Array.isArray(p.propNotUnderlying18)
-          ? Misc.MAX_UINT
-          : parseUnits(p.propNotUnderlying18 || "0", 18)
+        [
+          Array.isArray(p.propNotUnderlying18)
+            ? Misc.MAX_UINT
+            : parseUnits(p.propNotUnderlying18 || "0", 18),
+          0 // todo entry data param value
+        ]
       );
 
       return {
@@ -1700,7 +1710,7 @@ describe('PairBasedStrategyLibTest', () => {
                 tokenY: usdt,
 
                 amountToSwap: "0",
-                planKind: PLAN_SWAP_REPAY,
+                planKind: PLAN_SWAP_REPAY_0,
 
                 liquidationThresholds: ["0", "0"],
                 balanceX: "1000",
@@ -1736,7 +1746,7 @@ describe('PairBasedStrategyLibTest', () => {
                 tokenY: usdt,
 
                 amountToSwap: "0",
-                planKind: PLAN_SWAP_REPAY,
+                planKind: PLAN_SWAP_REPAY_0,
 
                 liquidationThresholds: ["0", "0"],
                 balanceX: "0",
@@ -1777,7 +1787,7 @@ describe('PairBasedStrategyLibTest', () => {
                 tokenY: usdt,
 
                 amountToSwap: "0",
-                planKind: PLAN_SWAP_REPAY,
+                planKind: PLAN_SWAP_REPAY_0,
 
                 liquidationThresholds: ["0", "0"],
                 balanceX: "1000",
@@ -1820,7 +1830,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 amountToSwap: "500",
                 tokenToSwap: usdc,
-                planKind: PLAN_SWAP_REPAY,
+                planKind: PLAN_SWAP_REPAY_0,
 
                 liquidationThresholds: ["0", "0"],
                 balanceX: "500",
@@ -1862,7 +1872,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 amountToSwap: "500",
                 tokenToSwap: usdt,
-                planKind: PLAN_SWAP_REPAY,
+                planKind: PLAN_SWAP_REPAY_0,
 
                 liquidationThresholds: ["0", "0"],
                 balanceX: "500",
@@ -1906,7 +1916,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                   amountToSwap: "200",
                   tokenToSwap: usdt,
-                  planKind: PLAN_SWAP_REPAY,
+                  planKind: PLAN_SWAP_REPAY_0,
 
                   liquidationThresholds: ["10", "10"],
                   balanceX: "500",
@@ -1941,7 +1951,7 @@ describe('PairBasedStrategyLibTest', () => {
                 return makeWithdrawStep({
                   tokenX: usdc,
                   tokenY: usdt,
-                  planKind: PLAN_SWAP_REPAY,
+                  planKind: PLAN_SWAP_REPAY_0,
 
                   amountToSwap: "900",
                   tokenToSwap: usdt,
@@ -1979,7 +1989,7 @@ describe('PairBasedStrategyLibTest', () => {
                 return makeWithdrawStep({
                   tokenX: usdc,
                   tokenY: usdt,
-                  planKind: PLAN_SWAP_REPAY,
+                  planKind: PLAN_SWAP_REPAY_0,
 
                   amountToSwap: "500",
                   tokenToSwap: usdc,
@@ -2025,7 +2035,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                   amountToSwap: "100",
                   tokenToSwap: usdc,
-                  planKind: PLAN_SWAP_REPAY,
+                  planKind: PLAN_SWAP_REPAY_0,
 
                   liquidationThresholds: ["0", "0"],
                   balanceX: "1000",
@@ -2090,7 +2100,7 @@ describe('PairBasedStrategyLibTest', () => {
                 amountToSwap: "1501",
                 tokenToSwap: usdc,
 
-                planKind: PLAN_REPAY_SWAP_REPAY,
+                planKind: PLAN_REPAY_SWAP_REPAY_1,
                 propNotUnderlying18: "0",
 
                 liquidationThresholds: ["0", "0"],
@@ -2149,7 +2159,7 @@ describe('PairBasedStrategyLibTest', () => {
 
                 amountToSwap: "1501",
                 tokenToSwap: usdt,
-                planKind: PLAN_REPAY_SWAP_REPAY,
+                planKind: PLAN_REPAY_SWAP_REPAY_1,
 
                 liquidationThresholds: ["0", "0"],
                 balanceX: "500",
@@ -2210,7 +2220,7 @@ describe('PairBasedStrategyLibTest', () => {
               amountToSwap: "1040",
               tokenToSwap: usdc,
 
-              planKind: PLAN_REPAY_SWAP_REPAY,
+              planKind: PLAN_REPAY_SWAP_REPAY_1,
               propNotUnderlying18: "0.8",
 
               liquidationThresholds: ["0", "0"],
@@ -2265,7 +2275,7 @@ describe('PairBasedStrategyLibTest', () => {
               amountToSwap: "1501",
               tokenToSwap: usdc,
 
-              planKind: PLAN_REPAY_SWAP_REPAY,
+              planKind: PLAN_REPAY_SWAP_REPAY_1,
 
               // At first, we need proportion 1 (all not-underlying)
               // The app will swap all usdt to usdt
@@ -2340,7 +2350,7 @@ describe('PairBasedStrategyLibTest', () => {
               amountToSwap: "1501",
               tokenToSwap: usdc,
 
-              planKind: PLAN_REPAY_SWAP_REPAY,
+              planKind: PLAN_REPAY_SWAP_REPAY_1,
               propNotUnderlying18: ["0.5", "0.5"],
 
               liquidationThresholds: ["0", "0"],
@@ -2417,7 +2427,7 @@ describe('PairBasedStrategyLibTest', () => {
 
           amountToSwap: "500",
           tokenToSwap: usdt,
-          planKind: PLAN_SWAP_ONLY,
+          planKind: PLAN_SWAP_ONLY_2,
 
           liquidationThresholds: ["0", "0"],
           balanceX: "500",
@@ -2517,6 +2527,7 @@ describe('PairBasedStrategyLibTest', () => {
           planKind: 0, // not used here
           usePoolProportions: false, // not used here
           propNotUnderlying18: parseUnits(p.propNotUnderlying18, 18),
+          entryDataParam: 0 // todo
         },
         p.indicesCollateralBorrow[0],
         p.indicesCollateralBorrow[1],
@@ -2921,7 +2932,8 @@ describe('PairBasedStrategyLibTest', () => {
           ),
           balanceAdditions: [], // not used here
           decs: decimals.map(x => parseUnits("1", x)),
-          usePoolProportions: false // not used here
+          usePoolProportions: false, // not used here
+          entryDataParam: 0, // todo
         },
         p.indexCollateral,
         p.indexBorrow
@@ -3319,24 +3331,31 @@ describe('PairBasedStrategyLibTest', () => {
   describe("_extractProp", () => {
     describe("Good paths", () => {
       it("should return expected propNotUnderlying18 for PLAN_SWAP_REPAY", async () => {
-        const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_SWAP_REPAY, Misc.ONE18]);
-        expect((await facade._extractProp(PLAN_SWAP_REPAY, entryData)).eq(Misc.ONE18)).eq(true);
+        const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_SWAP_REPAY_0, Misc.ONE18]);
+        const ret = await facade._extractProp(PLAN_SWAP_REPAY_0, entryData);
+        expect((ret.propNotUnderlying18).eq(Misc.ONE18)).eq(true);
       });
       it("should return propNotUnderlying18=MAX_UINT for PLAN_SWAP_REPAY", async () => {
-        const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_SWAP_REPAY, Misc.MAX_UINT]);
-        expect((await facade._extractProp(PLAN_SWAP_REPAY, entryData)).eq(Misc.MAX_UINT)).eq(true);
+        const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_SWAP_REPAY_0, Misc.MAX_UINT]);
+        const ret = await facade._extractProp(PLAN_SWAP_REPAY_0, entryData);
+        expect(ret.propNotUnderlying18.eq(Misc.MAX_UINT)).eq(true);
       });
       it("should return custom propNotUnderlying18 for PLAN_SWAP_ONLY", async () => {
-        const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_SWAP_ONLY, 777]);
-        expect((await facade._extractProp(PLAN_SWAP_ONLY, entryData)).toNumber()).eq(777);
+        const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_SWAP_ONLY_2, 777]);
+        const ret = await facade._extractProp(PLAN_SWAP_ONLY_2, entryData);
+        expect(ret.propNotUnderlying18.toNumber()).eq(777);
       });
       it("should return max uint for PLAN_REPAY_SWAP_REPAY", async () => {
-        const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
-        expect(await facade._extractProp(PLAN_REPAY_SWAP_REPAY, entryData)).eq(Misc.MAX_UINT);
+        const entryData = defaultAbiCoder.encode(['uint256', 'uint256', "uint256"], [PLAN_REPAY_SWAP_REPAY_1, Misc.MAX_UINT, 144]);
+        const ret = await facade._extractProp(PLAN_REPAY_SWAP_REPAY_1, entryData);
+        expect(ret.propNotUnderlying18).eq(Misc.MAX_UINT);
+        expect(ret.entryDataParamValue).eq(144);
       });
       it("should return 0 for PLAN_REPAY_SWAP_REPAY", async () => {
-        const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_REPAY_SWAP_REPAY, 0]);
-        expect(await facade._extractProp(PLAN_REPAY_SWAP_REPAY, entryData)).eq(0);
+        const entryData = defaultAbiCoder.encode(['uint256', 'uint256', 'uint256'], [PLAN_REPAY_SWAP_REPAY_1, 0, 77]);
+        const ret = await facade._extractProp(PLAN_REPAY_SWAP_REPAY_1, entryData);
+        expect(ret.propNotUnderlying18).eq(0);
+        expect(ret.entryDataParamValue).eq(77);
       });
     });
     describe("Bad paths", () => {
@@ -3345,8 +3364,8 @@ describe('PairBasedStrategyLibTest', () => {
         await expect(facade._extractProp(555, entryData)).revertedWith("TS-9 wrong value"); // WRONG_VALUE
       });
       it("should revert if proportion is greater than 1e18", async () => {
-        const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_REPAY_SWAP_REPAY, Misc.ONE18.add(1)]);
-        await expect(facade._extractProp(PLAN_SWAP_REPAY, entryData)).revertedWith("TS-30 invalid value"); // INVALID_VALUE
+        const entryData = buildEntryData1(BigNumber.from(0), "1.01");
+        await expect(facade._extractProp(PLAN_REPAY_SWAP_REPAY_1, entryData)).revertedWith("TS-30 invalid value"); // INVALID_VALUE
       });
     });
   });

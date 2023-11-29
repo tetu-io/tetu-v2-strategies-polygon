@@ -23,7 +23,8 @@ import {MaticHolders} from "../../../../scripts/addresses/MaticHolders";
 import {IterationPlanLib} from "../../../../typechain/contracts/test/facades/PairBasedStrategyLibFacade";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
-import {PLAN_REPAY_SWAP_REPAY, PLATFORM_KIND_AAVE2_2, PLATFORM_KIND_AAVE3_3} from "../../../baseUT/AppConstants";
+import {PLAN_REPAY_SWAP_REPAY_1, PLATFORM_KIND_AAVE2_2, PLATFORM_KIND_AAVE3_3} from "../../../baseUT/AppConstants";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 describe('PairBasedStrategyLibIntTest', () => {
 
@@ -44,6 +45,7 @@ describe('PairBasedStrategyLibIntTest', () => {
     await HardhatUtils.switchToMostCurrentBlock(); // 1inch works on current block only
 
     [signer] = await ethers.getSigners();
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
     facade = await MockHelper.createPairBasedStrategyLibFacade(signer);
     converter = ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer);
@@ -142,7 +144,8 @@ describe('PairBasedStrategyLibIntTest', () => {
 
           propNotUnderlying18: 0,
           balanceAdditions: [0, 0],
-          planKind: 0
+          planKind: 0,
+          entryDataParam: 0
         };
       const aggParams = {
         useLiquidator: p.aggregator === Misc.ZERO_ADDRESS,
@@ -482,11 +485,11 @@ describe('PairBasedStrategyLibIntTest', () => {
 
         it("should revert if price impact is too high", async () => {
           const mockConverter = await MockHelper.createMockTetuConverter(signer);
-          (await mockConverter).setIsConversionValid(
+          await mockConverter.setIsConversionValid(
             MaticAddresses.USDC_TOKEN,
             parseUnits("100", 6),
             MaticAddresses.DAI_TOKEN,
-            0, // arbitrary (unknown before-hand) amount-out
+            0, // arbitrary (unknown beforehand) amount-out
             0 // FAILED_0
           );
 
@@ -539,9 +542,6 @@ describe('PairBasedStrategyLibIntTest', () => {
       const decimalsX = await tokenX.decimals();
       const decimalsY = await tokenY.decimals();
       const signerFacade = await DeployerUtilsLocal.impersonate(facade.address);
-
-      // we need only AAVE3 adapter, disable others
-      // await InjectUtils.injectTetuConverter(signer);
 
       // set up current balances
       await TokenUtils.getToken(p.tokenX, facade.address, parseUnits(p.balanceX, decimalsX));
@@ -615,9 +615,12 @@ describe('PairBasedStrategyLibIntTest', () => {
         "0x",
         true,
         p.planKind,
-        Array.isArray(p.propNotUnderlying18)
-          ? Misc.MAX_UINT
-          : parseUnits(p.propNotUnderlying18 || "0", 18)
+        [
+          Array.isArray(p.propNotUnderlying18)
+            ? Misc.MAX_UINT
+            : parseUnits(p.propNotUnderlying18 || "0", 18),
+          0
+        ]
       );
 
       return {
@@ -634,8 +637,10 @@ describe('PairBasedStrategyLibIntTest', () => {
      * A + B < X because of not-zero debt-gap of the first borrow.
      * In this case, _borrowToProportions will revert with "TS-29 opposite debt exists".
      * We need one more repay instead, so we will have R-S-R-R scheme
+     *
+     * Skipped, because currently we have only single pool adapter (AAVE3) that is able to borrow USDT under USDC
      */
-    describe("SCB-777", () => {
+    describe.skip("SCB-777", () => {
       let snapshot: string;
       before(async function () {
         snapshot = await TimeUtils.snapshot();
@@ -652,7 +657,7 @@ describe('PairBasedStrategyLibIntTest', () => {
           amountToSwap: "727.183544",
           tokenToSwap: MaticAddresses.USDC_TOKEN,
 
-          planKind: PLAN_REPAY_SWAP_REPAY,
+          planKind: PLAN_REPAY_SWAP_REPAY_1,
           propNotUnderlying18: "0.44",
 
           liquidationThresholds: ["0.01000", "0.01000"],

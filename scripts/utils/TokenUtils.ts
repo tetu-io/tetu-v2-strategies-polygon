@@ -141,7 +141,8 @@ export class TokenUtils {
   }*/
 
   public static async getToken(token: string, to: string, amount?: BigNumber, silent?: boolean) {
-    await deal(token, to, amount || 0)
+    const currentBalance = await IERC20__factory.connect(token, await DeployerUtilsLocal.impersonate(to)).balanceOf(to);
+    await deal(token, to, currentBalance.add(amount || 0));
 
     const start = Date.now();
     if (!silent) {

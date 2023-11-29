@@ -12,7 +12,6 @@ import {
   ControllerV2__factory,
   StrategySplitterV2__factory, TetuVaultV2__factory
 } from "../../typechain";
-import {DForceChangePriceUtils} from "../baseUT/converter/DForceChangePriceUtils";
 import {UniversalTestUtils} from "../baseUT/utils/UniversalTestUtils";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../baseUT/utils/HardhatUtils';
 
@@ -75,7 +74,7 @@ describe.skip("UpdateBalancerBoostedStrategyTest @skip-on-coverage", () => {
   });
 
   it("should upgrade all strategies and reinvest the money", async () => {
-    await DForceChangePriceUtils.setupPriceOracleMock(signer);
+    // await DForceChangePriceUtils.setupPriceOracleMock(signer);
 
     // deploy all new strategies
     const strategy = await BalancerBoostedStrategy__factory.connect(strategyAddress, signer);

@@ -11,6 +11,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV3.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/IBookkeeper.sol";
 import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
@@ -24,8 +25,6 @@ library ConverterStrategyBaseLib2 {
 //region --------------------------------------- Data types
   struct CalcInvestedAssetsLocal {
     uint len;
-    uint[] prices;
-    uint[] decs;
     uint[] debts;
     address asset;
     address token;
@@ -48,12 +47,65 @@ library ConverterStrategyBaseLib2 {
 //region----------------------------------------- EVENTS
   event LiquidationThresholdChanged(address token, uint amount);
   event ReinvestThresholdPercentChanged(uint amount);
-  event FixPriceChanges(uint investedAssetsBefore, uint investedAssetsOut);
-  /// @notice Compensation of losses is not carried out completely because loss amount exceeds allowed max
-  event UncoveredLoss(uint lossCovered, uint lossUncovered, uint investedAssetsBefore, uint investedAssetsAfter);
-  /// @notice Insurance balance were not enough to cover the loss, {lossUncovered} was uncovered
-  event NotEnoughInsurance(uint lossUncovered);
   event SendToInsurance(uint sentAmount, uint unsentAmount);
+
+  /// @notice Increase to debts between new and previous checkpoints.
+  /// @param tokens List of possible collateral/borrow assets. One of the is unerlying.
+  /// @param deltaGains Amounts by which the debt has reduced (supply profit) [sync with {tokens}]
+  /// @param deltaLosses Amounts by which the debt has increased (increase of amount-to-pay) [sync with {tokens}]
+  /// @param prices Prices of the {tokens}
+  /// @param increaseToDebt Total amount of increasing of the debt to the insurance in underlying
+  event OnIncreaseDebtToInsurance(
+    address[] tokens,
+    uint[] deltaGains,
+    uint[] deltaLosses,
+    uint[] prices,
+    int increaseToDebt
+  );
+
+  /// @param increaseToDebt The value on which the debt to insurance was increased
+  /// @param debtToInsuranceBefore Value of the debt to insurance before fix price change
+  /// @param debtToInsuranceAfter New value of the debt to insurance
+  /// @param increaseToDebt Amount on which debt was increased.
+  /// Actual value {debtToInsuranceAfter}-{debtToInsuranceBefore} can be less than increaseToDebt
+  /// because some amount can be left uncovered.
+  event FixPriceChanges(
+    uint investedAssetsBefore,
+    uint investedAssetsOut,
+    int debtToInsuranceBefore,
+    int debtToInsuranceAfter,
+    int increaseToDebt
+  );
+
+  /// @param lossToCover Amount of loss that should be covered (it fits to allowed limits, no revert)
+  /// @param debtToInsuranceInc The amount by which the debt to insurance increases
+  /// @param amountCovered Actually covered amount of loss. If amountCovered < lossToCover => the insurance is not enough
+  /// @param lossUncovered Amount of uncovered losses (not enough insurance)
+  event OnCoverLoss(
+    uint lossToCover,
+    int debtToInsuranceInc,
+    uint amountCovered,
+    uint lossUncovered
+  );
+
+  /// @notice Value of {debtToInsurance} was increased on {increaseToDebt} inside fix-price-change
+  /// in the case when invested-asset amounts were increased.
+  /// @dev See comments in {_coverLossAfterPriceChanging}: actual profit-to-cover amount can be less than {increaseToDebt}
+  /// @param debtToInsuranceBefore Value of debtToInsurance before fix-price-change
+  /// @param increaseToDebt Value on which {debtToInsuranceBefore} was incremented
+  event ChangeDebtToInsuranceOnProfit(
+    int debtToInsuranceBefore,
+    int increaseToDebt
+  );
+
+  /// @notice Amount {lossCovered}+{lossUncovered} should be covered, but it's too high and will produce revert
+  /// on the splitter side. So, only {lossCovered} can be covered, {lossUncovered} are not covered
+  event UncoveredLoss(uint lossCovered, uint lossUncovered, uint investedAssetsBefore, uint investedAssetsAfter);
+
+  /// @notice Register amounts received for supplying collaterals and amount paid for the debts
+  /// @param gains Amount received by all pool adapters for the provided collateral, in underlying
+  /// @param losses Amount paid by all pool adapters for the debts, in underlying
+  event BorrowResults(uint gains, uint losses);
 //endregion----------------------------------------- EVENTS
 
 //region----------------------------------------- MAIN LOGIC
@@ -265,64 +317,6 @@ library ConverterStrategyBaseLib2 {
     return (earned, lost);
   }
 
-  /// @notice Register income and cover possible loss after price changing, emit FixPriceChanges
-  /// @param investedAssetsBefore Currently stored value of _csbs.investedAssets
-  /// @param investedAssetsAfter Actual value of invested assets calculated at the current moment
-  function coverLossAfterPriceChanging(
-    uint investedAssetsBefore,
-    uint investedAssetsAfter,
-    IStrategyV3.BaseState storage baseState
-  ) external returns (uint earned) {
-    uint lost;
-    (earned, lost) = _registerIncome(investedAssetsBefore, investedAssetsAfter);
-    if (lost != 0) {
-      (uint lossToCover, uint lossUncovered) = getSafeLossToCover(
-        lost,
-        investedAssetsAfter + IERC20(baseState.asset).balanceOf(address(this)) // totalAssets
-      );
-      _coverLossAndCheckResults(baseState.splitter, earned, lossToCover);
-
-      if (lossUncovered != 0) {
-        emit UncoveredLoss(lossToCover, lossUncovered, investedAssetsBefore, investedAssetsAfter);
-      }
-    }
-    emit FixPriceChanges(investedAssetsBefore, investedAssetsAfter);
-  }
-
-  /// @notice Call coverPossibleStrategyLoss, covered loss will be sent to vault.
-  ///         If the loss were covered only partially, emit {NotEnoughInsurance}
-  function coverLossAndCheckResults(address splitter, uint earned, uint lossToCover) external {
-    _coverLossAndCheckResults(splitter, earned, lossToCover);
-  }
-
-  /// @notice Call coverPossibleStrategyLoss, covered loss will be sent to vault.
-  ///         If the loss were covered only partially, emit {NotEnoughInsurance}
-  function _coverLossAndCheckResults(address splitter, uint earned, uint lossToCover) internal {
-    address asset = ISplitter(splitter).asset();
-    address vault = ISplitter(splitter).vault();
-    uint balanceBefore = IERC20(asset).balanceOf(vault);
-    ISplitter(splitter).coverPossibleStrategyLoss(earned, lossToCover);
-    uint balanceAfter = IERC20(asset).balanceOf(vault);
-    uint delta = balanceAfter > balanceBefore
-      ? balanceAfter - balanceBefore
-      : 0;
-    if (delta < lossToCover) {
-      emit NotEnoughInsurance(lossToCover - delta);
-    }
-  }
-
-  /// @notice Cut loss-value to safe value that doesn't produce revert inside splitter
-  function getSafeLossToCover(uint loss, uint totalAssets_) internal pure returns (
-    uint lossToCover,
-    uint lossUncovered
-  ) {
-    // see StrategySplitterV2._declareStrategyIncomeAndCoverLoss, _coverLoss implementations
-    lossToCover = Math.min(loss, HARDWORK_LOSS_TOLERANCE * totalAssets_ / 100_000);
-    lossUncovered = loss > lossToCover
-      ? loss - lossToCover
-      : 0;
-  }
-
   /// @notice Send ProfitToCover to insurance - code fragment of the requirePayAmountBack()
   ///         moved here to reduce size of requirePayAmountBack()
   /// @param theAsset_ The asset passed from Converter
@@ -496,35 +490,48 @@ library ConverterStrategyBaseLib2 {
   /// @notice Calculate amount we will receive when we withdraw all from pool
   /// @dev This is writable function because we need to update current balances in the internal protocols.
   /// @param indexAsset Index of the underlying (main asset) in {tokens}
+  /// @param makeCheckpoint_ True - call IBookkeeper.checkpoint in the converter
   /// @return amountOut Invested asset amount under control (in terms of underlying)
+  /// @return prices Asset prices in USD, decimals 18
+  /// @return decs 10**decimals
   function calcInvestedAssets(
     address[] memory tokens,
     uint[] memory depositorQuoteExitAmountsOut,
     uint indexAsset,
-    ITetuConverter converter_
+    ITetuConverter converter_,
+    bool makeCheckpoint_
   ) external returns (
-    uint amountOut
+    uint amountOut,
+    uint[] memory prices,
+    uint[] memory decs
   ) {
-    return _calcInvestedAssets(tokens, depositorQuoteExitAmountsOut, indexAsset, converter_);
+    return _calcInvestedAssets(tokens, depositorQuoteExitAmountsOut, indexAsset, converter_, makeCheckpoint_);
   }
+
   /// @notice Calculate amount we will receive when we withdraw all from pool
   /// @dev This is writable function because we need to update current balances in the internal protocols.
   /// @param indexAsset Index of the underlying (main asset) in {tokens}
+  /// @param makeCheckpoint_ True - call IBookkeeper.checkpoint in the converter
   /// @return amountOut Invested asset amount under control (in terms of underlying)
+  /// @return prices Asset prices in USD, decimals 18
+  /// @return decs 10**decimals
   function _calcInvestedAssets(
     address[] memory tokens,
     uint[] memory depositorQuoteExitAmountsOut,
     uint indexAsset,
-    ITetuConverter converter_
+    ITetuConverter converter_,
+    bool makeCheckpoint_
   ) internal returns (
-    uint amountOut
+    uint amountOut,
+    uint[] memory prices,
+    uint[] memory decs
   ) {
     CalcInvestedAssetsLocal memory v;
     v.len = tokens.length;
     v.asset = tokens[indexAsset];
 
     // calculate prices, decimals
-    (v.prices, v.decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, v.len);
+    (prices, decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, v.len);
 
     // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
     // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
@@ -552,7 +559,7 @@ library ConverterStrategyBaseLib2 {
         amountOut += collateral;
 
         if (toRepay >= toPay) {
-          amountOut += (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
+          amountOut += (toRepay - toPay) * prices[i] * decs[indexAsset] / prices[indexAsset] / decs[i];
         } else {
           // there is not enough amount to pay the debt
           // let's register a debt and try to resolve it later below
@@ -570,7 +577,7 @@ library ConverterStrategyBaseLib2 {
         // estimatedAssets should be reduced on the debt-value
         // this estimation is approx and do not count price impact on the liquidation
         // we will able to count the real output only after withdraw process
-        uint debtInAsset = v.debts[i] * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
+        uint debtInAsset = v.debts[i] * prices[i] * decs[indexAsset] / prices[indexAsset] / decs[i];
         if (debtInAsset > amountOut) {
           // The debt is greater than we can pay. We shouldn't try to pay the debt in this case
           amountOut = 0;
@@ -580,7 +587,22 @@ library ConverterStrategyBaseLib2 {
       }
     }
 
-    return amountOut;
+    if (makeCheckpoint_) {
+      _callCheckpoint(tokens, converter_);
+    }
+
+    return (amountOut, prices, decs);
+  }
+
+  /// @notice Make new checkpoint in converter's bookkeeper
+  /// As results, a next call of checkpoint will return amount of increases to debts ("deltas")
+  /// since current moment up to the moment of the next call (we need such deltas in _fixPriceChanges only)
+  function _callCheckpoint(address[] memory tokens, ITetuConverter converter_) internal returns (
+    uint[] memory deltaGains,
+    uint[] memory deltaLosses
+  ) {
+    IBookkeeper a = IBookkeeper(IConverterController(converter_.controller()).bookkeeper());
+    return a.checkpoint(tokens);
   }
 
   /// @notice Lazy initialization of v.debts, add {value} to {v.debts[index]}
@@ -620,7 +642,7 @@ library ConverterStrategyBaseLib2 {
     uint[] memory amounts = new uint[](2);
     amounts[0] = tokenAmounts[0];
 
-    uint newTotalAssets = _calcInvestedAssets(tokens, amounts, 0, converter);
+    (uint newTotalAssets,,) = _calcInvestedAssets(tokens, amounts, 0, converter, true);
     return (
       newTotalAssets < totalAssets
         ? totalAssets - newTotalAssets
@@ -630,8 +652,6 @@ library ConverterStrategyBaseLib2 {
         : tokenAmounts
     );
   }
-//endregion------------------------------------- calcInvestedAssets
-
 
   /// @notice Swap can give us more amount out than expected, so we will receive increasing of share price.
   ///         To prevent it, we need to send exceeded amount to insurance,
@@ -661,7 +681,186 @@ library ConverterStrategyBaseLib2 {
       }
     }
   }
+//endregion------------------------------------- calcInvestedAssets
 
+//region ------------------------------------------------------- Bookkeeper logic
+  /// @notice Make checkpoint (it's writable function) and calculate total cost of the deltas in terms of the {asset}
+  /// @param tokens Full list of tokens that can be used as collateral/borrow asset by the current strategy
+  /// @param indexAsset Index of the underlying in {tokens}
+  /// @return increaseToDebt Total increase-to-debt since previous checkpoint [in underlying]
+  function _getIncreaseToDebt(
+    address[] memory tokens,
+    uint indexAsset,
+    uint[] memory prices,
+    uint[] memory decs,
+    ITetuConverter converter
+  ) internal returns (
+    int increaseToDebt
+  ) {
+    IBookkeeper a = IBookkeeper(IConverterController(converter.controller()).bookkeeper());
+    (uint[] memory deltaGains, uint[] memory deltaLosses) = a.checkpoint(tokens);
+
+    uint len = tokens.length;
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (i == indexAsset) {
+        increaseToDebt -= int(deltaGains[i]);
+        increaseToDebt += int(deltaLosses[i]);
+      } else {
+        increaseToDebt += (int(deltaLosses[i]) - int(deltaGains[i]))
+          * int(prices[i]) * int(decs[indexAsset]) / int(prices[indexAsset]) / int(decs[i]);
+      }
+    }
+    emit OnIncreaseDebtToInsurance(tokens, deltaGains, deltaLosses, prices, increaseToDebt);
+
+    return increaseToDebt;
+  }
+
+  /// @notice Register income and cover possible loss after price changing, emit FixPriceChanges
+  /// @param investedAssetsBefore Currently stored value of _csbs.investedAssets
+  /// @param investedAssetsAfter Actual value of invested assets calculated at the current moment
+  /// @param increaseToDebt The amount by which the total loan debts increased for the selected period
+  /// @return earned Amount earned because of price changing
+  function _coverLossAfterPriceChanging(
+    IConverterStrategyBase.ConverterStrategyBaseState storage csbs,
+    uint investedAssetsBefore,
+    uint investedAssetsAfter,
+    int increaseToDebt,
+    IStrategyV3.BaseState storage baseState
+  ) internal returns (uint earned) {
+    int debtToInsurance0 = csbs.debtToInsurance;
+    if (investedAssetsAfter > investedAssetsBefore) {
+      earned = investedAssetsAfter - investedAssetsBefore;
+      if (increaseToDebt != 0) {
+        // Earned amount will be send to the insurance later.
+        // Probably it can be reduced by same limitations as {lost} amount below
+        // and so, it will be necessary to decrease increaseToDebt proportionally.
+        // For simplicity, we increase debtToInsurance on full increaseToDebt always
+        // in assumption, that such profits are always low.
+        csbs.debtToInsurance += increaseToDebt;
+        emit ChangeDebtToInsuranceOnProfit(debtToInsurance0, increaseToDebt);
+      }
+    } else {
+      uint lost = investedAssetsBefore - investedAssetsAfter;
+      if (lost != 0) {
+        uint totalAsset = investedAssetsAfter + IERC20(baseState.asset).balanceOf(address(this));
+        (uint lossToCover, uint lossUncovered) = _getSafeLossToCover(lost, totalAsset);
+
+        if (lossUncovered != 0) {
+          // we need to cover lost-amount, but this amount is too high and will produce revert in the splitter
+          // so, we will cover only part of {lost} and leave other part uncovered.
+          emit UncoveredLoss(lossToCover, lossUncovered, investedAssetsBefore, investedAssetsAfter);
+        }
+
+        // if we compensate lost only partially, we reduce both amounts "from prices" and "from debts" proportionally
+        _coverLossAndCheckResults(csbs, baseState.splitter, lossToCover, increaseToDebt * int(lossToCover) / int(lost));
+
+      }
+    }
+
+    emit FixPriceChanges(
+      investedAssetsBefore,
+      investedAssetsAfter,
+      debtToInsurance0,
+      csbs.debtToInsurance,
+      increaseToDebt
+    );
+    return earned;
+  }
+
+  /// @notice Call coverPossibleStrategyLoss, covered loss will be sent to vault.
+  ///         If the loss were covered only partially, emit {NotEnoughInsurance}
+  function coverLossAndCheckResults(
+    IConverterStrategyBase.ConverterStrategyBaseState storage csbs,
+    address splitter,
+    uint lossToCover
+  ) external {
+    _coverLossAndCheckResults(csbs, splitter, lossToCover, int(lossToCover));
+  }
+
+  /// @notice Call coverPossibleStrategyLoss, covered loss will be sent to vault.
+  function _coverLossAndCheckResults(
+    IConverterStrategyBase.ConverterStrategyBaseState storage csbs,
+    address splitter,
+    uint lossToCover,
+    int debtToInsuranceInc
+  ) internal {
+    address asset = ISplitter(splitter).asset();
+    address vault = ISplitter(splitter).vault();
+
+    uint balanceBefore = IERC20(asset).balanceOf(vault);
+    ISplitter(splitter).coverPossibleStrategyLoss(0, lossToCover);
+    uint balanceAfter = IERC20(asset).balanceOf(vault);
+
+    if (debtToInsuranceInc != 0) {
+      csbs.debtToInsurance += debtToInsuranceInc;
+    }
+
+    uint delta = AppLib.sub0(balanceAfter, balanceBefore);
+    uint uncovered = AppLib.sub0(lossToCover, delta);
+
+    // we don't add uncovered amount to the debts to the insurance
+    emit OnCoverLoss(
+      lossToCover,
+      lossToCover == 0
+        ? int(0)
+        : debtToInsuranceInc * int(lossToCover - uncovered) / int(lossToCover),
+      delta,
+      uncovered
+    );
+  }
+
+  /// @notice Cut loss-value to safe value that doesn't produce revert inside splitter
+  function _getSafeLossToCover(uint loss, uint totalAssets_) internal pure returns (
+    uint lossToCover,
+    uint lossUncovered
+  ) {
+    // see StrategySplitterV2._declareStrategyIncomeAndCoverLoss, _coverLoss implementations
+    lossToCover = Math.min(loss, ConverterStrategyBaseLib2.HARDWORK_LOSS_TOLERANCE * totalAssets_ / 100_000);
+    lossUncovered = AppLib.sub0(loss, lossToCover);
+  }
+
+  /// @notice Calculate profit/loss happened because of price changing.
+  /// Try to cover the loss, send the profit to the insurance.
+  /// Increment debt to insurance on amount of increase of the debts.
+  /// @param amountsInPool Amount of tokens that can be received from the pool after withdrawing all liquidity.
+  /// The order of tokens is same as in the {tokens}
+  /// @param tokens Result of {_depositorPoolAssets}
+  /// @param indexAsset Index of the underlying in {tokens}
+  /// @return investedAssetsOut Updated value of {csbs.investedAssets}
+  /// @return earnedOut Profit that was received because of price changes. It should be sent back to insurance.
+  function fixPriceChanges(
+    IConverterStrategyBase.ConverterStrategyBaseState storage csbs,
+    IStrategyV3.BaseState storage baseState,
+    uint[] memory amountsInPool,
+    address[] memory tokens,
+    uint indexAsset
+  ) external returns (
+    uint investedAssetsOut,
+    uint earnedOut
+  ) {
+    ITetuConverter converter = csbs.converter;
+    uint investedAssetsBefore = csbs.investedAssets;
+
+    uint[] memory prices;
+    uint[] memory decs;
+
+    (investedAssetsOut, prices, decs) = _calcInvestedAssets(tokens, amountsInPool, indexAsset, converter, false);
+    csbs.investedAssets = investedAssetsOut;
+
+    int increaseToDebt = _getIncreaseToDebt(tokens, indexAsset, prices, decs, converter);
+    earnedOut = _coverLossAfterPriceChanging(csbs, investedAssetsBefore, investedAssetsOut, increaseToDebt, baseState);
+  }
+
+  /// @notice Register amounts received for supplying collaterals and amount paid for the debts
+  ///         for the current period (a new period is started after each hardwork operation)
+  function registerBorrowResults(ITetuConverter converter, address asset) external {
+    IBookkeeper a = IBookkeeper(IConverterController(converter.controller()).bookkeeper());
+    (uint gains, uint losses) = a.startPeriod(asset);
+    if (gains != 0 && losses != 0) {
+      emit BorrowResults(gains, losses);
+    }
+  }
+//endregion ------------------------------------------------------- Bookkeeper logic
 
 
 }

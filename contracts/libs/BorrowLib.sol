@@ -10,6 +10,15 @@ library BorrowLib {
   /// @notice prop0 + prop1
   uint constant public SUM_PROPORTIONS = 1e18;
 
+  /// @notice Function {_rebalanceAssets} cannot be called recursively more than twice.
+  /// Normally one call is enough.
+  /// Firstly repay(requiredAmount0) is called below. There are two possible results:
+  /// 1) requiredCost0 <= cost0
+  /// 2) v.directDebt == 0
+  /// There is SCB-818: there are two debts (big and small), on the first cycle we get amount less than expected
+  /// because of debt gap. So, we need second cycle.
+  uint constant public MAX_DEEP_RECURSION = 2;
+
   //region -------------------------------------------------- Data types
   struct PricesDecs {
     /// @notice Asset prices in USD, decimals 18
@@ -133,7 +142,7 @@ library BorrowLib {
     tokens[1] = asset1;
     (v.pd.prices, v.pd.decs) = AppLib._getPricesAndDecs(priceOracle, tokens, 2);
 
-    _refreshRebalance(v, ConverterLiquidator(converter_, liquidator_), true);
+    _refreshRebalance(v, ConverterLiquidator(converter_, liquidator_), MAX_DEEP_RECURSION);
   }
 
   /// @notice Convert {amount_} of underlying to two amounts: A0 (underlying) and A1 (not-underlying)
@@ -249,7 +258,7 @@ library BorrowLib {
   function _refreshRebalance(
     RebalanceAssetsLocal memory v,
     ConverterLiquidator memory converterLiquidator,
-    bool repayAllowed
+    uint repayAllowed
   ) internal {
     v.amount0 = IERC20(v.asset0).balanceOf(address(this));
     v.amount1 = IERC20(v.asset1).balanceOf(address(this));
@@ -268,7 +277,7 @@ library BorrowLib {
   function _rebalanceAssets(
     RebalanceAssetsLocal memory v,
     ConverterLiquidator memory converterLiquidator,
-    bool repayAllowed
+    uint repayAllowed
   ) internal {
     uint cost0 = v.amount0 * v.pd.prices[0] / v.pd.decs[0];
     uint cost1 = v.amount1 * v.pd.prices[1] / v.pd.decs[1];
@@ -297,16 +306,11 @@ library BorrowLib {
         });
 
         if (v.directDebt >= AppLib.DUST_AMOUNT_TOKENS) {
-          // This branch of code cannot be called recursively.
-          // Firstly repay(requiredAmount0) is called below. There are two possible results:
-          // 1) requiredCost0 <= cost0
-          // 2) v.directDebt == 0
-          // so, this code cannot be called second time
-          require(repayAllowed, AppErrors.NOT_ALLOWED);
+          require(repayAllowed != 0, AppErrors.TOO_DEEP_RECURSION_BORROW_LIB);
 
           // repay of v.asset1 is required
           uint requiredAmount0 = (requiredCost0 - cost0) * v.pd.decs[0] / v.pd.prices[0];
-          rebalanceRepayBorrow(v, c10, requiredAmount0, v.directDebt);
+          rebalanceRepayBorrow(v, c10, requiredAmount0, v.directDebt, repayAllowed);
         } else {
           // new (or additional) borrow of asset 0 under asset 1 is required
           openPosition(c10, v.pd, v.amount1, v.amount0);
@@ -327,12 +331,12 @@ library BorrowLib {
         });
         // we need to decrease amount of asset 0 and increase amount of asset 1, so we need to borrow asset 1 (direct)
         if (v.reverseDebt >= AppLib.DUST_AMOUNT_TOKENS) {
-          require(repayAllowed, AppErrors.NOT_ALLOWED);
+          require(repayAllowed != 0, AppErrors.TOO_DEEP_RECURSION_BORROW_LIB);
 
           // repay of v.asset0 is required
           // requiredCost0 < cost0 => requiredCost1 > cost1
           uint requiredAmount1 = (requiredCost1 - cost1) * v.pd.decs[1] / v.pd.prices[1];
-          rebalanceRepayBorrow(v, c01, requiredAmount1, v.reverseDebt);
+          rebalanceRepayBorrow(v, c01, requiredAmount1, v.reverseDebt, repayAllowed);
         } else {
           // new or additional borrow of asset 1 under asset 0 is required
           openPosition(c01, v.pd, v.amount0, v.amount1);
@@ -354,8 +358,12 @@ library BorrowLib {
     RebalanceAssetsLocal memory v,
     RebalanceAssetsCore memory c,
     uint requiredAmountB,
-    uint amountDebtA
+    uint amountDebtA,
+    uint repayAllowed
   ) internal {
+    // repayAllowed cannot be zero here because of requires in _rebalanceAssets, but it's safer to check it once more
+    require(repayAllowed != 0, AppErrors.TOO_DEEP_RECURSION_BORROW_LIB);
+
     // we need to get {requiredAmountB}
     // we don't know exact amount to repay
     // but we are sure that amount {requiredAmountB ===> requiredAmountA} would be more than required
@@ -363,7 +371,7 @@ library BorrowLib {
     uint amountToRepay = Math.min(capRequiredAmountA, amountDebtA);
     if (amountToRepay >= AppLib.DUST_AMOUNT_TOKENS) {
       ConverterStrategyBaseLib._repayDebt(c.converterLiquidator.converter, c.assetB, c.assetA, amountToRepay);
-      _refreshRebalance(v, c.converterLiquidator, false);
+      _refreshRebalance(v, c.converterLiquidator, repayAllowed - 1);
     } // else the assets are already in proper proportions
   }
 

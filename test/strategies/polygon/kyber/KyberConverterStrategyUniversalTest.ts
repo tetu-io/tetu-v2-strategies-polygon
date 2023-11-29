@@ -26,12 +26,14 @@ import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatU
 import {
   KYBER_PID_DEFAULT_BLOCK,
   KYBER_USDC_DAI_PID_DEFAULT_BLOCK
-} from '../../../baseUT/strategies/PairBasedStrategyBuilder';
+} from '../../../baseUT/strategies/pair/PairBasedStrategyBuilder';
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 // const {expect} = chai;
 chai.use(chaiAsPromised);
 
-describe('KyberConverterStrategyUniversalTest', async () => {
+/// Kyber is not used after security incident nov-2023
+describe.skip('KyberConverterStrategyUniversalTest', async () => {
   // [asset, pool, tickRange, rebalanceTickRange, incentiveKey]
   const targets: [string, string, number, number, number][] = [
     [MaticAddresses.USDC_TOKEN, MaticAddresses.KYBER_USDC_USDT, 0, 0, KYBER_PID_DEFAULT_BLOCK],
@@ -50,6 +52,7 @@ describe('KyberConverterStrategyUniversalTest', async () => {
 
     const [signer] = await ethers.getSigners();
 
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
     await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
     await StrategyTestUtils.deployAndSetCustomSplitter(signer, core);
     // Disable DForce (as it reverts on repay after block advance)

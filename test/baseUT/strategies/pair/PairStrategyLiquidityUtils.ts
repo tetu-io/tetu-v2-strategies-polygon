@@ -5,14 +5,15 @@ import {
   IUniswapV3Quoter__factory,
   KyberLib,
   UniswapV3Lib
-} from "../../../typechain";
-import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
-import {UniswapV3LiquidityUtils} from "./univ3/UniswapV3LiquidityUtils";
-import {AlgebraLiquidityUtils} from "./algebra/AlgebraLiquidityUtils";
-import {KyberLiquidityUtils} from "./kyber/KyberLiquidityUtils";
+} from "../../../../typechain";
+import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../AppPlatforms";
+import {UniswapV3LiquidityUtils} from "../univ3/UniswapV3LiquidityUtils";
+import {AlgebraLiquidityUtils} from "../algebra/AlgebraLiquidityUtils";
+import {KyberLiquidityUtils} from "../kyber/KyberLiquidityUtils";
 import {BigNumber} from "ethers";
-import {IBuilderResults, IStrategyBasicInfo} from "./PairBasedStrategyBuilder";
-import {IUniswapV3Pool__factory} from "../../../typechain/factories/contracts/integrations/uniswap";
+import {IStrategyBasicInfo} from "./PairBasedStrategyBuilder";
+import {IUniswapV3Pool__factory} from "../../../../typechain/factories/contracts/integrations/uniswap";
+import {GAS_LIMIT} from "../../GasLimits";
 
 export class PairStrategyLiquidityUtils {
   /**
@@ -58,7 +59,8 @@ export class PairStrategyLiquidityUtils {
           tokenOut,
           await IUniswapV3Pool__factory.connect(b.pool, signer).fee(),
           amountOut,
-          0
+          0,
+          {gasLimit: GAS_LIMIT}
         );
       case PLATFORM_ALGEBRA:
         console.log("algebra.quoteExactOutputSingle");
@@ -69,19 +71,23 @@ export class PairStrategyLiquidityUtils {
           tokenIn,
           tokenOut,
           amountOut,
-          0
+          0,
+          {gasLimit: GAS_LIMIT}
         );
         console.log("quoteExactOutputSingle.algebra.amountOut", amountOut);
         console.log("quoteExactOutputSingle.algebra.results", algebraRet);
         return algebraRet.amountIn;
       case PLATFORM_KYBER:
-        const kyberRet = await IKyberQuoterV2__factory.connect(b.quoter, signer).callStatic.quoteExactOutputSingle({
-          tokenIn,
-          tokenOut,
-          feeUnits: await IPool__factory.connect(b.pool, signer).swapFeeUnits(),
-          amount: amountOut,
-          limitSqrtP: 0
-        });
+        const kyberRet = await IKyberQuoterV2__factory.connect(b.quoter, signer).callStatic.quoteExactOutputSingle(
+          {
+            tokenIn,
+            tokenOut,
+            feeUnits: await IPool__factory.connect(b.pool, signer).swapFeeUnits(),
+            amount: amountOut,
+            limitSqrtP: 0,
+          },
+          {gasLimit: GAS_LIMIT}
+        );
         console.log("quoteExactOutputSingle.kyber.amountOut", amountOut);
         console.log("quoteExactOutputSingle.kyber.results", kyberRet);
         return kyberRet.returnedAmount;

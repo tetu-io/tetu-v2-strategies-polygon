@@ -4,8 +4,9 @@ import {
   Aave3PlatformAdapter,
   Aave3PoolAdapter,
   Aave3PoolAdapterEMode, AaveTwoPlatformAdapter, AaveTwoPoolAdapter,
-  IConverterController__factory
+  IConverterController__factory, MoonwellPlatformAdapter, MoonwellPoolAdapter
 } from "../../../typechain";
+import {BaseAddresses} from "../../../scripts/addresses/BaseAddresses";
 
 /**
  * To use this class it's necessary to uncomment adapters in Converter.sol file.
@@ -38,7 +39,7 @@ export class CustomConverterDeployHelper {
   public static async createAave3PoolAdapterEMode(signer: SignerWithAddress) : Promise<Aave3PoolAdapterEMode> {
     return (await DeployerUtils.deployContract(signer, "Aave3PoolAdapterEMode")) as Aave3PoolAdapterEMode;
   }
-//endregion AAVE.v2
+//endregion AAVE.v3
 
 //region AAVE.TWO
   public static async createAaveTwoPlatformAdapter(
@@ -62,7 +63,35 @@ export class CustomConverterDeployHelper {
     return (await DeployerUtils.deployContract(signer, "AaveTwoPoolAdapter")) as AaveTwoPoolAdapter;
   }
 //endregion AAVE.TWO
-//
+
+//region Moonwell (base-chain)
+  public static async createMoonwellPlatformAdapter(
+    signer: SignerWithAddress,
+    converterController: string,
+    templateAdapterNormal: string,
+    comptroller?: string,
+  ) : Promise<MoonwellPlatformAdapter> {
+    return (await DeployerUtils.deployContract(
+      signer,
+      "MoonwellPlatformAdapter",
+      converterController,
+      comptroller ?? BaseAddresses.MOONWELL_COMPTROLLER,
+      templateAdapterNormal,
+      [
+        BaseAddresses.MOONWELL_USDC,
+        BaseAddresses.MOONWELL_DAI,
+        BaseAddresses.MOONWELL_CBETH,
+        BaseAddresses.MOONWELL_WETH,
+        BaseAddresses.MOONWELL_USDBC
+      ]
+    )) as MoonwellPlatformAdapter;
+  }
+
+  public static async createMoonwellPoolAdapter(signer: SignerWithAddress) : Promise<MoonwellPoolAdapter> {
+    return (await DeployerUtils.deployContract(signer, "MoonwellPoolAdapter")) as MoonwellPoolAdapter;
+  }
+//endregion Moonwell (base-chain)
+
 // //region dForce
 //   public static async createDForcePlatformAdapter(
 //     signer: SignerWithAddress,

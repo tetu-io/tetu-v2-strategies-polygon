@@ -1,13 +1,14 @@
 /* tslint:disable:no-trailing-whitespace */
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
-import {IBuilderResults, PairBasedStrategyBuilder} from "./PairBasedStrategyBuilder";
-import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
-import {MockSwapper} from "../../../typechain";
+import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
+import {IBuilderResults, IStrategyCustomizationParams, PairBasedStrategyBuilder} from "./PairBasedStrategyBuilder";
+import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../AppPlatforms";
+import {MockSwapper} from "../../../../typechain";
 
 interface IBuildPairStrategyParams {
   notUnderlying?: string; // default is MaticAddresses.USDT_TOKEN
   kyberPid?: number; // default is undefined
+  customParams?: IStrategyCustomizationParams
 }
 
 export class PairStrategyFixtures {
@@ -22,18 +23,18 @@ export class PairStrategyFixtures {
       case PLATFORM_UNIV3:
         switch (notUnderlying) {
           case MaticAddresses.USDT_TOKEN:
-            return this.buildUniv3UsdtUsdc(signer, signer2);
+            return this.buildUniv3UsdtUsdc(signer, signer2, p?.customParams,);
           case MaticAddresses.WETH_TOKEN:
-            return this.buildUniv3UsdcWeth(signer, signer2);
+            return this.buildUniv3UsdcWeth(signer, signer2, p?.customParams,);
           case MaticAddresses.WMATIC_TOKEN:
-            return this.buildUniv3WmaticUsdc(signer, signer2);
+            return this.buildUniv3WmaticUsdc(signer, signer2, p?.customParams,);
           default:
             throw Error(`univ3-buildStrategy doesn't support ${notUnderlying}`);
         }
       case PLATFORM_ALGEBRA:
-        return this.buildAlgebraUsdtUsdc(signer, signer2);
+        return this.buildAlgebraUsdtUsdc(signer, signer2, p?.customParams,);
       case PLATFORM_KYBER:
-        return this.buildKyberUsdtUsdc(signer, signer2, p?.kyberPid);
+        return this.buildKyberUsdtUsdc(signer, signer2, p?.customParams, p?.kyberPid);
       default:
         throw Error(`buildStrategy doesn't support ${strategyName}`);
     }
@@ -42,6 +43,7 @@ export class PairStrategyFixtures {
   static async buildUniv3UsdtUsdc(
     signer: SignerWithAddress,
     signer2: SignerWithAddress,
+    p?: IStrategyCustomizationParams
   ): Promise<IBuilderResults> {
     return PairBasedStrategyBuilder.buildUniv3({
       signer,
@@ -60,12 +62,17 @@ export class PairStrategyFixtures {
         swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
         tokenIn: MaticAddresses.USDC_TOKEN,
         tokenOut: MaticAddresses.USDT_TOKEN,
-      },]
+      },],
 
+      ...p
     });
   }
 
-  static async buildUniv3WmaticUsdc(signer: SignerWithAddress, signer2: SignerWithAddress): Promise<IBuilderResults> {
+  static async buildUniv3WmaticUsdc(
+    signer: SignerWithAddress,
+    signer2: SignerWithAddress,
+    p?: IStrategyCustomizationParams
+  ): Promise<IBuilderResults> {
     return PairBasedStrategyBuilder.buildUniv3({
       signer,
       signer2,
@@ -83,12 +90,17 @@ export class PairStrategyFixtures {
         swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
         tokenIn: MaticAddresses.WMATIC_TOKEN,
         tokenOut: MaticAddresses.USDC_TOKEN,
-      },]
+      },],
 
+      ...p
     });
   }
 
-  static async buildUniv3UsdcWeth(signer: SignerWithAddress, signer2: SignerWithAddress): Promise<IBuilderResults> {
+  static async buildUniv3UsdcWeth(
+    signer: SignerWithAddress,
+    signer2: SignerWithAddress,
+    p?: IStrategyCustomizationParams
+  ): Promise<IBuilderResults> {
     return PairBasedStrategyBuilder.buildUniv3({
       signer,
       signer2,
@@ -106,12 +118,17 @@ export class PairStrategyFixtures {
         swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
         tokenIn: MaticAddresses.USDC_TOKEN,
         tokenOut: MaticAddresses.WETH_TOKEN,
-      },]
+      },],
 
+      ...p
     });
   }
 
-  static async buildAlgebraUsdtUsdc(signer: SignerWithAddress, signer2: SignerWithAddress): Promise<IBuilderResults> {
+  static async buildAlgebraUsdtUsdc(
+    signer: SignerWithAddress,
+    signer2: SignerWithAddress,
+    p?: IStrategyCustomizationParams
+  ): Promise<IBuilderResults> {
     return PairBasedStrategyBuilder.buildAlgebra({
       signer,
       signer2,
@@ -145,11 +162,17 @@ export class PairStrategyFixtures {
           tokenIn: MaticAddresses.USDC_TOKEN,
           tokenOut: MaticAddresses.USDT_TOKEN,
         },
-      ]
+      ],
+      ...p
     });
   }
 
-  static async buildKyberUsdtUsdc(signer: SignerWithAddress, signer2: SignerWithAddress, pid?: number): Promise<IBuilderResults> {
+  static async buildKyberUsdtUsdc(
+    signer: SignerWithAddress,
+    signer2: SignerWithAddress,
+    p?: IStrategyCustomizationParams,
+    pid?: number
+  ): Promise<IBuilderResults> {
     return PairBasedStrategyBuilder.buildKyber({
       signer,
       signer2,
@@ -174,7 +197,8 @@ export class PairStrategyFixtures {
           tokenIn: MaticAddresses.KNC_TOKEN,
           tokenOut: MaticAddresses.USDC_TOKEN,
         },
-      ]
+      ],
+      ...p
     }, pid);
   }
 }

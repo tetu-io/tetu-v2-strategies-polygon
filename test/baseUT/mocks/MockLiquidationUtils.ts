@@ -30,6 +30,12 @@ export async function setupMockedLiquidation(
     parseUnits(liquidation.amountIn, await liquidation.tokenIn.decimals()),
     parseUnits(liquidation.amountOut, await liquidation.tokenOut.decimals())
   );
+  await liquidator.setPrice(
+    liquidation.tokenIn.address,
+    liquidation.tokenOut.address,
+    parseUnits(liquidation.amountIn, await liquidation.tokenIn.decimals()),
+    parseUnits(liquidation.amountOut, await liquidation.tokenOut.decimals()),
+  );
   await liquidator.setLiquidateWithRoute(
     liquidation.tokenIn.address,
     liquidation.tokenOut.address,

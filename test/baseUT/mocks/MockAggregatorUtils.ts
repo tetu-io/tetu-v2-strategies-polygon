@@ -11,7 +11,7 @@ import {
   MockSwapper
 } from "../../../typechain";
 import {Misc} from "../../../scripts/utils/Misc";
-import {IBuilderResults} from "../strategies/PairBasedStrategyBuilder";
+import {IBuilderResults} from "../strategies/pair/PairBasedStrategyBuilder";
 
 export interface IMockAggregatorParams {
   converter: string;

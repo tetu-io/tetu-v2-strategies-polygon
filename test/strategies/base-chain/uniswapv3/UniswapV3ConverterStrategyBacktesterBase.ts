@@ -17,7 +17,7 @@ import {BaseAddresses} from "../../../../scripts/addresses/BaseAddresses";
 
 // How to
 // anvil --prune-history
-// hardhat test test/strategies/polygon/uniswapv3/UniswapV3ConverterStrategyBacktester.ts --network foundry
+// hardhat test test/strategies/polygon/uniswapv3/UniswapV3ConverterStrategyBacktesterBase.ts --network foundry
 
 // tslint:disable-next-line:no-var-requires
 const hre = require("hardhat");

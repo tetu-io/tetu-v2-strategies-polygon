@@ -16,7 +16,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
   string public constant override NAME = "Kyber Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.KYBER;
-  string public constant override STRATEGY_VERSION = "3.0.1";
+  string public constant override STRATEGY_VERSION = "3.1.0";
   //endregion ------------------------------------------------- Constants
 
   //region ------------------------------------------------- INIT
@@ -163,6 +163,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
     (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
     uint[] memory tokenAmounts = KyberConverterStrategyLogicLib.rebalanceNoSwaps(
+      _csbs,
       state.pair,
       [address(_csbs.converter), address(AppLib._getLiquidator(_controller))],
       oldTotalAssets,
@@ -228,6 +229,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     // check "operator only", make withdraw step, cover-loss, send profit to cover, prepare to enter to the pool
     uint[] memory tokenAmounts;
     (completed, tokenAmounts) = KyberConverterStrategyLogicLib.withdrawByAggStep(
+      _csbs,
       [tokenToSwap_, aggregator_, controller(), address(_csbs.converter), baseState.splitter],
       [amountToSwap_, profitToCover, oldTotalAssets, entryToPool],
       swapData,

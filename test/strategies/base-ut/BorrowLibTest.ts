@@ -3946,7 +3946,7 @@ describe('BorrowLibTest', () => {
         ).revertedWith("TS-32 too high value"); // TOO_HIGH
       });
 
-      it("should revert with TS-23 not allowed", async () => {
+      it("should revert with TS-33 too deep recursion", async () => {
         await expect(
           makeRebalanceAssets({
             tokenX: usdc,
@@ -3964,7 +3964,7 @@ describe('BorrowLibTest', () => {
               // so, repay is not possible.
             }]
           })
-        ).revertedWith("TS-23 not allowed"); // NOT_ALLOWED
+        ).revertedWith("TS-33 too deep recursion"); // TOO_DEEP_RECURSION_BORROW_LIB
       });
     });
   });
