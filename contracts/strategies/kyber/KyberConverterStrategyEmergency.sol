@@ -113,8 +113,6 @@ contract KyberConverterStrategyEmergency is KyberDepositor, ConverterStrategyBas
     return true;
   }
 
-  receive() external payable {}
-
   ////////////////////////////////////////////////////////////////////////////////////////////////
 
   function _withdrawFromPool(uint) override internal pure virtual returns (uint, uint, uint) {
