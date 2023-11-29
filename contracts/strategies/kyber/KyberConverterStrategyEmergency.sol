@@ -11,12 +11,16 @@ import "./KyberStrategyErrors.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
 
 contract KyberConverterStrategyEmergency is KyberDepositor, ConverterStrategyBase, IRebalancingV2Strategy, IFarmingStrategy {
+  using SafeERC20 for IERC20;
 
   //region ------------------------------------------------- Constants
 
   string public constant override NAME = "Kyber Converter Strategy Emergency";
   string public constant override PLATFORM = AppPlatforms.KYBER;
-  string public constant override STRATEGY_VERSION = "3.0.0";
+  string public constant override STRATEGY_VERSION = "3.0.1";
+
+  address public constant COLLATERAL_ASSET = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174; // USDC
+  address public constant BORROW_ASSET = 0xc2132D05D31c914a87C6611C10748AEb04B58e8F; // USDT
   //endregion ------------------------------------------------- Constants
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,6 +33,25 @@ contract KyberConverterStrategyEmergency is KyberDepositor, ConverterStrategyBas
   function salvage(address token, uint amount) external {
     StrategyLib2.onlyOperators(controller());
     IERC20(token).transfer(IController(controller()).governance(), amount);
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  function emergencyGetDebtAmount() external view returns (uint amountToPay, uint collateral) {
+    return _emergencyGetDebtAmount(COLLATERAL_ASSET, BORROW_ASSET);
+  }
+  function _emergencyGetDebtAmount(address collateralAsset, address borrowAsset) public view returns (uint amountToPay, uint collateral) {
+    return _csbs.converter.getDebtAmountStored(address(this), collateralAsset, borrowAsset, true);
+  }
+  function balanceOf(address token) public view returns (uint) {
+    return IERC20(token).balanceOf(address(this));
+  }
+  function emergencyCloseDirectDebts(uint amountToPay) external {
+    ITetuConverter converter = _csbs.converter;
+    if (amountToPay == 0) {
+      amountToPay = _csbs.converter.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset, true);
+    }
+    IERC20(BORROW_ASSET).safeTransfer(address(converter), amountToPay);
+    converter.repay(COLLATERAL_ASSET, BORROW_ASSET, amountToPay, address(this));
   }
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
