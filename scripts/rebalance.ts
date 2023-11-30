@@ -270,9 +270,9 @@ async function main() {
   }
 }
 
-const fetchFuncAxios = async(url: string) => {
+const fetchFuncAxios = async(url: string, headers: {}) => {
   try {
-    const r = await axios.get(url);
+    const r = await axios.get(url, { headers });
     if (r.status === 200) {
       return r.data;
     } else {

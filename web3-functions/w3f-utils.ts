@@ -1,6 +1,6 @@
 import { StaticJsonRpcProvider } from '@ethersproject/providers/src.ts/url-json-rpc-provider';
 import { BigNumber, Contract } from 'ethers';
-import {defaultAbiCoder, formatUnits, parseUnits} from 'ethers/lib/utils';
+import { defaultAbiCoder, formatUnits } from 'ethers/lib/utils';
 import { Web3FunctionResult } from '@gelatonetwork/web3-functions-sdk/dist/lib/types/Web3FunctionResult';
 
 const MAX_UINT = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
@@ -56,7 +56,7 @@ async function quoteOneInch(
   amount: string,
   fromAddress: string,
   chainId: number,
-  fetchFunc: (url: string) => Promise<unknown>,
+  fetchFunc: (url: string, headers: {}) => Promise<unknown>,
   protocols?: string,
 ): Promise<IAggQuote | undefined> {
   const params = {
@@ -69,10 +69,16 @@ async function quoteOneInch(
     allowPartialFill: false,
     protocols,
   };
-  const url = `https://api-tetu.1inch.io/v5.0/${chainId}/swap?${(new URLSearchParams(JSON.parse(JSON.stringify(params)))).toString()}`;
+
+  const oneInchApiKey = process.env.ONE_INCH_API_KEY ?? '';
+  if (oneInchApiKey === '') {
+    throw new Error('ONE_INCH_API_KEY is not set');
+  }
+
+  const url = `https://api.1inch.dev/v5.0/${chainId}/swap?${(new URLSearchParams(JSON.parse(JSON.stringify(params)))).toString()}`;
   console.log('1inch API request', url);
   try {
-    const quote: ONE_INCH_RESPONSE = (await fetchFunc(url)) as ONE_INCH_RESPONSE;
+    const quote: ONE_INCH_RESPONSE = (await fetchFunc(url, {'Authorization': 'Bearer ' + oneInchApiKey})) as ONE_INCH_RESPONSE;
     if (quote && quote.tx && quote.tx.data && quote.tx.to && quote.toTokenAmount) {
       return {
         to: quote.tx.to,
@@ -96,7 +102,7 @@ async function quoteOpenOcean(
   account: string,
   chainId: number,
   provider: StaticJsonRpcProvider,
-  fetchFunc: (url: string) => Promise<unknown>,
+  fetchFunc: (url: string, headers: {}) => Promise<unknown>,
 ): Promise<IAggQuote | undefined> {
 
   const amount = formatUnits(amountWithDecimals, await (new Contract(inTokenAddress, ERC20_ABI, provider)).decimals());
@@ -116,7 +122,7 @@ async function quoteOpenOcean(
     JSON.parse(JSON.stringify(params)))).toString()}`;
   console.log('OpenOcean API request', url);
   try {
-    const quote: OPEN_OCEAN_RESPONSE = (await fetchFunc(url)) as OPEN_OCEAN_RESPONSE;
+    const quote: OPEN_OCEAN_RESPONSE = (await fetchFunc(url, {})) as OPEN_OCEAN_RESPONSE;
     if (quote && quote.data && quote.data.to && quote.data.data && quote.data.outAmount) {
       return {
         to: quote.data.to,
@@ -140,7 +146,7 @@ export async function runResolver(
   configAddress: string,
   agg: string,
   oneInchProtocols: string,
-  fetchFunc: (url: string) => Promise<unknown>,
+  fetchFunc: (url: string, headers: {}) => Promise<unknown>,
 ): Promise<Web3FunctionResult> {
   // console.log('run Resolver', `
   // strategyAddress: ${strategyAddress}
