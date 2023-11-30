@@ -27,7 +27,7 @@ async function main() {
   await verify('KyberDebtLib', 'contracts/strategies/kyber');
   await verify('KyberConverterStrategyLogicLib', 'contracts/strategies/kyber');
   await verify('KyberConverterStrategy', 'contracts/strategies/kyber');
-  await verify('RebalanceDebtConfig', 'contracts/tools');
+  // await verify('RebalanceDebtConfig', 'contracts/tools');
 }
 
 async function verify(name: string, pkg?: string) {

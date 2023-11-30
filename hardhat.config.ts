@@ -87,6 +87,11 @@ export default {
       chainId: 8453,
       gas: 12_000_000,
       accounts: [EnvSetup.getEnv().privateKey],
+      verify: {
+        etherscan: {
+          apiKey: EnvSetup.getEnv().networkScanKeyBase
+        }
+      }
     },
     w3fmatic: {
       chainId: 137,
