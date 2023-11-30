@@ -91,7 +91,7 @@ async function main() {
 
   let lastNSR: number = 0;
   const needNSRTimestamp: { [addr: string]: number } = {};
-  let lastFuseTriggerReport = 0
+  const lastFuseTrigger = new Map<string, number>();
 
   // noinspection InfiniteLoopJS
   while (true) {
@@ -125,22 +125,28 @@ async function main() {
 
             let now = await Misc.getBlockTsFromChain();
 
-            const defaultState = await strategy.getDefaultState()
+            const defaultState = await strategy.getDefaultState();
             const isFuseTriggered =
               defaultState[2][1].toString() === '2'
               || defaultState[2][1].toString() === '3'
               || defaultState[2][2].toString() === '2'
               || defaultState[2][2].toString() === '3';
+
+            const lastFuseTriggerReport = lastFuseTrigger.get(strategyAddress.toLowerCase()) ?? 0;
+
+            console.log('>>> !!! isFuseTriggered', isFuseTriggered);
+            console.log('>>> !!! lastFuseTriggerReport', lastFuseTriggerReport);
+            console.log('>>> !!! now - lastFuseTriggerReport', now - lastFuseTriggerReport);
             if (isFuseTriggered) {
               if (lastFuseTriggerReport === 0) {
                 await sendMessageToTelegram(`Fuse triggered for ${strategyName} ${strategyAddress}`);
-                lastFuseTriggerReport = now
-              } else if (now - lastFuseTriggerReport >= 3600) {
+                lastFuseTrigger.set(strategyAddress.toLowerCase(), now);
+              } else if (now - lastFuseTriggerReport >= 3600 * 24) {
                 await sendMessageToTelegram(`Fuse still triggered ${strategyName} ${strategyAddress}`);
-                lastFuseTriggerReport = now
+                lastFuseTrigger.set(strategyAddress.toLowerCase(), now);
               }
             } else {
-              lastFuseTriggerReport = 0
+              lastFuseTrigger.set(strategyAddress.toLowerCase(), 0);
             }
 
             // NSR
