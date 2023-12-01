@@ -50,7 +50,7 @@ const openOceanChains = new Map<number, string>([
   [8453, 'base'],
 ]);
 
-async function quoteOneInch(
+export async function quoteOneInch(
   fromTokenAddress: string,
   toTokenAddress: string,
   amount: string,
@@ -75,7 +75,7 @@ async function quoteOneInch(
     throw new Error('ONE_INCH_API_KEY is not set');
   }
 
-  const url = `https://api.1inch.dev/v5.0/${chainId}/swap?${(new URLSearchParams(JSON.parse(JSON.stringify(params)))).toString()}`;
+  const url = `https://api.1inch.dev/swap/v5.0/${chainId}/swap?${(new URLSearchParams(JSON.parse(JSON.stringify(params)))).toString()}`;
   console.log('1inch API request', url);
   try {
     const quote: ONE_INCH_RESPONSE = (await fetchFunc(url, {'Authorization': 'Bearer ' + oneInchApiKey})) as ONE_INCH_RESPONSE;

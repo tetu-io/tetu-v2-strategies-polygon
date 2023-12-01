@@ -1,6 +1,6 @@
 /* tslint:disable */
 import hre, { ethers } from 'hardhat';
-import { runResolver } from '../web3-functions/w3f-utils';
+import { quoteOneInch, runResolver } from '../web3-functions/w3f-utils';
 import axios from 'axios';
 import { RunHelper } from './utils/RunHelper';
 import { getDeployedContractByName, txParams2 } from '../deploy_constants/deploy-helpers';
@@ -20,6 +20,7 @@ import { Misc } from './utils/Misc';
 import { NSRUtils } from './utils/NSRUtils';
 import { formatUnits } from 'ethers/lib/utils';
 import { splitterHardWork } from './utils/splitter-hardwork';
+import { BaseAddresses } from './addresses/BaseAddresses';
 
 // test rebalance debt
 // NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtW3F.ts
@@ -92,6 +93,19 @@ async function main() {
   let lastNSR: number = 0;
   const needNSRTimestamp: { [addr: string]: number } = {};
   const lastFuseTrigger = new Map<string, number>();
+
+
+  const res = await quoteOneInch(
+    BaseAddresses.USDC_TOKEN,
+    BaseAddresses.USDbC_TOKEN,
+    '7175627810',
+    '0xAA43e2cc199DC946b3D528c6E00ebb3F4CC2fC0e',
+    8453,
+    fetchFuncAxios,
+  );
+  if (!res) {
+    throw Error('1inch test call failed!');
+  }
 
   // noinspection InfiniteLoopJS
   while (true) {
