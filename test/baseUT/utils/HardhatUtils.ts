@@ -6,14 +6,24 @@ export const HARDHAT_NETWORK_ID = 31337;
 export const POLYGON_NETWORK_ID = 137;
 export const BASE_NETWORK_ID = 8453;
 
+interface IEnvData {
+  rpcUrl: string;
+  forkBlock: number;
+}
+
 export class HardhatUtils {
 
   static async switchToMostCurrentBlock() {
     await reset(EnvSetup.getEnv().maticRpcUrl);
   }
 
-  static async switchToBlock(block: number) {
-    await reset(EnvSetup.getEnv().maticRpcUrl, block);
+  static async switchToBlock(block: number, chain: number = POLYGON_NETWORK_ID) {
+    const envData = this.getEnvData(chain);
+    if (envData) {
+      await reset(envData.rpcUrl, block);
+    } else {
+      await reset();
+    }
   }
 
   static async restoreBlockFromEnv() {
@@ -54,6 +64,16 @@ export class HardhatUtils {
     } else {
       throw new Error('Unknown chain id ' + chainId);
     }
+  }
 
+  public static getEnvData(chainId: number) : IEnvData | undefined {
+    const env = EnvSetup.getEnv();
+    if (chainId === HARDHAT_NETWORK_ID) {
+      return undefined;
+    } else if (chainId === POLYGON_NETWORK_ID) {
+      return {rpcUrl: env.maticRpcUrl, forkBlock: env.maticForkBlock};
+    } else if (chainId === BASE_NETWORK_ID) {
+      return {rpcUrl: env.baseRpcUrl, forkBlock: env.baseForkBlock};
+    }
   }
 }
