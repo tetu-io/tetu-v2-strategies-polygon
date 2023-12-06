@@ -261,20 +261,7 @@ library AlgebraConverterStrategyLogicLib {
         FARMING_CENTER.exitFarming(key, vars.tokenId, false);
 
         // claim rewards and send to profit holder
-        {
-          address strategyProfitHolder = state.pair.strategyProfitHolder;
-
-          if (reward > 0) {
-            address token = state.rewardToken;
-            reward = FARMING_CENTER.claimReward(token, address(this), 0, reward);
-            IERC20(token).safeTransfer(strategyProfitHolder, reward);
-          }
-          if (bonusReward > 0) {
-            address token = state.bonusRewardToken;
-            bonusReward = FARMING_CENTER.claimReward(token, address(this), 0, bonusReward);
-            IERC20(token).safeTransfer(strategyProfitHolder, bonusReward);
-          }
-        }
+        _claimRewardsAndBonusRewards(state, state.pair.strategyProfitHolder, reward, bonusReward);
       } else {
         ALGEBRA_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), vars.tokenId);
       }
@@ -324,26 +311,7 @@ library AlgebraConverterStrategyLogicLib {
 
     // claim rewards and send to profit holder
     if (! emergency) {
-      if (v.reward != 0) {
-        address token = state.rewardToken;
-        try FARMING_CENTER.claimReward(
-          token, address(this), 0, v.reward
-        ) returns (uint reward) {
-          IERC20(token).safeTransfer(v.strategyProfitHolder, reward);
-        } catch {
-          // an exception in reward-claiming shouldn't stop hardwork / withdraw
-        }
-      }
-      if (v.bonusReward != 0) {
-        address token = state.bonusRewardToken;
-        try FARMING_CENTER.claimReward(
-          token, address(this), 0, v.bonusReward
-        ) returns (uint bonusReward) {
-          IERC20(token).safeTransfer(v.strategyProfitHolder, bonusReward);
-        } catch {
-          // an exception in reward-claiming shouldn't stop hardwork / withdraw
-        }
-      }
+      _claimRewardsAndBonusRewards(state, v.strategyProfitHolder, v.reward, v.bonusReward);
     }
 
     // withdraw nft
@@ -532,6 +500,35 @@ library AlgebraConverterStrategyLogicLib {
     }
 
     return earned;
+  }
+
+  /// @notice Claim reward and bonusRewards if any, send them to {strategyProfitHolder}
+  function _claimRewardsAndBonusRewards(
+    State storage state,
+    address strategyProfitHolder,
+    uint rewardAmount,
+    uint bonusRewardAmount
+  ) internal {
+    if (rewardAmount != 0) {
+      address token = state.rewardToken;
+      try FARMING_CENTER.claimReward(
+        token, address(this), 0, rewardAmount
+      ) returns (uint reward) {
+        IERC20(token).safeTransfer(strategyProfitHolder, reward);
+      } catch {
+        // an exception in reward-claiming shouldn't stop hardwork / withdraw
+      }
+    }
+    if (bonusRewardAmount != 0) {
+      address token = state.bonusRewardToken;
+      try FARMING_CENTER.claimReward(
+        token, address(this), 0, bonusRewardAmount
+      ) returns (uint bonusReward) {
+        IERC20(token).safeTransfer(strategyProfitHolder, bonusReward);
+      } catch {
+        // an exception in reward-claiming shouldn't stop hardwork / withdraw
+      }
+    }
   }
   //endregion ------------------------------------------------ Rewards
 
