@@ -20,7 +20,7 @@ contract KyberConverterStrategyEmergency is KyberDepositor, ConverterStrategyBas
 
   string public constant override NAME = "Kyber Converter Strategy Emergency";
   string public constant override PLATFORM = AppPlatforms.KYBER;
-  string public constant override STRATEGY_VERSION = "3.0.1";
+  string public constant override STRATEGY_VERSION = "3.0.2";
 
   address internal constant USDC_TOKEN = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
   address internal constant TOKEN_USDT = 0xc2132D05D31c914a87C6611C10748AEb04B58e8F;
@@ -194,8 +194,8 @@ contract KyberConverterStrategyEmergency is KyberDepositor, ConverterStrategyBas
     return new uint[](0);
   }
 
-  function _handleRewards() override internal virtual pure returns (uint, uint, uint) {
-    return (0, 0, 0);
+  function _handleRewards() override internal virtual pure returns (uint, uint, uint, uint) {
+    return (0, 0, 0, 0);
   }
 
   function _depositToPool(uint, bool) override internal virtual pure returns (

@@ -28,14 +28,14 @@ contract BalancerBoostedStrategy is ConverterStrategyBase, BalancerBoostedDeposi
     StrategyLib2._changeStrategySpecificName(baseState, BalancerLogicLib.createSpecificName(pool_));
   }
 
-  function _handleRewards() internal virtual override returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
+  function _handleRewards() internal virtual override returns (uint earned, uint lost, uint assetBalanceAfterClaim, uint paidDebtToInsurance) {
     address asset = baseState.asset;
     uint assetBalanceBefore = AppLib.balance(asset);
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
-    _rewardsLiquidation(rewardTokens, amounts);
+    paidDebtToInsurance = _rewardsLiquidation(rewardTokens, amounts);
     assetBalanceAfterClaim = AppLib.balance(asset);
     (uint earned2, uint lost2) = ConverterStrategyBaseLib2._registerIncome(assetBalanceBefore, assetBalanceAfterClaim);
-    return (earned + earned2, lost + lost2, assetBalanceAfterClaim);
+    return (earned + earned2, lost + lost2, assetBalanceAfterClaim, paidDebtToInsurance);
   }
 
   function setGauge(address gauge_) external {

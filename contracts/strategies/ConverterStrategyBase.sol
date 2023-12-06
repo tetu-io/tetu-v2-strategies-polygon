@@ -94,7 +94,8 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     uint earnedHandleRewards,
     uint lostHandleRewards,
     uint earnedDeposit,
-    uint lostDeposit
+    uint lostDeposit,
+    uint paidDebtToInsurance
   );
   //endregion -------------------------------------------------------- Events
 
@@ -425,9 +426,12 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
 
   /// @dev Call recycle process and send tokens to forwarder.
   ///      Need to be separated from the claim process - the claim can be called by operator for other purposes.
-  function _rewardsLiquidation(address[] memory rewardTokens_, uint[] memory rewardAmounts_) internal {
+  /// @return paidDebtToInsurance Earned amount spent on debt-to-insurance payment
+  function _rewardsLiquidation(address[] memory rewardTokens_, uint[] memory rewardAmounts_) internal returns (
+    uint paidDebtToInsurance
+  ) {
     if (rewardTokens_.length != 0) {
-      ConverterStrategyBaseLib.recycle(
+      paidDebtToInsurance = ConverterStrategyBaseLib.recycle(
         baseState,
         _csbs,
         _depositorPoolAssets(),
@@ -437,6 +441,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
         rewardAmounts_
       );
     }
+    return paidDebtToInsurance;
   }
   //endregion -------------------------------------------------------- Claim rewards
 
@@ -467,7 +472,16 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   }
 
   /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
-  function _handleRewards() internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim);
+  /// @return earned The amount of earned rewards.
+  /// @return lost The amount of lost rewards.
+  /// @return assetBalanceAfterClaim The asset balance after claiming rewards.
+  /// @return paidDebtToInsurance A part of {earned} spent on debt-to-insurance payment
+  function _handleRewards() internal virtual returns (
+    uint earned,
+    uint lost,
+    uint assetBalanceAfterClaim,
+    uint paidDebtToInsurance
+  );
 
   /// @param reInvest Deposit to pool all available amount if it's greater than the threshold
   /// @return earned Earned amount in terms of {asset}
@@ -477,7 +491,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
     if (!_preHardWork(reInvest)) {
       // claim rewards and get current asset balance
-      (uint earned1, uint lost1, uint assetBalance) = _handleRewards();
+      (uint earned1, uint lost1, uint assetBalance, uint paidDebtToInsurance) = _handleRewards();
 
       // re-invest income
       (, uint amountSentToInsurance) = _depositToPoolUniversal(
@@ -496,9 +510,9 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       );
 
       _postHardWork();
-      emit OnHardWorkEarnedLost(investedAssetsNewPrices, earnedByPrices, earned1, lost1, earned, lost);
+      emit OnHardWorkEarnedLost(investedAssetsNewPrices, earnedByPrices, earned1, lost1, earned, lost, paidDebtToInsurance);
 
-      earned += earned1;
+      earned = AppLib.sub0(earned + earned1, paidDebtToInsurance);
       lost += lost1;
     }
 
