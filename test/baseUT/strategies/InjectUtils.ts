@@ -27,16 +27,16 @@ export class InjectUtils {
    * just comment body of injectTetuConverterBeforeAnyTest if no preparations are required.
    */
   static async injectTetuConverterBeforeAnyTest(signer: SignerWithAddress, core0?: CoreAddresses, converter0?: string) {
-    console.log("injectTetuConverterBeforeAnyTest");
-    const converter = converter0 ?? MaticAddresses.TETU_CONVERTER;
-
-    await InjectUtils.injectTetuConverter(signer, core0, converter);
-    if (converter?.toLowerCase() === MaticAddresses.TETU_CONVERTER.toLowerCase()) {
-      await ConverterUtils.disableAaveV2(signer, converter);
-      await InjectUtils.redeployAave3PoolAdapters(signer, converter);
-    } else if (converter?.toLowerCase() === BaseAddresses.TETU_CONVERTER.toLowerCase()) {
-      await InjectUtils.redeployMoonwellPoolAdapters(signer, converter);
-    }
+    // console.log("injectTetuConverterBeforeAnyTest");
+    // const converter = converter0 ?? MaticAddresses.TETU_CONVERTER;
+    //
+    // await InjectUtils.injectTetuConverter(signer, core0, converter);
+    // if (converter?.toLowerCase() === MaticAddresses.TETU_CONVERTER.toLowerCase()) {
+    //   await ConverterUtils.disableAaveV2(signer, converter);
+    //   await InjectUtils.redeployAave3PoolAdapters(signer, converter);
+    // } else if (converter?.toLowerCase() === BaseAddresses.TETU_CONVERTER.toLowerCase()) {
+    //   await InjectUtils.redeployMoonwellPoolAdapters(signer, converter);
+    // }
   }
 
   static async injectTetuConverter(signer: SignerWithAddress, core0?: CoreAddresses, converter0?: string) {

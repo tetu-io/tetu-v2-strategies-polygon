@@ -723,7 +723,7 @@ describe("ConverterStrategyBaseInt", () => {
       await ConverterUtils.whitelist([facade.address]);
 
       await ConverterUtils.disableAaveV2(signer);
-      await ConverterUtils.disableDForce(signer);
+      // await ConverterUtils.disableDForce(signer);
 
       const amountIn = parseUnits(p.amountIn, decimalsCollateral);
 

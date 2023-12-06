@@ -92,7 +92,7 @@ describe.skip('BalancerBoostedIntTest @skip-on-coverage', function() {
     await StrategyTestUtils.deployAndSetCustomSplitter(signer, addresses);
 
     // Disable DForce (as it reverts on repay after block advance)
-    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+    // await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
 
     stateParams = {
       mainAssetSymbol: await IERC20Metadata__factory.connect(MAIN_ASSET, signer).symbol()

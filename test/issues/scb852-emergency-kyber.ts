@@ -5,6 +5,7 @@ import {IStateNum, StateUtilsNum} from "../baseUT/utils/StateUtilsNum";
 import {MaticAddresses} from "../../scripts/addresses/MaticAddresses";
 import {InjectUtils} from "../baseUT/strategies/InjectUtils";
 import {
+  ControllerV2__factory,
   ConverterStrategyBase__factory, IERC20__factory,
   IRebalancingV2Strategy__factory, KyberConverterStrategyEmergency,
   KyberConverterStrategyEmergency__factory,
@@ -17,15 +18,14 @@ import {formatUnits} from "ethers/lib/utils";
 import {IController__factory} from "../../typechain/factories/@tetu_io/tetu-converter/contracts/interfaces";
 
 describe("Scb852-emergency-kyber @skip-on-coverage", () => {
-  const BLOCK = 50518922;
+  const BLOCK = -1;
   const STRATEGY = "0x792Bcc2f14FdCB9FAf7E12223a564e7459eA4201";
   const OPERATOR = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
 
   let snapshotBefore: string;
   before(async function () {
-    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID, BLOCK);
     snapshotBefore = await TimeUtils.snapshot();
-    await HardhatUtils.switchToBlock(BLOCK);
   });
 
   after(async function () {
@@ -102,5 +102,42 @@ describe("Scb852-emergency-kyber @skip-on-coverage", () => {
     console.log("Balances final", balancesFinal);
 
     await saver("f");
+  });
+  it("apply kyber update", async () => {
+    const VAULT = "0x0D397F4515007AE4822703b74b9922508837A04E";
+    const SPLITTER = "0xA31cE671A0069020F7c87ce23F9cAAA7274C794c";
+    const CONTROLLER = "0x33b27e0a2506a4a2fbc213a01c51d0451745343a";
+
+    const signer = await DeployerUtilsLocal.impersonate(OPERATOR);
+    const strategy = IRebalancingV2Strategy__factory.connect(STRATEGY, signer);
+    const states: IStateNum[] = [];
+    const governance = await IController__factory.connect(CONTROLLER, signer).governance();
+
+    const controllerGov = await ControllerV2__factory.connect(CONTROLLER, await Misc.impersonate(governance));
+    await controllerGov.upgradeProxy(["0x792Bcc2f14FdCB9FAf7E12223a564e7459eA4201"]);
+
+    const kyberStrategy = KyberConverterStrategyEmergency__factory.connect(STRATEGY, await Misc.impersonate(OPERATOR));
+    const directDebts = await kyberStrategy._emergencyGetDebtAmount(MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN);
+    const reverseDebts = await kyberStrategy._emergencyGetDebtAmount(MaticAddresses.USDT_TOKEN, MaticAddresses.USDC_TOKEN);
+    console.log("direct debts", directDebts);
+    console.log("reverse", reverseDebts);
+
+    const balancesBefore = await getBalances(signer, kyberStrategy, governance);
+    console.log("Balances before", balancesBefore);
+
+    await kyberStrategy.emergencyCloseDirectDebtsUsingFlashLoan();
+
+    const balancesAfter = await getBalances(signer, kyberStrategy, governance);
+    console.log("Balances after", balancesAfter);
+
+    // salvage
+    const balanceUsdc = await kyberStrategy.balanceOf(MaticAddresses.USDC_TOKEN);
+    const balanceUsdt = await kyberStrategy.balanceOf(MaticAddresses.USDT_TOKEN);
+
+    await kyberStrategy.salvage(MaticAddresses.USDC_TOKEN, balanceUsdc);
+    await kyberStrategy.salvage(MaticAddresses.USDT_TOKEN, balanceUsdt);
+
+    const balancesFinal = await getBalances(signer, kyberStrategy, governance);
+    console.log("Balances final", balancesFinal);
   });
 });
