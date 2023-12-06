@@ -1,6 +1,6 @@
 /* tslint:disable */
 import hre, { ethers } from 'hardhat';
-import { runResolver } from '../web3-functions/w3f-utils';
+import { quoteOneInch, runResolver } from '../web3-functions/w3f-utils';
 import axios from 'axios';
 import { RunHelper } from './utils/RunHelper';
 import { getDeployedContractByName, txParams2 } from '../deploy_constants/deploy-helpers';
@@ -20,6 +20,7 @@ import { Misc } from './utils/Misc';
 import { NSRUtils } from './utils/NSRUtils';
 import { formatUnits } from 'ethers/lib/utils';
 import { splitterHardWork } from './utils/splitter-hardwork';
+import { BaseAddresses } from './addresses/BaseAddresses';
 
 // test rebalance debt
 // NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtW3F.ts
@@ -91,7 +92,20 @@ async function main() {
 
   let lastNSR: number = 0;
   const needNSRTimestamp: { [addr: string]: number } = {};
-  let lastFuseTriggerReport = 0
+  const lastFuseTrigger = new Map<string, number>();
+
+
+  const res = await quoteOneInch(
+    BaseAddresses.USDC_TOKEN,
+    BaseAddresses.USDbC_TOKEN,
+    '7175627810',
+    '0xAA43e2cc199DC946b3D528c6E00ebb3F4CC2fC0e',
+    8453,
+    fetchFuncAxios,
+  );
+  if (!res) {
+    throw Error('1inch test call failed!');
+  }
 
   // noinspection InfiniteLoopJS
   while (true) {
@@ -125,22 +139,28 @@ async function main() {
 
             let now = await Misc.getBlockTsFromChain();
 
-            const defaultState = await strategy.getDefaultState()
+            const defaultState = await strategy.getDefaultState();
             const isFuseTriggered =
               defaultState[2][1].toString() === '2'
               || defaultState[2][1].toString() === '3'
               || defaultState[2][2].toString() === '2'
               || defaultState[2][2].toString() === '3';
+
+            const lastFuseTriggerReport = lastFuseTrigger.get(strategyAddress.toLowerCase()) ?? 0;
+
+            console.log('>>> !!! isFuseTriggered', isFuseTriggered);
+            console.log('>>> !!! lastFuseTriggerReport', lastFuseTriggerReport);
+            console.log('>>> !!! now - lastFuseTriggerReport', now - lastFuseTriggerReport);
             if (isFuseTriggered) {
               if (lastFuseTriggerReport === 0) {
                 await sendMessageToTelegram(`Fuse triggered for ${strategyName} ${strategyAddress}`);
-                lastFuseTriggerReport = now
-              } else if (now - lastFuseTriggerReport >= 3600) {
+                lastFuseTrigger.set(strategyAddress.toLowerCase(), now);
+              } else if (now - lastFuseTriggerReport >= 3600 * 24) {
                 await sendMessageToTelegram(`Fuse still triggered ${strategyName} ${strategyAddress}`);
-                lastFuseTriggerReport = now
+                lastFuseTrigger.set(strategyAddress.toLowerCase(), now);
               }
             } else {
-              lastFuseTriggerReport = 0
+              lastFuseTrigger.set(strategyAddress.toLowerCase(), 0);
             }
 
             // NSR
@@ -270,9 +290,9 @@ async function main() {
   }
 }
 
-const fetchFuncAxios = async(url: string) => {
+const fetchFuncAxios = async(url: string, headers: {}) => {
   try {
-    const r = await axios.get(url);
+    const r = await axios.get(url, { headers });
     if (r.status === 200) {
       return r.data;
     } else {
