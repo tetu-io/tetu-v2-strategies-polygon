@@ -741,6 +741,7 @@ export class StateUtilsNum {
       "hw.lostDeposit",
       "hw.earnedHandleRewards",
       "hw.lostHandleRewards",
+      "hw.paidDebtToInsurance",
 
       "hardwork.sender",
       "hardwork.strategy",
@@ -898,6 +899,7 @@ export class StateUtilsNum {
       item.events?.onHardWorkEarnedLost?.lostDeposit,
       item.events?.onHardWorkEarnedLost?.earnedHandleRewards,
       item.events?.onHardWorkEarnedLost?.lostHandleRewards,
+      item.events?.onHardWorkEarnedLost?.paidDebtToInsurance,
 
       item.events?.hardwork?.sender,
       item.events?.hardwork?.strategy,

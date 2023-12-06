@@ -1844,7 +1844,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         });
 
         if (strategyInfo.initialInsuranceBalance !== "0") {
-          it('borrow losses + swap losses = covered losses', async () => {
+          it('borrow losses + swap losses = covered losses + increaseToDebts', async () => {
             const {ret} = await loadFixture(makeCalculations);
             const last = ret[ret.length - 1];
 
@@ -1866,9 +1866,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             console.log("lossesForBorrowing", lossesForBorrowing);
 
             if (strategyInfo.dontChangePrices === true) {
-              expect(coveredLoss).approximately(lossesForBorrowing + swapLosses + notEnoughInsurance, 0.01);
+              expect(coveredLoss + increaseToDebts).approximately(lossesForBorrowing + swapLosses + notEnoughInsurance, 0.01);
             } else {
-              expect(coveredLoss).gt(lossesForBorrowing + swapLosses + notEnoughInsurance);
+              expect(coveredLoss + increaseToDebts).gt(lossesForBorrowing + swapLosses + notEnoughInsurance);
             }
           });
 
