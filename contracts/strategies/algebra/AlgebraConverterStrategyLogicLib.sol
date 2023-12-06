@@ -481,10 +481,15 @@ library AlgebraConverterStrategyLogicLib {
     if (rewardAmount != 0) {
       try FARMING_CENTER.claimReward(
         token, address(this), 0, rewardAmount
-      ) returns (uint reward) {
-        rewardOut = reward;
+      ) returns (uint /*reward*/) {
+        // if previous calls of claimReward were failed and current call is successful,
+        // we can receive reward > rewardAmount here but we will receive only rewardAmount on the balance.
+        // Most probably it's enough to transfer min(rewardAmount, reward) but it's more reliable to check balance
         if (to != address(0)) {
-          IERC20(token).safeTransfer(to, rewardOut);
+          rewardOut = Math.min(rewardAmount, IERC20(token).balanceOf(address(this)));
+          if (rewardOut != 0) {
+            IERC20(token).safeTransfer(to, rewardOut);
+          }
         }
       } catch {
         // an exception in reward-claiming shouldn't stop hardwork / withdraw
