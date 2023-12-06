@@ -73,7 +73,7 @@ describe('BorrowLibIntTest', () => {
     priceOracle = IPriceOracle__factory.connect(await converterController.priceOracle(), signer);
 
     // let's use AAVE3 (with debt-tokens and repay-borrow-in-single-block-forbidden problems)
-    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+    // await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
     await ConverterUtils.disablePlatformAdapter(signer, await getAaveTwoPlatformAdapter(signer));
     await ConverterUtils.disablePlatformAdapter(signer, await getCompoundThreePlatformAdapter(signer));
     await ConverterUtils.allowToConvertByAave3(signer, converterController, MaticAddresses.WMATIC_TOKEN, MaticAddresses.USDC_TOKEN);

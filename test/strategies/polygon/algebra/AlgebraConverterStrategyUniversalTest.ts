@@ -80,8 +80,9 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
 
     await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
     await StrategyTestUtils.deployAndSetCustomSplitter(signer, core);
+
     // Disable DForce (as it reverts on repay after block advance)
-    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+    // await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
 
     const pools = [
       // for production

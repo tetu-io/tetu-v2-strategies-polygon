@@ -255,26 +255,15 @@ library AlgebraConverterStrategyLogicLib {
 
       if (state.pair.totalLiquidity > 0) {
         // get reward amounts
-        (uint reward, uint bonusReward) = FARMING_CENTER.collectRewards(key, vars.tokenId);
+        (uint reward, uint bonusReward) = _collectRewards(key, vars.tokenId);
 
         // exit farming (undeposit)
         FARMING_CENTER.exitFarming(key, vars.tokenId, false);
 
         // claim rewards and send to profit holder
-        {
-          address strategyProfitHolder = state.pair.strategyProfitHolder;
-
-          if (reward > 0) {
-            address token = state.rewardToken;
-            reward = FARMING_CENTER.claimReward(token, address(this), 0, reward);
-            IERC20(token).safeTransfer(strategyProfitHolder, reward);
-          }
-          if (bonusReward > 0) {
-            address token = state.bonusRewardToken;
-            bonusReward = FARMING_CENTER.claimReward(token, address(this), 0, bonusReward);
-            IERC20(token).safeTransfer(strategyProfitHolder, bonusReward);
-          }
-        }
+        address strategyProfitHolder = state.pair.strategyProfitHolder;
+        _claimRewards(state.rewardToken, strategyProfitHolder, reward);
+        _claimRewards(state.bonusRewardToken, strategyProfitHolder, bonusReward);
       } else {
         ALGEBRA_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), vars.tokenId);
       }
@@ -310,7 +299,7 @@ library AlgebraConverterStrategyLogicLib {
 
     // get reward amounts
     if (! emergency) {
-      (v.reward, v.bonusReward) = FARMING_CENTER.collectRewards(key, tokenId);
+      (v.reward, v.bonusReward) = _collectRewards(key, tokenId);
     }
 
     // exit farming (undeposit)
@@ -318,16 +307,8 @@ library AlgebraConverterStrategyLogicLib {
 
     // claim rewards and send to profit holder
     if (! emergency) {
-      if (v.reward > 0) {
-        address token = state.rewardToken;
-        v.reward = FARMING_CENTER.claimReward(token, address(this), 0, v.reward);
-        IERC20(token).safeTransfer(v.strategyProfitHolder, v.reward);
-      }
-      if (v.bonusReward > 0) {
-        address token = state.bonusRewardToken;
-        v.bonusReward = FARMING_CENTER.claimReward(token, address(this), 0, v.bonusReward);
-        IERC20(token).safeTransfer(v.strategyProfitHolder, v.bonusReward);
-      }
+      _claimRewards(state.rewardToken, v.strategyProfitHolder, v.reward);
+      _claimRewards(state.bonusRewardToken, v.strategyProfitHolder, v.bonusReward);
     }
 
     // withdraw nft
@@ -462,15 +443,9 @@ library AlgebraConverterStrategyLogicLib {
         (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
       }
 
-      (amountsOut[2], amountsOut[3]) = FARMING_CENTER.collectRewards(getIncentiveKey(state), tokenId);
-
-      if (amountsOut[2] > 0) {
-        amountsOut[2] = FARMING_CENTER.claimReward(tokensOut[2], address(this), 0, amountsOut[2]);
-      }
-
-      if (amountsOut[3] > 0) {
-        amountsOut[3] = FARMING_CENTER.claimReward(tokensOut[3], address(this), 0, amountsOut[3]);
-      }
+      (amountsOut[2], amountsOut[3]) = _collectRewards(getIncentiveKey(state), tokenId);
+      amountsOut[2] = _claimRewards(tokensOut[2], address(0), amountsOut[2]);
+      amountsOut[3] = _claimRewards(tokensOut[3], address(0), amountsOut[3]);
 
       emit AlgebraRewardsClaimed(amountsOut[2], amountsOut[3]);
     }
@@ -498,6 +473,43 @@ library AlgebraConverterStrategyLogicLib {
     }
 
     return earned;
+  }
+
+  /// @notice Claim rewards if any, send them to {strategyProfitHolder} if !skipTransfer, hide exceptions
+  /// @param to Transfer rewards to {to}, skip transfer if 0
+  function _claimRewards(address token, address to, uint rewardAmount) internal returns (uint rewardOut) {
+    if (rewardAmount != 0) {
+      try FARMING_CENTER.claimReward(
+        token, address(this), 0, rewardAmount
+      ) returns (uint /*reward*/) {
+        // if previous calls of claimReward were failed and current call is successful,
+        // we can receive reward > rewardAmount here but we will receive only rewardAmount on the balance.
+        // Most probably it's enough to transfer min(rewardAmount, reward) but it's more reliable to check balance
+        if (to != address(0)) {
+          rewardOut = Math.min(rewardAmount, IERC20(token).balanceOf(address(this)));
+          if (rewardOut != 0) {
+            IERC20(token).safeTransfer(to, rewardOut);
+          }
+        }
+      } catch {
+        // an exception in reward-claiming shouldn't stop hardwork / withdraw
+      }
+    }
+
+    return rewardOut;
+  }
+
+  /// @notice Collect rewards, hide exceptions
+  function _collectRewards(IncentiveKey memory key, uint tokenId) internal returns (uint reward, uint bonusReward) {
+    try FARMING_CENTER.collectRewards(
+      key, tokenId
+    ) returns (uint rewardAmount, uint bonusRewardAmount) {
+      (reward, bonusReward) = (rewardAmount, bonusRewardAmount);
+    } catch {
+      // an exception in reward-claiming shouldn't stop hardwork / withdraw
+    }
+
+    return (reward, bonusReward);
   }
   //endregion ------------------------------------------------ Rewards
 
