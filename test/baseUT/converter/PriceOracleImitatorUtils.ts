@@ -39,7 +39,7 @@ export class PriceOracleImitatorUtils {
     stableTokenPrice: string = '100000000'
   ) {
     // Disable all lending platforms except AAVE3
-    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+    // await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
     await ConverterUtils.disablePlatformAdapter(signer, await getAaveTwoPlatformAdapter(signer));
 
     const poolOwner = await Misc.impersonate(MaticAddresses.AAVE3_POOL_OWNER);
@@ -86,7 +86,7 @@ export class PriceOracleImitatorUtils {
     stableTokenPrice: string = '100000000'
   ) {
     // Disable all lending platforms except AAVE3
-    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+    // await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
     await ConverterUtils.disablePlatformAdapter(signer, await getAaveTwoPlatformAdapter(signer));
 
     const poolOwner = await Misc.impersonate(MaticAddresses.AAVE3_POOL_OWNER);
@@ -111,7 +111,7 @@ export class PriceOracleImitatorUtils {
     stableTokenPrice: string = '100000000'
   ) {
     // Disable all lending platforms except AAVE3
-    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+    // await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
     await ConverterUtils.disablePlatformAdapter(signer, await getAaveTwoPlatformAdapter(signer));
 
     const poolOwner = await Misc.impersonate(MaticAddresses.AAVE3_POOL_OWNER);
@@ -136,7 +136,7 @@ export class PriceOracleImitatorUtils {
     stableTokenPrice: string = '100000000'
   ) {
     // Disable all lending platforms except AAVE3
-    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+    // await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
     await ConverterUtils.disablePlatformAdapter(signer, await getAaveTwoPlatformAdapter(signer));
 
     const poolOwner = await Misc.impersonate(MaticAddresses.AAVE3_POOL_OWNER);

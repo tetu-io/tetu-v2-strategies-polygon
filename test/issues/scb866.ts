@@ -63,7 +63,7 @@ describe("Scb866 @skip-on-coverage", () => {
       );
       const splitter = await vault.splitter();
 
-      await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
+      // await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
       await InjectUtils.injectStrategy(signer, STRATEGY, "AlgebraConverterStrategy");
 
       // await saver("b");

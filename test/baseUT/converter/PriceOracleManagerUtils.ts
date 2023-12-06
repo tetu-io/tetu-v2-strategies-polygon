@@ -25,7 +25,7 @@ export class PriceOracleManagerUtils {
   ): Promise<IPriceOracleManager> {
 
     // Disable all lending platforms except AAVE3
-    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+    // await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
     await ConverterUtils.disablePlatformAdapter(signer, await getAaveTwoPlatformAdapter(signer));
 
     //  See first event for of ACLManager (AAVE_V3_POOL = "0x794a61358D6845594F94dc1DB02A252b5b4814aD")
