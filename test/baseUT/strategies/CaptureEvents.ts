@@ -577,8 +577,8 @@ export class CaptureEvents {
             strategy: log.strategy,
             earned: +formatUnits(log.earned, decimals),
             lost: +formatUnits(log.lost, decimals),
-            apr: +formatUnits(log.apr, 18),
-            avgApr: +formatUnits(log.avgApr, 18),
+            apr: +formatUnits(log.apr, 5),
+            avgApr: +formatUnits(log.avgApr, 5),
             sender: log.sender,
             tvl: +formatUnits(log.tvl, decimals),
           };
