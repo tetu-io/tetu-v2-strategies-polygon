@@ -310,7 +310,13 @@ library AlgebraConverterStrategyLogicLib {
 
     // get reward amounts
     if (! emergency) {
-      (v.reward, v.bonusReward) = FARMING_CENTER.collectRewards(key, tokenId);
+      try FARMING_CENTER.collectRewards(
+        key, tokenId
+      ) returns (uint reward, uint bonusReward) {
+        (v.reward, v.bonusReward) = (reward, bonusReward);
+      } catch {
+        // an exception in reward-claiming shouldn't stop hardwork / withdraw
+      }
     }
 
     // exit farming (undeposit)
@@ -318,15 +324,25 @@ library AlgebraConverterStrategyLogicLib {
 
     // claim rewards and send to profit holder
     if (! emergency) {
-      if (v.reward > 0) {
+      if (v.reward != 0) {
         address token = state.rewardToken;
-        v.reward = FARMING_CENTER.claimReward(token, address(this), 0, v.reward);
-        IERC20(token).safeTransfer(v.strategyProfitHolder, v.reward);
+        try FARMING_CENTER.claimReward(
+          token, address(this), 0, v.reward
+        ) returns (uint reward) {
+          IERC20(token).safeTransfer(v.strategyProfitHolder, reward);
+        } catch {
+          // an exception in reward-claiming shouldn't stop hardwork / withdraw
+        }
       }
-      if (v.bonusReward > 0) {
+      if (v.bonusReward != 0) {
         address token = state.bonusRewardToken;
-        v.bonusReward = FARMING_CENTER.claimReward(token, address(this), 0, v.bonusReward);
-        IERC20(token).safeTransfer(v.strategyProfitHolder, v.bonusReward);
+        try FARMING_CENTER.claimReward(
+          token, address(this), 0, v.bonusReward
+        ) returns (uint bonusReward) {
+          IERC20(token).safeTransfer(v.strategyProfitHolder, bonusReward);
+        } catch {
+          // an exception in reward-claiming shouldn't stop hardwork / withdraw
+        }
       }
     }
 
@@ -462,14 +478,32 @@ library AlgebraConverterStrategyLogicLib {
         (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
       }
 
-      (amountsOut[2], amountsOut[3]) = FARMING_CENTER.collectRewards(getIncentiveKey(state), tokenId);
-
-      if (amountsOut[2] > 0) {
-        amountsOut[2] = FARMING_CENTER.claimReward(tokensOut[2], address(this), 0, amountsOut[2]);
+      try FARMING_CENTER.collectRewards(
+        getIncentiveKey(state), tokenId
+      ) returns (uint reward, uint bonusReward) {
+        (amountsOut[2], amountsOut[3]) = (reward, bonusReward);
+      } catch {
+        // an exception in reward-claiming shouldn't stop hardwork / withdraw
       }
 
-      if (amountsOut[3] > 0) {
-        amountsOut[3] = FARMING_CENTER.claimReward(tokensOut[3], address(this), 0, amountsOut[3]);
+      if (amountsOut[2] != 0) {
+        try FARMING_CENTER.claimReward(
+            tokensOut[2], address(this), 0, amountsOut[2]
+        ) returns (uint reward) {
+          amountsOut[2] = reward;
+        } catch {
+          // an exception in reward-claiming shouldn't stop hardwork / withdraw
+        }
+      }
+
+      if (amountsOut[3] != 0) {
+        try FARMING_CENTER.claimReward(
+          tokensOut[3], address(this), 0, amountsOut[3]
+        ) returns (uint reward) {
+          amountsOut[3] = reward;
+        } catch {
+          // an exception in reward-claiming shouldn't stop hardwork / withdraw
+        }
       }
 
       emit AlgebraRewardsClaimed(amountsOut[2], amountsOut[3]);
