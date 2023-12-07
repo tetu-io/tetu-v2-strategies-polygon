@@ -1513,7 +1513,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
   describe("Check invariants on loops", () => {
     const COUNT_CYCLES = 20;
-    const maxLockedPercent = 35;
+    const maxLockedPercent = 15;
     const WITHDRAW_FEE = 300;
     /** Currently withdraw-fee is used as priceChangeTolerance for security reasons */
     const PRICE_CHANGE_TOLERANCE = WITHDRAW_FEE;
@@ -1536,6 +1536,30 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     }
 
     const strategies: IStrategyInfo[] = [
+      { // large total assets, enough insurance to cover any losses, small withdraw/deposits, don't change prices
+        caseTag: "case1",
+        name: PLATFORM_UNIV3,
+        notUnderlyingToken: MaticAddresses.USDT_TOKEN,
+        compoundRatio: 0,
+        initialAmountOnSignerBalance: "80000",
+        investAmount: "50000",
+        initialInsuranceBalance: "1000",
+        initialLastDirectionUp: false,
+        countBlocksToAdvance: 15000,
+        dontChangePrices: true
+      },
+      { // large total assets, enough insurance to cover any losses, small withdraw/deposits, change prices
+        caseTag: "case6",
+        name: PLATFORM_UNIV3,
+        notUnderlyingToken: MaticAddresses.USDT_TOKEN,
+        compoundRatio: 0,
+        initialAmountOnSignerBalance: "8000",
+        investAmount: "5000",
+        initialInsuranceBalance: "1000",
+        initialLastDirectionUp: false,
+        countBlocksToAdvance: 10000,
+        dontChangePrices: false
+      },
       { // large total assets, enough insurance to cover any losses, small withdraw/deposits, change prices
         caseTag: "case5",
         name: PLATFORM_UNIV3,
@@ -1560,18 +1584,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       //   countBlocksToAdvance: 10000,
       //   dontChangePrices: false
       // },
-      { // large total assets, enough insurance to cover any losses, small withdraw/deposits, don't change prices
-        caseTag: "case1",
-        name: PLATFORM_UNIV3,
-        notUnderlyingToken: MaticAddresses.USDT_TOKEN,
-        compoundRatio: 0,
-        initialAmountOnSignerBalance: "80000",
-        investAmount: "50000",
-        initialInsuranceBalance: "1000",
-        initialLastDirectionUp: false,
-        countBlocksToAdvance: 10000,
-        dontChangePrices: true
-      },
       { // not enough insurance, small user, don't change prices
         caseTag: "case2",
         name: PLATFORM_UNIV3,
@@ -1633,10 +1645,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         await IERC20__factory.connect(b.asset, signer3).approve(b.vault.address, Misc.MAX_UINT);
         await TokenUtils.getToken(b.asset, signer.address, parseUnits(strategyInfo.initialAmountOnSignerBalance, 6));
         await TokenUtils.getToken(b.asset, signer3.address, parseUnits(strategyInfo.initialAmountOnSignerBalanceUser ?? strategyInfo.initialAmountOnSignerBalance, 6));
-
-        console.log('initial deposits...');
-        await b.vault.connect(signer).deposit(parseUnits(strategyInfo.investAmount, 6), signer.address, {gasLimit: GAS_LIMIT});
-        await b.vault.connect(signer3).deposit(parseUnits(strategyInfo.investAmountSignerUser ?? strategyInfo.investAmount, 6), signer3.address, {gasLimit: GAS_LIMIT});
 
         return b;
       }
@@ -1700,12 +1708,17 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           await saver("init");
 
+          console.log('initial deposits...');
+          await saver(`ds`, await CaptureEvents.makeDeposit(b.vault.connect(signer), parseUnits(strategyInfo.investAmount, 6), platform));
+          await saver(`ds3`, await CaptureEvents.makeDeposit(b.vault.connect(signer3), parseUnits(strategyInfo.investAmountSignerUser ?? strategyInfo.investAmount, 6), platform));
+
           let lastDirectionUp = strategyInfo.initialLastDirectionUp;
           for (let i = 0; i < COUNT_CYCLES; i++) {
             console.log(`==================== CYCLE ${i} ====================`);
-            // provide some rewards
-            await UniversalUtils.makePoolVolume(signer2, state, b.swapper, parseUnits('100000', 6));
-            await TimeUtils.advanceNBlocks(strategyInfo.countBlocksToAdvance ?? 2000);
+            if (i % 1) { // provide some rewards
+              await UniversalUtils.makePoolVolume(signer2, state, b.swapper, parseUnits('100000', 6));
+              await TimeUtils.advanceNBlocks(strategyInfo.countBlocksToAdvance ?? 2000);
+            }
 
             if (i % 3 && !strategyInfo.dontChangePrices) {
               const movePricesUp = !lastDirectionUp;
@@ -1748,9 +1761,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             // let's give some time to increase the debts
             await TimeUtils.advanceNBlocks(strategyInfo.countBlocksToAdvance ?? 2000);
 
-            if (i % 2) {
+            if (i % 3) {
               const maxWithdraw = await b.vault.maxWithdraw(user.address);
-              const toWithdraw = maxWithdraw.mul(i % 4 ? (strategyInfo.percentToWithdraw ?? 3) : 1).div(100);
+              const toWithdraw = maxWithdraw.mul(i % 4 ? (strategyInfo.percentToWithdraw ?? 1) : 1).div(100);
               const lastWithdrawFee = +formatUnits(toWithdraw, b.assetDecimals) * (100_000 / (100_000 - PRICE_CHANGE_TOLERANCE) - 1);
               totalWithdrawFee += lastWithdrawFee;
               totalWithdraw += +formatUnits(toWithdraw, b.assetDecimals);
@@ -1761,7 +1774,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               });
             } else {
               const maxDeposit = await IERC20Metadata__factory.connect(b.asset, signer).balanceOf(user.address);
-              const toDeposit = maxDeposit.mul(i % 3 ? 3 : (strategyInfo.percentToDeposit ?? 6)).div(100);
+              const toDeposit = maxDeposit.mul(i % 5 ? 3 : (strategyInfo.percentToDeposit ?? 2)).div(100);
               totalDeposit += +formatUnits(toDeposit, b.assetDecimals);
               console.log(`Deposit.. ==================== ${i} ==================== max=${maxDeposit} to=${toDeposit}`);
               await saver(`d${i}`, await CaptureEvents.makeDeposit(b.vault.connect(user), toDeposit, platform), {
@@ -1769,16 +1782,17 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               });
             }
 
-            const readerResults = await reader.getLockedUnderlyingAmount(b.strategy.address);
-            const locketAmount = +formatUnits(readerResults.estimatedUnderlyingAmount, b.assetDecimals);
-            const totalAsset = +formatUnits(readerResults.totalAssets, b.assetDecimals);
-            const lockedPercent = 100 * locketAmount / totalAsset;
-            console.log(`locketAmount=${locketAmount} totalAsset=${totalAsset} lockedPercent=${lockedPercent}`);
-            if (lockedPercent > maxLockedPercent) {
-              console.log(`Rebalance debts.. ==================== ${i} ====================`);
-              const planEntryData = buildEntryData1();
-              const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
-              await b.strategy.withdrawByAggStep(
+            { // withdraw by agg
+              const readerResults = await reader.getLockedUnderlyingAmount(b.strategy.address);
+              const locketAmount = +formatUnits(readerResults.estimatedUnderlyingAmount, b.assetDecimals);
+              const totalAsset = +formatUnits(readerResults.totalAssets, b.assetDecimals);
+              const lockedPercent = 100 * locketAmount / totalAsset;
+              console.log(`locketAmount=${locketAmount} totalAsset=${totalAsset} lockedPercent=${lockedPercent}`);
+              if (lockedPercent > maxLockedPercent) {
+                console.log(`Rebalance debts.. ==================== ${i} ====================`);
+                const planEntryData = buildEntryData1();
+                const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
+                await b.strategy.withdrawByAggStep(
                   quote.tokenToSwap,
                   Misc.ZERO_ADDRESS,
                   quote.amountToSwap,
@@ -1786,7 +1800,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   planEntryData,
                   ENTRY_TO_POOL_IS_ALLOWED,
                   {gasLimit: GAS_LIMIT}
-              );
+                );
+              }
             }
           }
 

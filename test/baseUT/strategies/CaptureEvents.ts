@@ -244,12 +244,12 @@ export interface IEventsSet {
   recycle?: IRecycle;
   swapByAgg?: ISwapByAgg;
 
-  fixPriceChanges?: IFixPriceChanges;
-  changeDebtToInsuranceOnProfit?: IChangeDebtToInsuranceOnProfit;
-  borrowResults?: IBorrowResults;
-  increaseDebtToInsurance?: IOnIncreaseDebtToInsurance;
+  fixPriceChanges?: IFixPriceChanges[];
+  changeDebtToInsuranceOnProfit?: IChangeDebtToInsuranceOnProfit[];
+  borrowResults?: IBorrowResults[];
+  increaseDebtToInsurance?: IOnIncreaseDebtToInsurance[];
 
-  payDebtToInsurance?: IOnPayDebtToInsurance;
+  payDebtToInsurance?: IOnPayDebtToInsurance[];
   coverDebtToInsurance?: IOnCoverDebtToInsurance[];
 
   onHardWorkEarnedLost?: IOnHardWorkEarnedLost;
@@ -464,6 +464,7 @@ export class CaptureEvents {
             event.topics,
           ) as unknown) as RebalancedEventObject;
 
+          if (ret.rebalanced?.loss) throw Error("second event 8");
           ret.rebalanced = {
             loss: +formatUnits(log.loss, decimals),
             coveredByRewards: +formatUnits(log.coveredByRewards, decimals),
@@ -479,6 +480,7 @@ export class CaptureEvents {
             event.topics,
           ) as unknown) as RebalancedDebtEventObject;
 
+          if (ret.rebalancedDebt?.loss) throw Error("second event 7");
           ret.rebalancedDebt = {
             loss: +formatUnits(log.loss, decimals),
             coveredByRewards: +formatUnits(log.coveredByRewards, decimals),
@@ -493,6 +495,7 @@ export class CaptureEvents {
             event.topics,
           ) as unknown) as OnHardWorkEarnedLostEventObject;
 
+          if (ret.onHardWorkEarnedLost?.investedAssetsNewPrices) throw Error("second event 6");
           ret.onHardWorkEarnedLost = {
             investedAssetsNewPrices: +formatUnits(log.investedAssetsNewPrices, decimals),
             earnedByPrices:  +formatUnits(log.earnedByPrices, decimals),
@@ -545,10 +548,13 @@ export class CaptureEvents {
             event.data,
             event.topics,
           ) as unknown) as ChangeDebtToInsuranceOnProfitEventObject;
-          ret.changeDebtToInsuranceOnProfit = {
+          if (!ret.changeDebtToInsuranceOnProfit) {
+            ret.changeDebtToInsuranceOnProfit = [];
+          }
+          ret.changeDebtToInsuranceOnProfit.push({
             debtToInsuranceBefore: +formatUnits(log.debtToInsuranceBefore, decimals),
             increaseToDebt: +formatUnits(log.increaseToDebt, decimals),
-          };
+          });
         }
 
         if (event.topics[0].toLowerCase() === converterStrategyBaseLib2I.getEventTopic('SendToInsurance').toLowerCase()) {
@@ -587,6 +593,7 @@ export class CaptureEvents {
             event.data,
             event.topics,
           ) as unknown) as HardWorkEventObject;
+          if (ret.hardwork?.strategy) throw Error("second event 4");
           ret.hardwork = {
             strategy: log.strategy,
             earned: +formatUnits(log.earned, decimals),
@@ -632,13 +639,16 @@ export class CaptureEvents {
             event.data,
             event.topics,
           ) as unknown) as FixPriceChangesEventObject;
-          ret.fixPriceChanges = {
+          if (!ret.fixPriceChanges) {
+            ret.fixPriceChanges = [];
+          }
+          ret.fixPriceChanges.push({
             investedAssetsOut: +formatUnits(log.investedAssetsOut, decimals),
             investedAssetsBefore: +formatUnits(log.investedAssetsBefore, decimals),
             debtToInsuranceBefore: +formatUnits(log.debtToInsuranceBefore, decimals),
             debtToInsuranceAfter: +formatUnits(log.debtToInsuranceAfter, decimals),
             increaseToDebt: +formatUnits(log.increaseToDebt, decimals),
-          }
+          });
         }
 
         if (event.topics[0].toLowerCase() === converterStrategyBaseLib2I.getEventTopic('OnIncreaseDebtToInsurance').toLowerCase()) {
@@ -650,13 +660,16 @@ export class CaptureEvents {
           const tokenDecimals = await Promise.all(log.tokens.map(
             async x => IERC20Metadata__factory.connect(x, signer).decimals()
           ))
-          ret.increaseDebtToInsurance = {
+          if (!ret.increaseDebtToInsurance) {
+            ret.increaseDebtToInsurance = [];
+          }
+          ret.increaseDebtToInsurance.push({
             tokens: log.tokens,
             deltaGains: log.deltaGains.map((x, index) => +formatUnits(x, tokenDecimals[index])),
             deltaLosses: log.deltaLosses.map((x, index) => +formatUnits(x, tokenDecimals[index])),
             prices: log.prices.map(x => +formatUnits(x, 18)),
             increaseToDebt: +formatUnits(log.increaseToDebt, decimals)
-          }
+          });
         }
 
         if (event.topics[0].toLowerCase() === converterStrategyBaseLib2I.getEventTopic('BorrowResults').toLowerCase()) {
@@ -665,10 +678,13 @@ export class CaptureEvents {
             event.data,
             event.topics,
           ) as unknown) as BorrowResultsEventObject;
-          ret.borrowResults = {
+          if (!ret.borrowResults) {
+            ret.borrowResults = [];
+          }
+          ret.borrowResults.push({
             gains: +formatUnits(log.gains, decimals),
             losses: +formatUnits(log.losses, decimals),
-          }
+          });
         }
 
         if (event.topics[0].toLowerCase() === converterStrategyBaseLibI.getEventTopic('Recycle').toLowerCase()) {
@@ -677,6 +693,7 @@ export class CaptureEvents {
             event.data,
             event.topics,
           ) as unknown) as RecycleEventObject;
+          if (ret.recycle?.rewardTokens.length) throw Error("second event 9");
           ret.recycle = {
             rewardTokens: log.rewardTokens,
             amountsToForward: log.amountsToForward,
@@ -691,10 +708,13 @@ export class CaptureEvents {
             event.data,
             event.topics,
           ) as unknown) as OnPayDebtToInsuranceEventObject;
-          ret.payDebtToInsurance = {
+          if (!ret.payDebtToInsurance) {
+            ret.payDebtToInsurance = [];
+          }
+          ret.payDebtToInsurance.push({
             debtToInsuranceBefore: +formatUnits(log.debtToInsuranceBefore, decimals),
             debtToInsuranceAfter: +formatUnits(log.debtToInsuraneAfter, decimals),
-          };
+          });
         }
 
         if (event.topics[0].toLowerCase() === converterStrategyBaseLibI.getEventTopic('OnCoverDebtToInsurance').toLowerCase()) {
@@ -757,10 +777,15 @@ export class CaptureEvents {
       },
 
       payDebtToInsurance: {
-        debtToInsuranceBefore: eventsSet?.payDebtToInsurance?.debtToInsuranceBefore ?? 0,
-        debtToInsuranceAfter: eventsSet?.payDebtToInsurance?.debtToInsuranceAfter ?? 0,
-        debtPaid: (eventsSet?.payDebtToInsurance?.debtToInsuranceBefore ?? 0)
-            - (eventsSet?.payDebtToInsurance?.debtToInsuranceAfter ?? 0),
+        debtToInsuranceBefore: eventsSet?.payDebtToInsurance?.length
+          ? eventsSet?.payDebtToInsurance[0].debtToInsuranceBefore
+          : 0,
+        debtToInsuranceAfter: eventsSet?.payDebtToInsurance?.length
+          ? eventsSet?.payDebtToInsurance[0].debtToInsuranceAfter
+          :0,
+        debtPaid: eventsSet?.payDebtToInsurance?.length
+          ? eventsSet.payDebtToInsurance.reduce((prev, cur) => prev + cur.debtToInsuranceBefore - cur.debtToInsuranceAfter, 0)
+          : 0
       },
 
       toPerfRecycle: eventsSet?.recycle?.toPerf ?? 0,
@@ -768,11 +793,21 @@ export class CaptureEvents {
       lossRebalance: eventsSet?.rebalanced?.loss ?? 0,
 
       fixPriceChanges: {
-          investedAssetsBefore: eventsSet?.fixPriceChanges?.investedAssetsBefore ?? 0,
-          investedAssetsAfter: eventsSet?.fixPriceChanges?.investedAssetsOut ?? 0,
-          debtToInsuranceBefore: eventsSet?.fixPriceChanges?.debtToInsuranceBefore ?? 0,
-          debtToInsuranceAfter: eventsSet?.fixPriceChanges?.debtToInsuranceAfter ?? 0,
-          increaseToDebt: eventsSet?.fixPriceChanges?.increaseToDebt ?? 0,
+        investedAssetsBefore: eventsSet?.fixPriceChanges?.length
+          ? eventsSet?.fixPriceChanges[0].investedAssetsBefore
+          : 0,
+        investedAssetsAfter: eventsSet?.fixPriceChanges?.length
+          ? eventsSet?.fixPriceChanges[0].investedAssetsOut
+          : 0,
+        debtToInsuranceBefore: eventsSet?.fixPriceChanges?.length
+          ? eventsSet?.fixPriceChanges[0].debtToInsuranceBefore
+          : 0,
+        debtToInsuranceAfter: eventsSet?.fixPriceChanges?.length
+          ? eventsSet?.fixPriceChanges[0].debtToInsuranceAfter
+          : 0,
+        increaseToDebt: eventsSet?.fixPriceChanges?.length
+          ? eventsSet.fixPriceChanges.reduce((prev, cur) => prev + cur.increaseToDebt, 0)
+          : 0,
       },
 
       toForwarderRecycle: eventsSet?.recycle?.rewardTokens && eventsSet?.recycle?.rewardTokens.length
@@ -789,13 +824,22 @@ export class CaptureEvents {
       swapByAgg: eventsSet?.swapByAgg,
 
       borrowResults: {
-        gains: eventsSet?.borrowResults?.gains ?? 0,
-        losses: eventsSet?.borrowResults?.losses ?? 0,
+        gains: eventsSet?.borrowResults?.length
+          ? eventsSet.borrowResults.reduce((prev, cur) => prev + cur.gains, 0)
+          : 0,
+
+        losses: eventsSet?.borrowResults?.length
+          ? eventsSet.borrowResults.reduce((prev, cur) => prev + cur.losses, 0)
+          : 0,
       },
 
       changeDebtToInsuranceOnProfit: {
-        debtToInsuranceBefore: eventsSet?.changeDebtToInsuranceOnProfit?.debtToInsuranceBefore ?? 0,
-        increaseToDebt: eventsSet?.changeDebtToInsuranceOnProfit?.increaseToDebt ?? 0,
+        debtToInsuranceBefore: eventsSet?.changeDebtToInsuranceOnProfit?.length
+          ? eventsSet?.changeDebtToInsuranceOnProfit[0].debtToInsuranceBefore
+          : 0,
+        increaseToDebt: eventsSet?.changeDebtToInsuranceOnProfit?.length
+          ? eventsSet.changeDebtToInsuranceOnProfit.reduce((prev, cur) => prev + cur.increaseToDebt, 0)
+          : 0,
       },
 
       onHardWorkEarnedLost: eventsSet?.onHardWorkEarnedLost ?? {

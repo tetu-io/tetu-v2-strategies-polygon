@@ -7,6 +7,7 @@ import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
 import "../interfaces/IConverterStrategyBase.sol";
+import "hardhat/console.sol";
 
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
@@ -140,6 +141,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     uint strategyLoss
   ){
+    console.log("ConverterStrategyBase._depositToPool");
     (uint updatedInvestedAssets, uint earnedByPrices) = _fixPriceChanges(updateTotalAssetsBeforeInvest_);
     (strategyLoss,) = _depositToPoolUniversal(amount_, earnedByPrices, updatedInvestedAssets);
   }
@@ -156,6 +158,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     uint strategyLoss,
     uint amountSentToInsurance
   ){
+    console.log("ConverterStrategyBase._depositToPoolUniversal");
     address _asset = baseState.asset;
 
     uint amountToDeposit = amount_ > earnedByPrices_
@@ -227,6 +230,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   ) internal virtual returns (
     uint[] memory tokenAmounts
   ) {
+    console.log("ConverterStrategyBase._beforeDeposit");
     // calculate required collaterals for each token and temporary save them to tokenAmounts
     (uint[] memory weights, uint totalWeight) = _depositorPoolWeights();
     return ConverterStrategyBaseLib.beforeDeposit(
@@ -262,6 +266,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   function _makeRequestedAmount(uint amount_, WithdrawUniversalLocal memory v) internal virtual returns ( // it's virtual to simplify unit testing
     uint expectedTotalAssetAmount
   ) {
+    console.log("ConverterStrategyBase._makeRequestedAmount");
     uint depositorLiquidity = _depositorLiquidity();
 
     // calculate how much liquidity we need to withdraw for getting at least requested amount of the {v.asset}
@@ -317,6 +322,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     uint assetPrice,
     uint strategyLoss
   ) {
+    console.log("ConverterStrategyBase._withdrawFromPool");
     // calculate profit/loss because of price changes, try to compensate the loss from the insurance
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
     (expectedWithdrewUSD, assetPrice, strategyLoss,) = _withdrawUniversal(amount, earnedByPrices, investedAssetsNewPrices);
@@ -348,6 +354,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     uint strategyLoss,
     uint amountSentToInsurance
   ) {
+    console.log("ConverterStrategyBase._withdrawUniversal");
     // amount to withdraw; we add a little gap to avoid situation "opened debts, no liquidity to pay"
     uint amount = amount_ == type(uint).max
       ? amount_
@@ -412,6 +419,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
 
   /// @notice Claim all possible rewards.
   function _claim() override internal virtual returns (address[] memory rewardTokensOut, uint[] memory amountsOut) {
+    console.log("ConverterStrategyBase._claim");
     // get rewards from the Depositor
     (address[] memory rewardTokens, uint[] memory rewardAmounts, uint[] memory balancesBefore) = _depositorClaimRewards();
 
@@ -467,6 +475,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   /// @return earned Earned amount in terms of {asset}
   /// @return lost Lost amount in terms of {asset}
   function doHardWork() override public returns (uint earned, uint lost) {
+    console.log("ConverterStrategyBase.doHardWork");
     require(msg.sender == baseState.splitter, StrategyLib2.DENIED);
     return _doHardWork(true);
   }
@@ -570,6 +579,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   /// It's too dangerous to try to get this amount here because of the problem "borrow-repay is not allowed in a single block"
   /// So, we need to handle it in the caller code.
   function _fixPriceChanges(bool updateInvestedAssetsAmount_) internal returns (uint investedAssetsOut, uint earnedOut) {
+    console.log("ConverterStrategyBase._fixPriceChanges");
     if (updateInvestedAssetsAmount_) {
       (address[] memory tokens, uint indexAsset) = _getTokens(baseState.asset);
       (investedAssetsOut, earnedOut) = ConverterStrategyBaseLib2.fixPriceChanges(

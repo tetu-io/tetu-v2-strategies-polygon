@@ -17,6 +17,7 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../interfaces/IConverterStrategyBase.sol";
+import "hardhat/console.sol";
 
 /// @notice Continuation of ConverterStrategyBaseLib (workaround for size limits)
 library ConverterStrategyBaseLib2 {
@@ -50,7 +51,7 @@ library ConverterStrategyBaseLib2 {
   event SendToInsurance(uint sentAmount, uint unsentAmount);
 
   /// @notice Increase to debts between new and previous checkpoints.
-  /// @param tokens List of possible collateral/borrow assets. One of the is unerlying.
+  /// @param tokens List of possible collateral/borrow assets. One of the is underlying.
   /// @param deltaGains Amounts by which the debt has reduced (supply profit) [sync with {tokens}]
   /// @param deltaLosses Amounts by which the debt has increased (increase of amount-to-pay) [sync with {tokens}]
   /// @param prices Prices of the {tokens}
@@ -63,10 +64,9 @@ library ConverterStrategyBaseLib2 {
     int increaseToDebt
   );
 
-  /// @param increaseToDebt The value on which the debt to insurance was increased
   /// @param debtToInsuranceBefore Value of the debt to insurance before fix price change
   /// @param debtToInsuranceAfter New value of the debt to insurance
-  /// @param increaseToDebt Amount on which debt was increased.
+  /// @param increaseToDebt Amount on which debt to insurance was increased.
   /// Actual value {debtToInsuranceAfter}-{debtToInsuranceBefore} can be less than increaseToDebt
   /// because some amount can be left uncovered.
   event FixPriceChanges(
@@ -791,22 +791,18 @@ library ConverterStrategyBaseLib2 {
     ISplitter(splitter).coverPossibleStrategyLoss(0, lossToCover);
     uint balanceAfter = IERC20(asset).balanceOf(vault);
 
+    uint delta = AppLib.sub0(balanceAfter, balanceBefore);
+    uint uncovered = AppLib.sub0(lossToCover, delta);
+    debtToInsuranceInc = lossToCover == 0
+      ? int(0)
+      : debtToInsuranceInc * int(lossToCover - uncovered) / int(lossToCover);
+
     if (debtToInsuranceInc != 0) {
       csbs.debtToInsurance += debtToInsuranceInc;
     }
 
-    uint delta = AppLib.sub0(balanceAfter, balanceBefore);
-    uint uncovered = AppLib.sub0(lossToCover, delta);
-
     // we don't add uncovered amount to the debts to the insurance
-    emit OnCoverLoss(
-      lossToCover,
-      lossToCover == 0
-        ? int(0)
-        : debtToInsuranceInc * int(lossToCover - uncovered) / int(lossToCover),
-      delta,
-      uncovered
-    );
+    emit OnCoverLoss(lossToCover, debtToInsuranceInc, delta, uncovered);
   }
 
   /// @notice Cut loss-value to safe value that doesn't produce revert inside splitter
@@ -838,6 +834,7 @@ library ConverterStrategyBaseLib2 {
     uint investedAssetsOut,
     uint earnedOut
   ) {
+    console.log("fixPriceChanges");
     ITetuConverter converter = csbs.converter;
     uint investedAssetsBefore = csbs.investedAssets;
 
