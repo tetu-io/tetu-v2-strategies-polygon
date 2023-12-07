@@ -41,6 +41,7 @@ import {
 } from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {OnHardWorkEarnedLostEventObject} from '../../../typechain/contracts/strategies/ConverterStrategyBase';
+import {strategy} from "../../../typechain/@tetu_io/tetu-contracts-v2/contracts";
 
 /** TetuVaultV2 */
 interface ILossCoveredEvent {
@@ -333,6 +334,17 @@ export class CaptureEvents {
     const platform = await strategy.PLATFORM();
     const decimals = await IERC20Metadata__factory.connect(await strategy.asset(), strategy.signer).decimals();
     const tx = await strategy.doHardWork({gasLimit: 19_000_000});
+    const cr = await tx.wait();
+    console.log('HARDWORK gas', cr.gasUsed.toNumber());
+
+    return this.handleReceipt(strategy.signer, cr, decimals, platform);
+  }
+
+  static async makeHardworkInSplitter(strategy: ConverterStrategyBase, operator: SignerWithAddress): Promise<IEventsSet> {
+    const platform = await strategy.PLATFORM();
+    const splitter = await StrategySplitterV2__factory.connect(await strategy.splitter(), operator);
+    const decimals = await IERC20Metadata__factory.connect(await strategy.asset(), strategy.signer).decimals();
+    const tx = await splitter.doHardWork({gasLimit: 19_000_000});
     const cr = await tx.wait();
     console.log('HARDWORK gas', cr.gasUsed.toNumber());
 

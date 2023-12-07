@@ -1271,6 +1271,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     }
 
     const strategies: IStrategyInfo[] = [
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
+      {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
       {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
 
       {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
@@ -1279,8 +1281,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
       // {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0}, // todo movePriceBySteps cannot change prices
 
-      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
-      {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
       // {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000}, // todo movePriceBySteps cannot change prices
 
       // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN, compoundRatio: 50_000}, // todo npm coverage produces SB too high
@@ -1341,6 +1341,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const states: IStateNum[] = [];
           const pathOut = `./tmp/${strategyInfo.name}-${tokenName(strategyInfo.notUnderlyingToken)}-${strategyInfo.compoundRatio}-test-loop.csv`;
 
+          const operator = await UniversalTestUtils.getAnOperator(b.strategy.address, signer);
           const reader = await MockHelper.createPairBasedStrategyReader(signer);
 
           // Following amount is used as swapAmount for both tokens A and B...
@@ -1422,7 +1423,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
             if (i % 5) {
               console.log('Hardwork..')
-              const eventsSet = await CaptureEvents.makeHardwork(converterStrategyBase.connect(splitterSigner));
+              const eventsSet = await CaptureEvents.makeHardworkInSplitter(converterStrategyBase, operator);
               states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `h${i}`, {eventsSet}));
               StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             }
@@ -1511,7 +1512,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
   });
 
   describe("Check invariants on loops", () => {
-    const COUNT_CYCLES = 10;
+    const COUNT_CYCLES = 20;
     const maxLockedPercent = 35;
     const WITHDRAW_FEE = 300;
     /** Currently withdraw-fee is used as priceChangeTolerance for security reasons */
@@ -1535,18 +1536,18 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     }
 
     const strategies: IStrategyInfo[] = [
-      // { // large total assets, enough insurance to cover any losses, small withdraw/deposits, change prices
-      //   caseTag: "case5",
-      //   name: PLATFORM_UNIV3,
-      //   notUnderlyingToken: MaticAddresses.USDT_TOKEN,
-      //   compoundRatio: 0,
-      //   initialAmountOnSignerBalance: "80000",
-      //   investAmount: "50000",
-      //   initialInsuranceBalance: "1000",
-      //   initialLastDirectionUp: true,
-      //   countBlocksToAdvance: 10000,
-      //   dontChangePrices: false
-      // },
+      { // large total assets, enough insurance to cover any losses, small withdraw/deposits, change prices
+        caseTag: "case5",
+        name: PLATFORM_UNIV3,
+        notUnderlyingToken: MaticAddresses.USDT_TOKEN,
+        compoundRatio: 0,
+        initialAmountOnSignerBalance: "8000",
+        investAmount: "5000",
+        initialInsuranceBalance: "1000",
+        initialLastDirectionUp: true,
+        countBlocksToAdvance: 10000,
+        dontChangePrices: false
+      },
       // { // large total assets, enough insurance to cover any losses, small withdraw/deposits, change prices
       //   caseTag: "case4",
       //   name: PLATFORM_UNIV3,
@@ -1686,6 +1687,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           }
           const pathOut = `./tmp/event-invariants-${strategyInfo.name}-${strategyInfo.caseTag}.csv`;
 
+          const operator = await UniversalTestUtils.getAnOperator(b.strategy.address, signer);
           const reader = await MockHelper.createPairBasedStrategyReader(signer);
 
           // Following amount is used as swapAmount for both tokens A and B...
@@ -1740,7 +1742,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
             if (i % 5) {
               console.log(`Hardwork.. ==================== ${i} ==================== `)
-              await saver(`h${i}`, await CaptureEvents.makeHardwork(converterStrategyBase.connect(splitterSigner)));
+              await saver(`h${i}`, await CaptureEvents.makeHardworkInSplitter(converterStrategyBase, operator));
             }
 
             // let's give some time to increase the debts
@@ -1748,7 +1750,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
             if (i % 2) {
               const maxWithdraw = await b.vault.maxWithdraw(user.address);
-              const toWithdraw = maxWithdraw.mul(i % 4 ? (strategyInfo.percentToWithdraw ?? 6) : 3).div(100);
+              const toWithdraw = maxWithdraw.mul(i % 4 ? (strategyInfo.percentToWithdraw ?? 3) : 1).div(100);
               const lastWithdrawFee = +formatUnits(toWithdraw, b.assetDecimals) * (100_000 / (100_000 - PRICE_CHANGE_TOLERANCE) - 1);
               totalWithdrawFee += lastWithdrawFee;
               totalWithdraw += +formatUnits(toWithdraw, b.assetDecimals);
