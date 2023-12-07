@@ -1455,15 +1455,17 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               console.log("Rebalance debts");
               const planEntryData = buildEntryData1();
               const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
-              await b.strategy.withdrawByAggStep(
+              const eventsSet = await CaptureEvents.makeWithdrawByAggStep(
+                b.strategy,
                 quote.tokenToSwap,
                 Misc.ZERO_ADDRESS,
                 quote.amountToSwap,
                 "0x",
                 planEntryData,
-                ENTRY_TO_POOL_IS_ALLOWED,
-                {gasLimit: GAS_LIMIT}
+                ENTRY_TO_POOL_IS_ALLOWED
               );
+              states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `wba${i}`, {eventsSet}));
+              StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             }
           }
 
@@ -1792,15 +1794,15 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                 console.log(`Rebalance debts.. ==================== ${i} ====================`);
                 const planEntryData = buildEntryData1();
                 const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
-                await b.strategy.withdrawByAggStep(
+                await saver(`wba${i}`, await CaptureEvents.makeWithdrawByAggStep(
+                  b.strategy,
                   quote.tokenToSwap,
                   Misc.ZERO_ADDRESS,
                   quote.amountToSwap,
                   "0x",
                   planEntryData,
-                  ENTRY_TO_POOL_IS_ALLOWED,
-                  {gasLimit: GAS_LIMIT}
-                );
+                  ENTRY_TO_POOL_IS_ALLOWED
+                ));
               }
             }
           }
