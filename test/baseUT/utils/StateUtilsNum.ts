@@ -750,6 +750,10 @@ export class StateUtilsNum {
       "hardwork.apr",
       "hardwork.lost",
       "hardwork.earned",
+
+      "onWithdraw.earned",
+      "onWithdraw.earnedByPrice",
+      "onWithdraw.earned-earnedByPrice",
     ];
 
     if (params.additionalParams) {
@@ -908,6 +912,10 @@ export class StateUtilsNum {
       item.events?.hardwork?.apr,
       item.events?.hardwork?.lost,
       item.events?.hardwork?.earned,
+
+      item.events?.onEarningOnWithdraw?.earned,
+      item.events?.onEarningOnWithdraw?.earnedByPrice,
+      item.events?.onEarningOnWithdraw?.delta,
 
       ...item.additionalParams
     ]);

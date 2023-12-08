@@ -24,6 +24,7 @@ import {
   OnIncreaseDebtToInsuranceEventObject,
   SendToInsuranceEventObject,
   UncoveredLossEventObject,
+  OnEarningOnWithdrawEventObject,
 } from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib2";
 import {formatUnits} from "ethers/lib/utils";
 import {
@@ -40,7 +41,9 @@ import {
   RecycleEventObject
 } from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {OnHardWorkEarnedLostEventObject} from '../../../typechain/contracts/strategies/ConverterStrategyBase';
+import {
+  OnHardWorkEarnedLostEventObject
+} from '../../../typechain/contracts/strategies/ConverterStrategyBase';
 import {strategy} from "../../../typechain/@tetu_io/tetu-contracts-v2/contracts";
 
 /** TetuVaultV2 */
@@ -214,6 +217,11 @@ interface IChangeDebtToInsuranceOnProfit {
   increaseToDebt: number;
 }
 
+interface IOnEarningOnWithdraw {
+  earned: number;
+  earnedByPrice: number;
+}
+
 interface IOnHardWorkEarnedLost {
   /** InvestedAssets after call of _fixPriceChanges */
   investedAssetsNewPrices: number;
@@ -254,6 +262,8 @@ export interface IEventsSet {
 
   onHardWorkEarnedLost?: IOnHardWorkEarnedLost;
   hardwork?: IHardWorkEvent;
+
+  earningOnWithdraw?: IOnEarningOnWithdraw[];
 }
 
 export interface ISummaryFromEventsSet {
@@ -303,6 +313,12 @@ export interface ISummaryFromEventsSet {
 
   onHardWorkEarnedLost: IOnHardWorkEarnedLost;
   hardwork: IHardWorkEvent;
+
+  onEarningOnWithdraw: {
+    earned: number;
+    earnedByPrice: number;
+    delta: number;
+  };
 }
 
 /**
@@ -505,6 +521,22 @@ export class CaptureEvents {
             lostDeposit: +formatUnits(log.lostDeposit, decimals),
             paidDebtToInsurance: +formatUnits(log.paidDebtToInsurance, decimals),
           }
+        }
+
+        if (event.topics[0].toLowerCase() === converterStrategyBaseLib2I.getEventTopic('OnEarningOnWithdraw').toLowerCase()) {
+          const log = (converterStrategyBaseLib2I.decodeEventLog(
+            converterStrategyBaseLib2I.getEvent('OnEarningOnWithdraw'),
+            event.data,
+            event.topics,
+          ) as unknown) as OnEarningOnWithdrawEventObject;
+
+          if (!ret.earningOnWithdraw) {
+            ret.earningOnWithdraw = [];
+          }
+          ret.earningOnWithdraw.push({
+            earned: +formatUnits(log.earned, decimals),
+            earnedByPrice: +formatUnits(log.earnedByPrice, decimals),
+          });
         }
 
         if (event.topics[0].toLowerCase() === converterStrategyBaseLib2I.getEventTopic('OnCoverLoss').toLowerCase()) {
@@ -859,7 +891,19 @@ export class CaptureEvents {
         sender: "",
         apr: 0,
         strategy: ""
-      }
+      },
+
+      onEarningOnWithdraw: eventsSet?.earningOnWithdraw
+        ? {
+          earned: eventsSet.earningOnWithdraw.reduce((prev, cur) => prev + cur.earned, 0),
+          earnedByPrice: eventsSet.earningOnWithdraw.reduce((prev, cur) => prev + cur.earnedByPrice, 0),
+          delta: eventsSet.earningOnWithdraw.reduce((prev, cur) => prev + cur.earned - cur.earnedByPrice, 0),
+        }
+        : {
+          earned: 0,
+          earnedByPrice: 0,
+          delta: 0
+        }
     }
   }
 }

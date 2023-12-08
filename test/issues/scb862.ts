@@ -5,7 +5,14 @@ import {IStateNum, StateUtilsNum} from "../baseUT/utils/StateUtilsNum";
 import {MaticAddresses} from "../../scripts/addresses/MaticAddresses";
 import fs from "fs";
 import {ethers} from "hardhat";
-import {ConverterStrategyBase__factory, TetuVaultV2__factory} from "../../typechain";
+import {
+  ConverterStrategyBase__factory,
+  IRebalancingV2Strategy__factory,
+  StrategySplitterV2__factory,
+  TetuVaultV2__factory
+} from "../../typechain";
+import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
+import {InjectUtils} from "../baseUT/strategies/InjectUtils";
 
 describe("Scb830 @skip-on-coverage", () => {
   // const TRANSACTIONS_AND_BLOCKS = [
@@ -54,7 +61,8 @@ describe("Scb830 @skip-on-coverage", () => {
     const pathOut = "./tmp/scb-830.csv";
     const [signer] = await ethers.getSigners();
     const VAULT = "0x68f0a05FDc8773d9a5Fd1304ca411ACc234ce22c";
-    const STRATEGY = "0xAA43e2cc199DC946b3D528c6E00ebb3F4CC2fC0e";
+    // const STRATEGY = "0xAA43e2cc199DC946b3D528c6E00ebb3F4CC2fC0e";
+    const STRATEGY = "0x32f7C3a5319A612C1992f021aa70510bc9F16161";
 
     const states: IStateNum[] = [];
 
@@ -96,5 +104,51 @@ describe("Scb830 @skip-on-coverage", () => {
       await HardhatUtils.switchToBlock(block, BASE_NETWORK_ID);
       await saver(`a:${i}${prefix}`, eventsSet);
     }
+  });
+
+  describe("do hardwork", () => {
+    const BLOCK = 7564701;
+    const STRATEGY = "0xAA43e2cc199DC946b3D528c6E00ebb3F4CC2fC0e";
+    const pathOut = "./tmp/hardwork-scb862.csv";
+    const OPERATOR = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
+
+    it("doHardWork", async () => {
+      const states: IStateNum[] = [];
+
+      if (fs.existsSync(pathOut)) {
+        fs.rmSync(pathOut);
+      }
+
+      const saver = async (title: string, e?: IEventsSet) => {
+        const state = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, title, {eventsSet: e});
+        states.push(state);
+        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, {mainAssetSymbol: MaticAddresses.USDC_TOKEN});
+      };
+
+      // const signer = await DeployerUtilsLocal.impersonate(SENDER);
+      const signer = (await ethers.getSigners())[0];
+      await HardhatUtils.switchToBlock(BLOCK - 1, BASE_NETWORK_ID);
+      // await HardhatUtils.switchToMostCurrentBlock();
+
+      const operator = await DeployerUtilsLocal.impersonate(OPERATOR);
+
+      const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, operator);
+      const converterStrategyBase = ConverterStrategyBase__factory.connect(STRATEGY, operator);
+      console.log(await converterStrategyBase.CONVERTER_STRATEGY_BASE_VERSION());
+
+      const vault = TetuVaultV2__factory.connect(
+        await (await StrategySplitterV2__factory.connect(await converterStrategyBase.splitter(), operator)).vault(),
+        signer
+      );
+      const splitter = await vault.splitter();
+
+      await InjectUtils.injectStrategy(signer, STRATEGY, "UniswapV3ConverterStrategy");
+      console.log(await converterStrategyBase.CONVERTER_STRATEGY_BASE_VERSION());
+
+      await saver("b");
+      const strategyAsSplitter = converterStrategyBase.connect(await DeployerUtilsLocal.impersonate(splitter));
+      const eventsSet = await CaptureEvents.makeHardworkInSplitter(strategyAsSplitter, operator);
+      await saver("a", eventsSet);
+    });
   });
 });
