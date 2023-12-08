@@ -969,6 +969,7 @@ describe('ConverterStrategyBaseTest', () => {
         earned: string;
         lost: string;
         balanceChange?: string;
+        paidDebtToInsurance: string;
       }
 
       initialBalance: string;
@@ -1047,6 +1048,7 @@ describe('ConverterStrategyBaseTest', () => {
         parseUnits(p.handleRewardsResults.lost, assetDecimals[p.assetIndex]),
         parseUnits(p.handleRewardsResults.balanceChange || "0", assetDecimals[p.assetIndex]),
         assetProvider,
+        parseUnits(p.handleRewardsResults.paidDebtToInsurance, assetDecimals[p.assetIndex]),
       );
 
       const callDoHardwork = p.callDoHardworkBySplitter === undefined
@@ -1119,6 +1121,7 @@ describe('ConverterStrategyBaseTest', () => {
             handleRewardsResults: {
               earned: "0",
               lost: "0",
+              paidDebtToInsurance: "0",
             },
             assetProviderBalance: "1000"
           });
@@ -1219,6 +1222,7 @@ describe('ConverterStrategyBaseTest', () => {
             handleRewardsResults: {
               earned,
               lost,
+              paidDebtToInsurance: "0",
             },
             assetProviderBalance: "1000"
           });
@@ -1302,6 +1306,7 @@ describe('ConverterStrategyBaseTest', () => {
               earned: "0",
               lost: "0",
               balanceChange: "0",
+              paidDebtToInsurance: "0",
             },
             assetProviderBalance: "1000",
             useMockedDepositToPoolUni: true
@@ -1394,6 +1399,7 @@ describe('ConverterStrategyBaseTest', () => {
               handleRewardsResults: {
                 earned: "500",
                 lost: "0",
+                paidDebtToInsurance: "0",
               },
               assetProviderBalance: "1000",
               callDoHardworkBySplitter: true,
@@ -1452,6 +1458,7 @@ describe('ConverterStrategyBaseTest', () => {
               handleRewardsResults: {
                 earned: "500",
                 lost: "400",
+                paidDebtToInsurance: "99",
               },
               assetProviderBalance: "1000",
               callDoHardworkBySplitter: true,
@@ -1461,7 +1468,7 @@ describe('ConverterStrategyBaseTest', () => {
 
           it("should return expected lost and earned values", async () => {
             const result = await loadFixture(makeTestThreeEarnedAmounts);
-            expect(result.earned).to.eq(500);
+            expect(result.earned).to.eq(500 - 99);
             expect(result.lost).to.eq(450);
           });
           it("should set expected investedAssets value", async () => {
@@ -1510,6 +1517,7 @@ describe('ConverterStrategyBaseTest', () => {
               handleRewardsResults: {
                 earned: "0",
                 lost: "500",
+                paidDebtToInsurance: "0",
               },
               assetProviderBalance: "1000",
               callDoHardworkBySplitter: true,
@@ -1570,6 +1578,7 @@ describe('ConverterStrategyBaseTest', () => {
                 handleRewardsResults: {
                   earned: "500",
                   lost: "0",
+                  paidDebtToInsurance: "0",
                 },
                 assetProviderBalance: "1000",
                 reInvest: false, // (!)
@@ -1623,6 +1632,7 @@ describe('ConverterStrategyBaseTest', () => {
                 handleRewardsResults: {
                   earned: "0",
                   lost: "500",
+                  paidDebtToInsurance: "0",
                 },
                 assetProviderBalance: "1000",
 
@@ -1679,6 +1689,7 @@ describe('ConverterStrategyBaseTest', () => {
           handleRewardsResults: {
             earned: "500",
             lost: "0",
+            paidDebtToInsurance: "0",
           },
           assetProviderBalance: "1000",
           callDoHardworkBySplitter: false // (!)

@@ -248,4 +248,17 @@ export class InjectUtils {
     );
   }
 
+  static async registerPair(signer: SignerWithAddress, platformAdapter: string, asset0: string, asset1: string, converter0?: string): Promise<void> {
+    const tetuConverter = converter0 ?? getConverterAddress();
+    const controller = await TetuConverter__factory.connect(tetuConverter, signer).controller();
+    const converterGovernance = await Misc.impersonate(
+      await ConverterController__factory.connect(controller, signer).governance()
+    );
+    const borrowManager = BorrowManager__factory.connect(
+      await ConverterController__factory.connect(controller, signer).borrowManager(),
+      converterGovernance
+    );
+    await borrowManager.addAssetPairs(platformAdapter, [asset0], [asset1]);
+  }
+
 }
