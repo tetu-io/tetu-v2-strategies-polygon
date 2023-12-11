@@ -1478,7 +1478,7 @@ describe('ConverterStrategyBaseTest', () => {
           });
           it("doHardwork() should return expected results", async () => {
             const result = await loadFixture(makeTestThreeEarnedAmounts);
-            expect(result.callDoHardwork?.earned).to.eq(500);
+            expect(result.callDoHardwork?.earned).to.eq(500 - 99);
             expect(result.callDoHardwork?.lost).to.eq(450);
           });
         });

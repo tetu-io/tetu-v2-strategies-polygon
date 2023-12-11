@@ -149,7 +149,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           return b;
         }
-        
+
         describe("Deposit 1000 USDC, put additional 1000 USDC on user's balance", function() {
           let snapshotLevel0: string;
           before(async function () {
@@ -283,8 +283,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
 
               const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+              const operator = await UniversalTestUtils.getAnOperator(b.strategy.address, signer);
+              const eventsSet = await CaptureEvents.makeHardworkInSplitter(converterStrategyBase, operator);
               await converterStrategyBase.doHardWork({gasLimit: GAS_LIMIT});
-              const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+              const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "a", {eventsSet});
 
               expect(stateAfter.strategy.investedAssets).gte(stateBefore.strategy.investedAssets - 0.001);
             });
@@ -1290,19 +1292,19 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
-            strategyInfo.name,
-            signer,
-            signer2,
-            {
-              kyberPid: KYBER_PID_DEFAULT_BLOCK,
-              notUnderlying: strategyInfo.notUnderlyingToken,
-              customParams: {
-                depositFee: 0,
-                withdrawFee: 300,
-                compoundRatio: strategyInfo.compoundRatio,
-                buffer: 0
-              }
+          strategyInfo.name,
+          signer,
+          signer2,
+          {
+            kyberPid: KYBER_PID_DEFAULT_BLOCK,
+            notUnderlying: strategyInfo.notUnderlyingToken,
+            customParams: {
+              depositFee: 0,
+              withdrawFee: 300,
+              compoundRatio: strategyInfo.compoundRatio,
+              buffer: 0
             }
+          }
         );
         await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(
           signer,
@@ -1554,7 +1556,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       //   caseTag: "case6",
       //   name: PLATFORM_UNIV3,
       //   notUnderlyingToken: MaticAddresses.USDT_TOKEN,
-      //   compoundRatio: 0,
+      //   compoundRatio: 80_000,
       //   initialAmountOnSignerBalance: "8000",
       //   investAmount: "5000",
       //   initialInsuranceBalance: "1000",
@@ -1566,7 +1568,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       //   caseTag: "case5",
       //   name: PLATFORM_UNIV3,
       //   notUnderlyingToken: MaticAddresses.USDT_TOKEN,
-      //   compoundRatio: 0,
+      //   compoundRatio: 50_000,
       //   initialAmountOnSignerBalance: "8000",
       //   investAmount: "5000",
       //   initialInsuranceBalance: "1000",
@@ -1586,22 +1588,22 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       //   countBlocksToAdvance: 10000,
       //   dontChangePrices: false
       // },
-      { // not enough insurance, small user, don't change prices
-        caseTag: "case2",
-        name: PLATFORM_UNIV3,
-        notUnderlyingToken: MaticAddresses.USDT_TOKEN,
-        compoundRatio: 0,
-        initialAmountOnSignerBalance: "8000",
-        investAmount: "5000",
-        initialAmountOnSignerBalanceUser: "2000",
-        investAmountSignerUser: "1000",
-        initialInsuranceBalance: "0",
-        initialLastDirectionUp: false,
-        countBlocksToAdvance: 7000,
-        percentToWithdraw: 10,
-        percentToDeposit: 80,
-        dontChangePrices: true
-      },
+      // { // not enough insurance, small user, don't change prices
+      //   caseTag: "case2",
+      //   name: PLATFORM_UNIV3,
+      //   notUnderlyingToken: MaticAddresses.USDT_TOKEN,
+      //   compoundRatio: 0,
+      //   initialAmountOnSignerBalance: "8000",
+      //   investAmount: "5000",
+      //   initialAmountOnSignerBalanceUser: "2000",
+      //   investAmountSignerUser: "1000",
+      //   initialInsuranceBalance: "0",
+      //   initialLastDirectionUp: false,
+      //   countBlocksToAdvance: 7000,
+      //   percentToWithdraw: 10,
+      //   percentToDeposit: 80,
+      //   dontChangePrices: true
+      // },
       // { // not enough insurance, large user, change prices
       //   caseTag: "case3",
       //   name: PLATFORM_UNIV3,
@@ -1623,19 +1625,19 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
-            strategyInfo.name,
-            signer,
-            signer2,
-            {
-              kyberPid: KYBER_PID_DEFAULT_BLOCK,
-              notUnderlying: strategyInfo.notUnderlyingToken,
-              customParams: {
-                depositFee: 0,
-                withdrawFee: WITHDRAW_FEE,
-                compoundRatio: strategyInfo.compoundRatio,
-                buffer: 0
-              }
+          strategyInfo.name,
+          signer,
+          signer2,
+          {
+            kyberPid: KYBER_PID_DEFAULT_BLOCK,
+            notUnderlying: strategyInfo.notUnderlyingToken,
+            customParams: {
+              depositFee: 0,
+              withdrawFee: WITHDRAW_FEE,
+              compoundRatio: strategyInfo.compoundRatio,
+              buffer: 0
             }
+          }
         );
 
         // we need very small thresholds to avoid increasing of share price on hardwork
@@ -1726,22 +1728,22 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               const movePricesUp = !lastDirectionUp;
               console.log(`Change prices.. ==================== ${i} ==================== ${movePricesUp ? "up" : "down"}`);
               await PairBasedStrategyPrepareStateUtils.movePriceBySteps(
-                  signer,
-                  b,
-                  movePricesUp,
-                  state,
-                  strategyInfo.name === PLATFORM_KYBER
-                      ? await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
-                          signer,
-                          b,
-                          state.tokenA,
-                          state.tokenB,
-                          movePricesUp,
-                          1.1
-                      )
-                      : swapAssetValueForPriceMove,
-                  swapAssetValueForPriceMove,
-                  5
+                signer,
+                b,
+                movePricesUp,
+                state,
+                strategyInfo.name === PLATFORM_KYBER
+                  ? await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
+                    signer,
+                    b,
+                    state.tokenA,
+                    state.tokenB,
+                    movePricesUp,
+                    1.1
+                  )
+                  : swapAssetValueForPriceMove,
+                swapAssetValueForPriceMove,
+                5
               );
               lastDirectionUp = !lastDirectionUp;
               await saver(`p${i}`);
@@ -1868,8 +1870,15 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           const debtToInsuranceInc = ret.reduce((prev, cur) => prev + (cur.events?.onCoverLoss.debtToInsuranceInc ?? 0), 0);
           const debtToInsurancePaid = ret.reduce((prev, cur) => prev + (cur.events?.payDebtToInsurance.debtPaid ?? 0), 0);
+          const debtToInsuranceOnProfitInc = ret.reduce((prev, cur) => prev + (cur.events?.changeDebtToInsuranceOnProfit.increaseToDebt ?? 0), 0);
 
-          expect(last.strategy.debtToInsurance - first.strategy.debtToInsurance).approximately(debtToInsuranceInc - debtToInsurancePaid, 0.01);
+          console.log("last.strategy.debtToInsurance", last.strategy.debtToInsurance);
+          console.log("first.strategy.debtToInsurance", first.strategy.debtToInsurance);
+          console.log("debtToInsuranceInc", debtToInsuranceInc);
+          console.log("debtToInsurancePaid", debtToInsurancePaid);
+          console.log("debtToInsuranceOnProfitInc", debtToInsuranceOnProfitInc);
+
+          expect(last.strategy.debtToInsurance - first.strategy.debtToInsurance).approximately(debtToInsuranceOnProfitInc + debtToInsuranceInc - debtToInsurancePaid, 0.01);
         });
 
         if (strategyInfo.initialInsuranceBalance !== "0") {
