@@ -41,7 +41,7 @@ export async function txParams(hre: HardhatRuntimeEnvironment, provider: provide
     };
   } else if (hre.network.config.chainId === 8453) {
     return {
-      maxPriorityFeePerGas: parseUnits('0.000001', 9),
+      maxPriorityFeePerGas: (gasPrice * 0.8).toFixed(0),
       maxFeePerGas: (gasPrice * 1.5).toFixed(0),
     };
   }
