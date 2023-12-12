@@ -37,7 +37,6 @@ export class ConverterUtils {
    *
    * We can avoid disabling of DForce also by replacing DForce's price oracle by mocked version (same as in TetuConverter)
    * The mocked version returns not-zero prices after block advance.
-   * @param signer
    */
   public static async disableDForce(signer: SignerWithAddress, converter0?: string): Promise<string> {
     console.log('disableDForce...');

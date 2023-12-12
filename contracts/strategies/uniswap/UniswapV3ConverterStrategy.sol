@@ -20,7 +20,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   string public constant override NAME = "UniswapV3 Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.UNIV3;
-  string public constant override STRATEGY_VERSION = "3.1.0";
+  string public constant override STRATEGY_VERSION = "3.1.1";
 
   //endregion ------------------------------------------------- Constants
 
@@ -267,14 +267,20 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   }
 
   /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
-  /// @return earned The amount of earned rewards.
-  /// @return lost The amount of lost rewards.
+  /// @return earned The amount of earned rewards
+  /// @return lost The amount of lost rewards
   /// @return assetBalanceAfterClaim The asset balance after claiming rewards.
-  function _handleRewards() override internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
+  /// @return paidDebtToInsurance Earned amount spent on debt-to-insurance payment
+  function _handleRewards() override internal virtual returns (
+    uint earned,
+    uint lost,
+    uint assetBalanceAfterClaim,
+    uint paidDebtToInsurance
+  ) {
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
     address asset = baseState.asset;
     earned = UniswapV3ConverterStrategyLogicLib.calcEarned(asset, controller(), rewardTokens, amounts);
-    _rewardsLiquidation(rewardTokens, amounts);
+    paidDebtToInsurance = _rewardsLiquidation(rewardTokens, amounts);
     lost = 0; // hide warning
     assetBalanceAfterClaim = AppLib.balance(asset);
   }

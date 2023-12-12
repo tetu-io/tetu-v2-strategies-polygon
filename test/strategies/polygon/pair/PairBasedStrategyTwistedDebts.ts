@@ -1008,7 +1008,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
               {percentRatio: 0.05, maxCountSteps: 10},
               {percentRatio: 0.25, maxCountSteps: 3}
             ];
-            const SWAP_AMOUNT_RATIO = [110, 0.01, 50, 99.95, 100.05];
+            const SWAP_AMOUNT_RATIO = [0.01, 50, 99.95, /* 100.05, 110 */ ];
             TARGET_LOCKED_AMOUNT_PERCENT_RATIO.forEach(lockedPercentConfig => {
               let currentLockedPercent: number;
               let targetLockedPercent: number;

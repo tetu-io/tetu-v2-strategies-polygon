@@ -16,7 +16,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
   string public constant override NAME = "Kyber Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.KYBER;
-  string public constant override STRATEGY_VERSION = "3.1.0";
+  string public constant override STRATEGY_VERSION = "3.1.1";
   //endregion ------------------------------------------------- Constants
 
   //region ------------------------------------------------- INIT
@@ -292,15 +292,21 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   }
 
   /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
-  /// @return earned The amount of earned rewards.
+  /// @return earned The amount of earned rewards
   /// @return lost The amount of lost rewards.
   /// @return assetBalanceAfterClaim The asset balance after claiming rewards.
-  function _handleRewards() override internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
+  /// @return paidDebtToInsurance Earned amount spent on debt-to-insurance payment
+  function _handleRewards() override internal virtual returns (
+    uint earned,
+    uint lost,
+    uint assetBalanceAfterClaim,
+    uint paidDebtToInsurance
+  ) {
     address asset = baseState.asset;
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
     earned = KyberConverterStrategyLogicLib.calcEarned(asset, controller(), rewardTokens, amounts);
-    _rewardsLiquidation(rewardTokens, amounts);
-    return (earned, lost, AppLib.balance(asset));
+    paidDebtToInsurance = _rewardsLiquidation(rewardTokens, amounts);
+    return (earned, lost, AppLib.balance(asset), paidDebtToInsurance);
   }
 
   /// @notice Deposit given amount to the pool.

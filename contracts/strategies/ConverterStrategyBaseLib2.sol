@@ -50,7 +50,7 @@ library ConverterStrategyBaseLib2 {
   event SendToInsurance(uint sentAmount, uint unsentAmount);
 
   /// @notice Increase to debts between new and previous checkpoints.
-  /// @param tokens List of possible collateral/borrow assets. One of the is unerlying.
+  /// @param tokens List of possible collateral/borrow assets. One of the is underlying.
   /// @param deltaGains Amounts by which the debt has reduced (supply profit) [sync with {tokens}]
   /// @param deltaLosses Amounts by which the debt has increased (increase of amount-to-pay) [sync with {tokens}]
   /// @param prices Prices of the {tokens}
@@ -63,10 +63,9 @@ library ConverterStrategyBaseLib2 {
     int increaseToDebt
   );
 
-  /// @param increaseToDebt The value on which the debt to insurance was increased
   /// @param debtToInsuranceBefore Value of the debt to insurance before fix price change
   /// @param debtToInsuranceAfter New value of the debt to insurance
-  /// @param increaseToDebt Amount on which debt was increased.
+  /// @param increaseToDebt Amount on which debt to insurance was increased.
   /// Actual value {debtToInsuranceAfter}-{debtToInsuranceBefore} can be less than increaseToDebt
   /// because some amount can be left uncovered.
   event FixPriceChanges(
@@ -106,6 +105,11 @@ library ConverterStrategyBaseLib2 {
   /// @param gains Amount received by all pool adapters for the provided collateral, in underlying
   /// @param losses Amount paid by all pool adapters for the debts, in underlying
   event BorrowResults(uint gains, uint losses);
+
+  /// @notice An amount (earned - earnedByPrice) is earned on withdraw and sent to the insurance
+  /// @dev We assume that earned > earnedByPrice, but it's better to save raw values
+  event OnEarningOnWithdraw(uint earned, uint earnedByPrice);
+
 //endregion----------------------------------------- EVENTS
 
 //region----------------------------------------- MAIN LOGIC
@@ -484,6 +488,55 @@ library ConverterStrategyBaseLib2 {
       amountsToConvert_
     );
   }
+
+  /// @notice Calculate amount earned after withdraw. Withdraw cannot produce income, so we send all
+  ///         earned amount to insurance. Also we send to the insurance earned-by-prices-amount here.
+  /// @dev Amount for the insurance is sent from the balance, so the sending doesn't change invested assets.
+  /// @param asset Underlying
+  /// @param investedAssets_ Invested assets amount at the moment of withdrawing start
+  /// @param balanceBefore Balance of the underlying at the moment of withdrawing start
+  /// @param earnedByPrices_ Amount of underlying earned because of price changes, it should be send to the insurance.
+  /// @param updatedInvestedAssets_ Invested assets amount after withdrawing
+  /// @return amountSentToInsurance Total amount sent to the insurance in result.
+  function calculateIncomeAfterWithdraw(
+    address splitter,
+    address asset,
+    uint investedAssets_,
+    uint balanceBefore,
+    uint earnedByPrices_,
+    uint updatedInvestedAssets_
+  ) external returns (uint amountSentToInsurance, uint strategyLoss) {
+    uint balanceAfterWithdraw = AppLib.balance(asset);
+
+    // we need to compensate difference if during withdraw we lost some assets
+    // also we should send earned amounts to the insurance
+    // it's too dangerous to earn money on withdraw, we can move share price
+    // in the case of "withdraw almost all" share price can be changed significantly
+    // so, it's safer to transfer earned amount to the insurance
+    // earned can exceeds earnedByPrices_
+    // but if earned < earnedByPrices_ it means that we compensate a part of losses from earned-by-prices.
+    uint earned;
+    (earned, strategyLoss) = _registerIncome(
+      AppLib.sub0(investedAssets_ + balanceBefore, earnedByPrices_),
+      updatedInvestedAssets_ + balanceAfterWithdraw
+    );
+
+    if (earned != earnedByPrices_) {
+      emit OnEarningOnWithdraw(earned, earnedByPrices_);
+    }
+
+    if (earned != 0) {
+      (amountSentToInsurance,) = _sendToInsurance(
+        asset,
+        earned,
+        splitter,
+        investedAssets_ + balanceBefore,
+        balanceAfterWithdraw
+      );
+    }
+
+    return (amountSentToInsurance, strategyLoss);
+  }
 //endregion ------------------------------------- Withdraw helpers
 
 //region---------------------------------------- calcInvestedAssets
@@ -791,22 +844,18 @@ library ConverterStrategyBaseLib2 {
     ISplitter(splitter).coverPossibleStrategyLoss(0, lossToCover);
     uint balanceAfter = IERC20(asset).balanceOf(vault);
 
+    uint delta = AppLib.sub0(balanceAfter, balanceBefore);
+    uint uncovered = AppLib.sub0(lossToCover, delta);
+    debtToInsuranceInc = lossToCover == 0
+      ? int(0)
+      : debtToInsuranceInc * int(lossToCover - uncovered) / int(lossToCover);
+
     if (debtToInsuranceInc != 0) {
       csbs.debtToInsurance += debtToInsuranceInc;
     }
 
-    uint delta = AppLib.sub0(balanceAfter, balanceBefore);
-    uint uncovered = AppLib.sub0(lossToCover, delta);
-
     // we don't add uncovered amount to the debts to the insurance
-    emit OnCoverLoss(
-      lossToCover,
-      lossToCover == 0
-        ? int(0)
-        : debtToInsuranceInc * int(lossToCover - uncovered) / int(lossToCover),
-      delta,
-      uncovered
-    );
+    emit OnCoverLoss(lossToCover, debtToInsuranceInc, delta, uncovered);
   }
 
   /// @notice Cut loss-value to safe value that doesn't produce revert inside splitter

@@ -7,4 +7,4 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
 };
 export default func;
 func.tags = ['KyberLib'];
-func.skip = async hre => (await hre.getChainId()) !== '137'
+func.skip = async hre => true // (await hre.getChainId()) !== '137'

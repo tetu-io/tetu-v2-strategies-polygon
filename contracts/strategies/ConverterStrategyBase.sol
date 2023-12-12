@@ -42,7 +42,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   //region -------------------------------------------------------- CONSTANTS
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant CONVERTER_STRATEGY_BASE_VERSION = "3.1.0";
+  string public constant CONVERTER_STRATEGY_BASE_VERSION = "3.1.1";
 
   /// @notice 1% gap to cover possible liquidation inefficiency
   /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
@@ -94,7 +94,8 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     uint earnedHandleRewards,
     uint lostHandleRewards,
     uint earnedDeposit,
-    uint lostDeposit
+    uint lostDeposit,
+    uint paidDebtToInsurance
   );
   //endregion -------------------------------------------------------- Events
 
@@ -357,36 +358,18 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       WithdrawUniversalLocal memory v;
       _initWithdrawUniversalLocal(baseState.asset, v, true);
 
-
       // get at least requested amount of the underlying on the balance
       assetPrice = ConverterStrategyBaseLib2.getAssetPriceFromConverter(v.converter, v.theAsset);
       expectedWithdrewUSD = AppLib.sub0(_makeRequestedAmount(amount, v), earnedByPrices_) * assetPrice / 1e18;
 
-      uint balanceAfterWithdraw = AppLib.balance(v.theAsset);
-
-      // we need to compensate difference if during withdraw we lost some assets
-      // also we should send earned amounts to the insurance
-      // it's too dangerous to earn money on withdraw, we can move share price
-      // in the case of "withdraw almost all" share price can be changed significantly
-      // so, it's safer to transfer earned amount to the insurance
-      // earned can exceeds earnedByPrices_
-      // but if earned < earnedByPrices_ it means that we compensate a part of losses from earned-by-prices.
-
-      uint earned;
-      (earned, strategyLoss) = ConverterStrategyBaseLib2._registerIncome(
-        AppLib.sub0(investedAssets_ + v.balanceBefore, earnedByPrices_),
-        _updateInvestedAssets() + balanceAfterWithdraw
+      (amountSentToInsurance, strategyLoss) = ConverterStrategyBaseLib2.calculateIncomeAfterWithdraw(
+        baseState.splitter,
+        v.theAsset,
+        investedAssets_,
+        v.balanceBefore,
+        earnedByPrices_,
+        _updateInvestedAssets()
       );
-
-      if (earned != 0) {
-        (amountSentToInsurance,) = ConverterStrategyBaseLib2.sendToInsurance(
-          v.theAsset,
-          earned,
-          baseState.splitter,
-          investedAssets_ + v.balanceBefore,
-          balanceAfterWithdraw
-        );
-      }
     }
 
     return (
@@ -425,9 +408,12 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
 
   /// @dev Call recycle process and send tokens to forwarder.
   ///      Need to be separated from the claim process - the claim can be called by operator for other purposes.
-  function _rewardsLiquidation(address[] memory rewardTokens_, uint[] memory rewardAmounts_) internal {
+  /// @return paidDebtToInsurance Earned amount spent on debt-to-insurance payment
+  function _rewardsLiquidation(address[] memory rewardTokens_, uint[] memory rewardAmounts_) internal returns (
+    uint paidDebtToInsurance
+  ) {
     if (rewardTokens_.length != 0) {
-      ConverterStrategyBaseLib.recycle(
+      paidDebtToInsurance = ConverterStrategyBaseLib.recycle(
         baseState,
         _csbs,
         _depositorPoolAssets(),
@@ -437,6 +423,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
         rewardAmounts_
       );
     }
+    return paidDebtToInsurance;
   }
   //endregion -------------------------------------------------------- Claim rewards
 
@@ -467,7 +454,16 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   }
 
   /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
-  function _handleRewards() internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim);
+  /// @return earned The amount of earned rewards.
+  /// @return lost The amount of lost rewards.
+  /// @return assetBalanceAfterClaim The asset balance after claiming rewards.
+  /// @return paidDebtToInsurance A part of {earned} spent on debt-to-insurance payment
+  function _handleRewards() internal virtual returns (
+    uint earned,
+    uint lost,
+    uint assetBalanceAfterClaim,
+    uint paidDebtToInsurance
+  );
 
   /// @param reInvest Deposit to pool all available amount if it's greater than the threshold
   /// @return earned Earned amount in terms of {asset}
@@ -477,28 +473,29 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
     if (!_preHardWork(reInvest)) {
       // claim rewards and get current asset balance
-      (uint earned1, uint lost1, uint assetBalance) = _handleRewards();
+      (uint earned1, uint lost1, uint assetBalance, uint paidDebtToInsurance) = _handleRewards();
 
       // re-invest income
+      (uint investedAssetsAfterHandleRewards,,) = _calcInvestedAssets();
       (, uint amountSentToInsurance) = _depositToPoolUniversal(
         reInvest
-        && investedAssetsNewPrices != 0
-        && assetBalance > _csbs.reinvestThresholdPercent * investedAssetsNewPrices / DENOMINATOR
+        && investedAssetsAfterHandleRewards != 0
+        && assetBalance > _csbs.reinvestThresholdPercent * investedAssetsAfterHandleRewards / DENOMINATOR
           ? assetBalance
           : 0,
         earnedByPrices,
-        investedAssetsNewPrices
+        investedAssetsAfterHandleRewards
       );
 
       (earned, lost) = ConverterStrategyBaseLib2._registerIncome(
-        investedAssetsNewPrices + assetBalance, // assets in use before deposit
+        investedAssetsNewPrices + assetBalance, // assets in use before handling rewards
         _csbs.investedAssets + AppLib.balance(baseState.asset) + amountSentToInsurance // assets in use after deposit
       );
 
       _postHardWork();
-      emit OnHardWorkEarnedLost(investedAssetsNewPrices, earnedByPrices, earned1, lost1, earned, lost);
+      emit OnHardWorkEarnedLost(investedAssetsNewPrices, earnedByPrices, earned1, lost1, earned, lost, paidDebtToInsurance);
 
-      earned += earned1;
+      earned = AppLib.sub0(earned + earned1, paidDebtToInsurance);
       lost += lost1;
     }
 

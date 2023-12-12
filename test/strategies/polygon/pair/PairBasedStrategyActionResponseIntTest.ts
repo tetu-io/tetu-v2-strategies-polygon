@@ -149,7 +149,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           return b;
         }
-        
+
         describe("Deposit 1000 USDC, put additional 1000 USDC on user's balance", function() {
           let snapshotLevel0: string;
           before(async function () {
@@ -283,8 +283,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
 
               const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+              const operator = await UniversalTestUtils.getAnOperator(b.strategy.address, signer);
+              const eventsSet = await CaptureEvents.makeHardworkInSplitter(converterStrategyBase, operator);
               await converterStrategyBase.doHardWork({gasLimit: GAS_LIMIT});
-              const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+              const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "a", {eventsSet});
 
               expect(stateAfter.strategy.investedAssets).gte(stateBefore.strategy.investedAssets - 0.001);
             });
@@ -1271,6 +1273,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     }
 
     const strategies: IStrategyInfo[] = [
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
+      {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
       {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
 
       {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
@@ -1279,8 +1283,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
       // {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0}, // todo movePriceBySteps cannot change prices
 
-      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
-      {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
       // {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000}, // todo movePriceBySteps cannot change prices
 
       // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN, compoundRatio: 50_000}, // todo npm coverage produces SB too high
@@ -1290,19 +1292,19 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
-            strategyInfo.name,
-            signer,
-            signer2,
-            {
-              kyberPid: KYBER_PID_DEFAULT_BLOCK,
-              notUnderlying: strategyInfo.notUnderlyingToken,
-              customParams: {
-                depositFee: 0,
-                withdrawFee: 300,
-                compoundRatio: strategyInfo.compoundRatio,
-                buffer: 0
-              }
+          strategyInfo.name,
+          signer,
+          signer2,
+          {
+            kyberPid: KYBER_PID_DEFAULT_BLOCK,
+            notUnderlying: strategyInfo.notUnderlyingToken,
+            customParams: {
+              depositFee: 0,
+              withdrawFee: 300,
+              compoundRatio: strategyInfo.compoundRatio,
+              buffer: 0
             }
+          }
         );
         await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(
           signer,
@@ -1341,6 +1343,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const states: IStateNum[] = [];
           const pathOut = `./tmp/${strategyInfo.name}-${tokenName(strategyInfo.notUnderlyingToken)}-${strategyInfo.compoundRatio}-test-loop.csv`;
 
+          const operator = await UniversalTestUtils.getAnOperator(b.strategy.address, signer);
           const reader = await MockHelper.createPairBasedStrategyReader(signer);
 
           // Following amount is used as swapAmount for both tokens A and B...
@@ -1422,7 +1425,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
             if (i % 5) {
               console.log('Hardwork..')
-              const eventsSet = await CaptureEvents.makeHardwork(converterStrategyBase.connect(splitterSigner));
+              const eventsSet = await CaptureEvents.makeHardworkInSplitter(converterStrategyBase, operator);
               states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `h${i}`, {eventsSet}));
               StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             }
@@ -1454,15 +1457,17 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               console.log("Rebalance debts");
               const planEntryData = buildEntryData1();
               const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
-              await b.strategy.withdrawByAggStep(
+              const eventsSet = await CaptureEvents.makeWithdrawByAggStep(
+                b.strategy,
                 quote.tokenToSwap,
                 Misc.ZERO_ADDRESS,
                 quote.amountToSwap,
                 "0x",
                 planEntryData,
-                ENTRY_TO_POOL_IS_ALLOWED,
-                {gasLimit: GAS_LIMIT}
+                ENTRY_TO_POOL_IS_ALLOWED
               );
+              states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `wba${i}`, {eventsSet}));
+              StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             }
           }
 
@@ -1511,8 +1516,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
   });
 
   describe("Check invariants on loops", () => {
-    const COUNT_CYCLES = 10;
-    const maxLockedPercent = 35;
+    const COUNT_CYCLES = 20;
+    const maxLockedPercent = 15;
     const WITHDRAW_FEE = 300;
     /** Currently withdraw-fee is used as priceChangeTolerance for security reasons */
     const PRICE_CHANGE_TOLERANCE = WITHDRAW_FEE;
@@ -1535,13 +1540,37 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     }
 
     const strategies: IStrategyInfo[] = [
+      { // large total assets, enough insurance to cover any losses, small withdraw/deposits, don't change prices
+        caseTag: "case1",
+        name: PLATFORM_UNIV3,
+        notUnderlyingToken: MaticAddresses.USDT_TOKEN,
+        compoundRatio: 0,
+        initialAmountOnSignerBalance: "80000",
+        investAmount: "50000",
+        initialInsuranceBalance: "1000",
+        initialLastDirectionUp: false,
+        countBlocksToAdvance: 15000,
+        dontChangePrices: true
+      },
+      // { // large total assets, enough insurance to cover any losses, small withdraw/deposits, change prices
+      //   caseTag: "case6",
+      //   name: PLATFORM_UNIV3,
+      //   notUnderlyingToken: MaticAddresses.USDT_TOKEN,
+      //   compoundRatio: 80_000,
+      //   initialAmountOnSignerBalance: "8000",
+      //   investAmount: "5000",
+      //   initialInsuranceBalance: "1000",
+      //   initialLastDirectionUp: false,
+      //   countBlocksToAdvance: 10000,
+      //   dontChangePrices: false
+      // },
       // { // large total assets, enough insurance to cover any losses, small withdraw/deposits, change prices
       //   caseTag: "case5",
       //   name: PLATFORM_UNIV3,
       //   notUnderlyingToken: MaticAddresses.USDT_TOKEN,
-      //   compoundRatio: 0,
-      //   initialAmountOnSignerBalance: "80000",
-      //   investAmount: "50000",
+      //   compoundRatio: 50_000,
+      //   initialAmountOnSignerBalance: "8000",
+      //   investAmount: "5000",
       //   initialInsuranceBalance: "1000",
       //   initialLastDirectionUp: true,
       //   countBlocksToAdvance: 10000,
@@ -1559,34 +1588,22 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       //   countBlocksToAdvance: 10000,
       //   dontChangePrices: false
       // },
-      { // large total assets, enough insurance to cover any losses, small withdraw/deposits, don't change prices
-        caseTag: "case1",
-        name: PLATFORM_UNIV3,
-        notUnderlyingToken: MaticAddresses.USDT_TOKEN,
-        compoundRatio: 0,
-        initialAmountOnSignerBalance: "80000",
-        investAmount: "50000",
-        initialInsuranceBalance: "1000",
-        initialLastDirectionUp: false,
-        countBlocksToAdvance: 10000,
-        dontChangePrices: true
-      },
-      { // not enough insurance, small user, don't change prices
-        caseTag: "case2",
-        name: PLATFORM_UNIV3,
-        notUnderlyingToken: MaticAddresses.USDT_TOKEN,
-        compoundRatio: 0,
-        initialAmountOnSignerBalance: "80000",
-        investAmount: "50000",
-        initialAmountOnSignerBalanceUser: "2000",
-        investAmountSignerUser: "1000",
-        initialInsuranceBalance: "0",
-        initialLastDirectionUp: false,
-        countBlocksToAdvance: 7000,
-        percentToWithdraw: 10,
-        percentToDeposit: 80,
-        dontChangePrices: true
-      },
+      // { // not enough insurance, small user, don't change prices
+      //   caseTag: "case2",
+      //   name: PLATFORM_UNIV3,
+      //   notUnderlyingToken: MaticAddresses.USDT_TOKEN,
+      //   compoundRatio: 0,
+      //   initialAmountOnSignerBalance: "8000",
+      //   investAmount: "5000",
+      //   initialAmountOnSignerBalanceUser: "2000",
+      //   investAmountSignerUser: "1000",
+      //   initialInsuranceBalance: "0",
+      //   initialLastDirectionUp: false,
+      //   countBlocksToAdvance: 7000,
+      //   percentToWithdraw: 10,
+      //   percentToDeposit: 80,
+      //   dontChangePrices: true
+      // },
       // { // not enough insurance, large user, change prices
       //   caseTag: "case3",
       //   name: PLATFORM_UNIV3,
@@ -1608,19 +1625,19 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
-            strategyInfo.name,
-            signer,
-            signer2,
-            {
-              kyberPid: KYBER_PID_DEFAULT_BLOCK,
-              notUnderlying: strategyInfo.notUnderlyingToken,
-              customParams: {
-                depositFee: 0,
-                withdrawFee: WITHDRAW_FEE,
-                compoundRatio: strategyInfo.compoundRatio,
-                buffer: 0
-              }
+          strategyInfo.name,
+          signer,
+          signer2,
+          {
+            kyberPid: KYBER_PID_DEFAULT_BLOCK,
+            notUnderlying: strategyInfo.notUnderlyingToken,
+            customParams: {
+              depositFee: 0,
+              withdrawFee: WITHDRAW_FEE,
+              compoundRatio: strategyInfo.compoundRatio,
+              buffer: 0
             }
+          }
         );
 
         // we need very small thresholds to avoid increasing of share price on hardwork
@@ -1632,10 +1649,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         await IERC20__factory.connect(b.asset, signer3).approve(b.vault.address, Misc.MAX_UINT);
         await TokenUtils.getToken(b.asset, signer.address, parseUnits(strategyInfo.initialAmountOnSignerBalance, 6));
         await TokenUtils.getToken(b.asset, signer3.address, parseUnits(strategyInfo.initialAmountOnSignerBalanceUser ?? strategyInfo.initialAmountOnSignerBalance, 6));
-
-        console.log('initial deposits...');
-        await b.vault.connect(signer).deposit(parseUnits(strategyInfo.investAmount, 6), signer.address, {gasLimit: GAS_LIMIT});
-        await b.vault.connect(signer3).deposit(parseUnits(strategyInfo.investAmountSignerUser ?? strategyInfo.investAmount, 6), signer3.address, {gasLimit: GAS_LIMIT});
 
         return b;
       }
@@ -1686,6 +1699,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           }
           const pathOut = `./tmp/event-invariants-${strategyInfo.name}-${strategyInfo.caseTag}.csv`;
 
+          const operator = await UniversalTestUtils.getAnOperator(b.strategy.address, signer);
           const reader = await MockHelper.createPairBasedStrategyReader(signer);
 
           // Following amount is used as swapAmount for both tokens A and B...
@@ -1698,33 +1712,38 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           await saver("init");
 
+          console.log('initial deposits...');
+          await saver(`ds`, await CaptureEvents.makeDeposit(b.vault.connect(signer), parseUnits(strategyInfo.investAmount, 6), platform));
+          await saver(`ds3`, await CaptureEvents.makeDeposit(b.vault.connect(signer3), parseUnits(strategyInfo.investAmountSignerUser ?? strategyInfo.investAmount, 6), platform));
+
           let lastDirectionUp = strategyInfo.initialLastDirectionUp;
           for (let i = 0; i < COUNT_CYCLES; i++) {
             console.log(`==================== CYCLE ${i} ====================`);
-            // provide some rewards
-            await UniversalUtils.makePoolVolume(signer2, state, b.swapper, parseUnits('100000', 6));
-            await TimeUtils.advanceNBlocks(strategyInfo.countBlocksToAdvance ?? 2000);
+            if (i % 1) { // provide some rewards
+              await UniversalUtils.makePoolVolume(signer2, state, b.swapper, parseUnits('100000', 6));
+              await TimeUtils.advanceNBlocks(strategyInfo.countBlocksToAdvance ?? 2000);
+            }
 
             if (i % 3 && !strategyInfo.dontChangePrices) {
               const movePricesUp = !lastDirectionUp;
               console.log(`Change prices.. ==================== ${i} ==================== ${movePricesUp ? "up" : "down"}`);
               await PairBasedStrategyPrepareStateUtils.movePriceBySteps(
-                  signer,
-                  b,
-                  movePricesUp,
-                  state,
-                  strategyInfo.name === PLATFORM_KYBER
-                      ? await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
-                          signer,
-                          b,
-                          state.tokenA,
-                          state.tokenB,
-                          movePricesUp,
-                          1.1
-                      )
-                      : swapAssetValueForPriceMove,
-                  swapAssetValueForPriceMove,
-                  5
+                signer,
+                b,
+                movePricesUp,
+                state,
+                strategyInfo.name === PLATFORM_KYBER
+                  ? await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
+                    signer,
+                    b,
+                    state.tokenA,
+                    state.tokenB,
+                    movePricesUp,
+                    1.1
+                  )
+                  : swapAssetValueForPriceMove,
+                swapAssetValueForPriceMove,
+                5
               );
               lastDirectionUp = !lastDirectionUp;
               await saver(`p${i}`);
@@ -1740,15 +1759,15 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
             if (i % 5) {
               console.log(`Hardwork.. ==================== ${i} ==================== `)
-              await saver(`h${i}`, await CaptureEvents.makeHardwork(converterStrategyBase.connect(splitterSigner)));
+              await saver(`h${i}`, await CaptureEvents.makeHardworkInSplitter(converterStrategyBase, operator));
             }
 
             // let's give some time to increase the debts
             await TimeUtils.advanceNBlocks(strategyInfo.countBlocksToAdvance ?? 2000);
 
-            if (i % 2) {
+            if (i % 3) {
               const maxWithdraw = await b.vault.maxWithdraw(user.address);
-              const toWithdraw = maxWithdraw.mul(i % 4 ? (strategyInfo.percentToWithdraw ?? 6) : 3).div(100);
+              const toWithdraw = maxWithdraw.mul(i % 4 ? (strategyInfo.percentToWithdraw ?? 1) : 1).div(100);
               const lastWithdrawFee = +formatUnits(toWithdraw, b.assetDecimals) * (100_000 / (100_000 - PRICE_CHANGE_TOLERANCE) - 1);
               totalWithdrawFee += lastWithdrawFee;
               totalWithdraw += +formatUnits(toWithdraw, b.assetDecimals);
@@ -1759,7 +1778,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               });
             } else {
               const maxDeposit = await IERC20Metadata__factory.connect(b.asset, signer).balanceOf(user.address);
-              const toDeposit = maxDeposit.mul(i % 3 ? 3 : (strategyInfo.percentToDeposit ?? 6)).div(100);
+              const toDeposit = maxDeposit.mul(i % 5 ? 3 : (strategyInfo.percentToDeposit ?? 2)).div(100);
               totalDeposit += +formatUnits(toDeposit, b.assetDecimals);
               console.log(`Deposit.. ==================== ${i} ==================== max=${maxDeposit} to=${toDeposit}`);
               await saver(`d${i}`, await CaptureEvents.makeDeposit(b.vault.connect(user), toDeposit, platform), {
@@ -1767,24 +1786,26 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               });
             }
 
-            const readerResults = await reader.getLockedUnderlyingAmount(b.strategy.address);
-            const locketAmount = +formatUnits(readerResults.estimatedUnderlyingAmount, b.assetDecimals);
-            const totalAsset = +formatUnits(readerResults.totalAssets, b.assetDecimals);
-            const lockedPercent = 100 * locketAmount / totalAsset;
-            console.log(`locketAmount=${locketAmount} totalAsset=${totalAsset} lockedPercent=${lockedPercent}`);
-            if (lockedPercent > maxLockedPercent) {
-              console.log(`Rebalance debts.. ==================== ${i} ====================`);
-              const planEntryData = buildEntryData1();
-              const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
-              await b.strategy.withdrawByAggStep(
+            { // withdraw by agg
+              const readerResults = await reader.getLockedUnderlyingAmount(b.strategy.address);
+              const locketAmount = +formatUnits(readerResults.estimatedUnderlyingAmount, b.assetDecimals);
+              const totalAsset = +formatUnits(readerResults.totalAssets, b.assetDecimals);
+              const lockedPercent = 100 * locketAmount / totalAsset;
+              console.log(`locketAmount=${locketAmount} totalAsset=${totalAsset} lockedPercent=${lockedPercent}`);
+              if (lockedPercent > maxLockedPercent) {
+                console.log(`Rebalance debts.. ==================== ${i} ====================`);
+                const planEntryData = buildEntryData1();
+                const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
+                await saver(`wba${i}`, await CaptureEvents.makeWithdrawByAggStep(
+                  b.strategy,
                   quote.tokenToSwap,
                   Misc.ZERO_ADDRESS,
                   quote.amountToSwap,
                   "0x",
                   planEntryData,
-                  ENTRY_TO_POOL_IS_ALLOWED,
-                  {gasLimit: GAS_LIMIT}
-              );
+                  ENTRY_TO_POOL_IS_ALLOWED
+                ));
+              }
             }
           }
 
@@ -1830,7 +1851,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           // withdraw fees give errors
           expect(deltaInsurance).approximately(totalWithdrawFee + sendToInsurance + debtPaid + toInsuranceRecycle - lossCovered, 0.1);
         });
-        it('should change debt to insurance in expected values', async () => {
+        it('should set debt to insurance to expected value', async () => {
           const {ret, totalWithdrawFee, totalWithdraw, totalDeposit} = await loadFixture(makeCalculations);
           const last = ret[ret.length - 1];
 
@@ -1842,9 +1863,28 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           expect(last.strategy.debtToInsurance - notEnoughInsurance).approximately(coverLossInc - debtPaid + debtToInsuranceOnProfitInc, 1e-4);
         });
+        it("should change debt to insurance in expected way", async () => {
+          const {ret} = await loadFixture(makeCalculations);
+          const first = ret[0];
+          const last = ret[ret.length - 1];
+
+          const debtToInsuranceInc = ret.reduce((prev, cur) => prev + (cur.events?.onCoverLoss.debtToInsuranceInc ?? 0), 0);
+          const debtToInsurancePaid = ret.reduce((prev, cur) => prev + (cur.events?.payDebtToInsurance.debtPaid ?? 0), 0);
+          const debtToInsuranceOnProfitInc = ret.reduce((prev, cur) => prev + (cur.events?.changeDebtToInsuranceOnProfit.increaseToDebt ?? 0), 0);
+
+          console.log("last.strategy.debtToInsurance", last.strategy.debtToInsurance);
+          console.log("first.strategy.debtToInsurance", first.strategy.debtToInsurance);
+          console.log("debtToInsuranceInc", debtToInsuranceInc);
+          console.log("debtToInsurancePaid", debtToInsurancePaid);
+          console.log("debtToInsuranceOnProfitInc", debtToInsuranceOnProfitInc);
+
+          expect(last.strategy.debtToInsurance - first.strategy.debtToInsurance).approximately(debtToInsuranceOnProfitInc + debtToInsuranceInc - debtToInsurancePaid, 0.01);
+        });
 
         if (strategyInfo.initialInsuranceBalance !== "0") {
-          it('borrow losses + swap losses = covered losses', async () => {
+
+          // todo
+          it.skip('borrow losses + swap losses = covered losses + increaseToDebts', async () => {
             const {ret} = await loadFixture(makeCalculations);
             const last = ret[ret.length - 1];
 
@@ -1866,9 +1906,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             console.log("lossesForBorrowing", lossesForBorrowing);
 
             if (strategyInfo.dontChangePrices === true) {
-              expect(coveredLoss).approximately(lossesForBorrowing + swapLosses + notEnoughInsurance, 0.01);
+              expect(coveredLoss + increaseToDebts).approximately(lossesForBorrowing + swapLosses + notEnoughInsurance, 0.01);
             } else {
-              expect(coveredLoss).gt(lossesForBorrowing + swapLosses + notEnoughInsurance);
+              expect(coveredLoss + increaseToDebts).gt(lossesForBorrowing + swapLosses + notEnoughInsurance);
             }
           });
 

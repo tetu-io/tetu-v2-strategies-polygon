@@ -734,6 +734,26 @@ export class StateUtilsNum {
 
       'preview.borrowGains',
       'preview.borrowLosses',
+
+      "hw.investedAssetsNewPrices",
+      "hw.earnedByPrices",
+      "hw.earnedDeposit",
+      "hw.lostDeposit",
+      "hw.earnedHandleRewards",
+      "hw.lostHandleRewards",
+      "hw.paidDebtToInsurance",
+
+      "hardwork.sender",
+      "hardwork.strategy",
+      "hardwork.tvl",
+      "hardwork.avgApr",
+      "hardwork.apr",
+      "hardwork.lost",
+      "hardwork.earned",
+
+      "onWithdraw.earned",
+      "onWithdraw.earnedByPrice",
+      "onWithdraw.earned-earnedByPrice",
     ];
 
     if (params.additionalParams) {
@@ -876,6 +896,26 @@ export class StateUtilsNum {
 
       item.previewBorrowResults?.borrowGains,
       item.previewBorrowResults?.borrowLosses,
+
+      item.events?.onHardWorkEarnedLost?.investedAssetsNewPrices,
+      item.events?.onHardWorkEarnedLost?.earnedByPrices,
+      item.events?.onHardWorkEarnedLost?.earnedDeposit,
+      item.events?.onHardWorkEarnedLost?.lostDeposit,
+      item.events?.onHardWorkEarnedLost?.earnedHandleRewards,
+      item.events?.onHardWorkEarnedLost?.lostHandleRewards,
+      item.events?.onHardWorkEarnedLost?.paidDebtToInsurance,
+
+      item.events?.hardwork?.sender,
+      item.events?.hardwork?.strategy,
+      item.events?.hardwork?.tvl,
+      item.events?.hardwork?.avgApr,
+      item.events?.hardwork?.apr,
+      item.events?.hardwork?.lost,
+      item.events?.hardwork?.earned,
+
+      item.events?.onEarningOnWithdraw?.earned,
+      item.events?.onEarningOnWithdraw?.earnedByPrice,
+      item.events?.onEarningOnWithdraw?.delta,
 
       ...item.additionalParams
     ]);

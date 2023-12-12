@@ -1993,7 +1993,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
       });
       it("should set expected debtToInsurance", async () => {
         const ret = await loadFixture(makeTest);
-        expect(ret.debtToInsurance).eq(-1000 - 5);
+        expect(ret.debtToInsurance).approximately(-1000 - 5 * 199/207, 1e-5);
       });
     });
   });

@@ -16,7 +16,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
   string public constant override NAME = "Algebra Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.ALGEBRA;
-  string public constant override STRATEGY_VERSION = "3.1.1";
+  string public constant override STRATEGY_VERSION = "3.1.2";
 
   //endregion ------------------------------------------------- Constants
 
@@ -279,11 +279,17 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   /// @return earned The amount of earned rewards.
   /// @return lost The amount of lost rewards.
   /// @return assetBalanceAfterClaim The asset balance after claiming rewards.
-  function _handleRewards() override internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
+  /// @return paidDebtToInsurance Earned amount spent on debt-to-insurance payment
+  function _handleRewards() override internal virtual returns (
+    uint earned,
+    uint lost,
+    uint assetBalanceAfterClaim,
+    uint paidDebtToInsurance
+  ) {
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
     earned = AlgebraConverterStrategyLogicLib.calcEarned(state.pair.tokenA, controller(), rewardTokens, amounts);
-    _rewardsLiquidation(rewardTokens, amounts);
-    return (earned, lost, AppLib.balance(baseState.asset));
+    paidDebtToInsurance = _rewardsLiquidation(rewardTokens, amounts);
+    return (earned, lost, AppLib.balance(baseState.asset), paidDebtToInsurance);
   }
 
   /// @notice Deposit given amount to the pool.

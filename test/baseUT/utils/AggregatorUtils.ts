@@ -50,7 +50,7 @@ export class AggregatorUtils {
     const chainId = hre.network.config.chainId;
     // const apiBaseUrl = 'https://api.1inch.io/v5.0/' + chainId;
     // const apiBaseUrl = 'https://api.1inch.dev/swap/v5.2/' + chainId;
-    const apiBaseUrl = 'https://api-tetu.1inch.io/v5.0/' + chainId;
+    const apiBaseUrl = `https://api.1inch.dev/swap/v5.0/${chainId}`;
 
     const r = (new URLSearchParams(JSON.parse(queryParams))).toString();
     return apiBaseUrl + methodName + '?' + r;

@@ -695,6 +695,7 @@ library ConverterStrategyBaseLib {
   /// @dev {_recycle} is implemented as separate (inline) function to simplify unit testing
   /// @param rewardTokens_ Full list of reward tokens received from tetuConverter and depositor
   /// @param rewardAmounts_ Amounts of {rewardTokens_}; we assume, there are no zero amounts here
+  /// @return paidDebtToInsurance Earned amount spent on debt-to-insurance payment
   function recycle(
     IStrategyV3.BaseState storage baseState,
     IConverterStrategyBase.ConverterStrategyBaseState storage csbs,
@@ -703,7 +704,7 @@ library ConverterStrategyBaseLib {
     mapping(address => uint) storage liquidationThresholds,
     address[] memory rewardTokens_,
     uint[] memory rewardAmounts_
-  ) external {
+  ) external returns (uint paidDebtToInsurance) {
     RecycleLocal memory v;
     v.asset = baseState.asset;
     v.compoundRatio = baseState.compoundRatio;
@@ -730,6 +731,9 @@ library ConverterStrategyBaseLib {
     if (v.debtToInsuranceCurrent != v.debtToInsuranceUpdated) {
       csbs.debtToInsurance = v.debtToInsuranceUpdated;
       emit OnPayDebtToInsurance(v.debtToInsuranceCurrent, v.debtToInsuranceUpdated);
+      paidDebtToInsurance = v.debtToInsuranceCurrent - v.debtToInsuranceUpdated > 0
+        ? uint(v.debtToInsuranceCurrent - v.debtToInsuranceUpdated)
+        : 0;
     }
 
     // send performance-part of the underlying to the performance receiver and insurance
@@ -745,6 +749,7 @@ library ConverterStrategyBaseLib {
     (rewardTokens_, v.amountsToForward) = _sendTokensToForwarder(controller, v.splitter, rewardTokens_, v.amountsToForward, v.thresholds);
 
     emit Recycle(rewardTokens_, v.amountsToForward, v.toPerf, v.toInsurance);
+    return paidDebtToInsurance;
   }
 
   /// @notice Send {amount_} of {asset_} to {receiver_} and insurance
