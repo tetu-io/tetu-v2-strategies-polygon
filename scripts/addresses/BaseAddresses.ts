@@ -33,4 +33,22 @@ export class BaseAddresses {
     public static MOONWELL_WETH = "0x628ff693426583D9a7FB391E54366292F509D457".toLowerCase();
     public static MOONWELL_CBETH = "0x3bf93770f2d4a794c3d9EBEfBAeBAE2a8f09A5E5".toLowerCase();
 //endregion ----------------------------------------------------- Moonwell
+
+//region ----------------------------------------------------- PancakeSwap
+    public static PANCAKE_SWAP_TOKEN = "0x3055913c90Fcc1A6CE9a358911721eEb942013A1".toLowerCase();
+    public static PANCAKE_MASTER_CHEF_V3 = "0xC6A2Db661D5a5690172d8eB0a7DEA2d3008665A3".toLowerCase();
+    public static PANCAKE_NONFUNGIBLE_POSITION_MANAGER = "0x46a15b0b27311cedf172ab29e4f4766fbe7f4364".toLowerCase();
+    /** From list of transactions: https://basescan.org/address/0x3af75af6f056d4d72c1675da919aebf908a109d6 */
+    public static PANCAKE_QUOTER_V2 = "0x864ED564875BdDD6F421e226494a0E7c071C06f8".toLowerCase(); // todo 0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997
+    /** From list of transactions: https://basescan.org/address/0x3af75af6f056d4d72c1675da919aebf908a109d6 */
+    public static PANCAKE_SMART_ROUTER = "0x678Aa4bF4E210cf2166753e054d5b7c31cc7fa86".toLowerCase();
+    /** From list of transactions: https://basescan.org/address/0x3af75af6f056d4d72c1675da919aebf908a109d6 */
+    public static PANCAKE_MIXED_ROUTE_QUOTER_V1 = "0x4c650FB471fe4e0f476fD3437C3411B1122c4e3B".toLowerCase();
+    /** From list of transactions: https://basescan.org/address/0x3af75af6f056d4d72c1675da919aebf908a109d6 */
+    public static PANCAKE_SMART_ROUTER_HELPER = "0x13f4EA83D0bd40E75C8222255bc855a974568Dd4".toLowerCase();
+    /** From list of transactions: https://basescan.org/address/0x3af75af6f056d4d72c1675da919aebf908a109d6 */
+    public static PANCAKE_SWAP_ROUTER = "0x1b81D678ffb9C0263b24A97847620C99d213eB14".toLowerCase();
+
+//endregion ----------------------------------------------------- PancakeSwap
+
 }
