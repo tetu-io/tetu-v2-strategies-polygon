@@ -5,7 +5,7 @@ pragma solidity 0.8.17;
 interface ISetupPairBasedStrategy {
 
   /// @notice Manually set status of the fuse
-  /// @param status See PairBasedStrategyLib.FuseStatus enum for possile values
+  /// @param status See PairBasedStrategyLib.FuseStatus enum for possible values
   function setFuseStatus(uint status) external;
 
   /// @notice Set thresholds for the fuse: [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
