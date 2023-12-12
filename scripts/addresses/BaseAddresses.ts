@@ -49,6 +49,9 @@ export class BaseAddresses {
     /** From list of transactions: https://basescan.org/address/0x3af75af6f056d4d72c1675da919aebf908a109d6 */
     public static PANCAKE_SWAP_ROUTER = "0x1b81D678ffb9C0263b24A97847620C99d213eB14".toLowerCase();
 
+    public static PANCAKE_POOL_USDC_USDbC = "0x29Ed55B18Af0Add137952CB3E29FB77B32fCE426".toLowerCase();
+    public static PANCAKE_POOL_DAI_USDbC_LP = "0xe4eFf19c7AcE186ba39fD3eD639B2D34171f7efF".toLowerCase();
+
 //endregion ----------------------------------------------------- PancakeSwap
 
 }

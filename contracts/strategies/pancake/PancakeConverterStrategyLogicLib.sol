@@ -1,16 +1,23 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.17;
 
+import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/lib/StringLib.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "./PancakeLib.sol";
 import "./PancakeDebtLib.sol";
 import "./PancakeStrategyErrors.sol";
+import "../ConverterStrategyBaseLib2.sol";
 import "../../libs/AppLib.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/lib/StringLib.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
-import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
+import "../../libs/AppErrors.sol";
+import "../pair/PairBasedStrategyLib.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
-import "../../integrations/pancake/IPancakeV3Pool.sol";
-import "../../integrations/pancake/IPancakeNonfungiblePositionManager.sol";
 
 library PancakeConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -19,16 +26,12 @@ library PancakeConverterStrategyLogicLib {
   uint internal constant LIQUIDATOR_SWAP_SLIPPAGE_STABLE = 300;
   uint internal constant LIQUIDATOR_SWAP_SLIPPAGE_VOLATILE = 500;
   uint internal constant HARD_WORK_USD_FEE_THRESHOLD = 100;
-
-  IPancakeNonfungiblePositionManager internal constant PANCAKE_NFT = IPancakeNonfungiblePositionManager(0x46A15B0b27311cedF172AB29E4f4766fbE7F4364); // todo make configurable
-  // todo IFarmingCenter internal constant FARMING_CENTER = IFarmingCenter(0x7F281A8cdF66eF5e9db8434Ec6D97acc1bc01E78);
   //endregion ------------------------------------------------ Constants
 
   //region ------------------------------------------------ Events
   event Rebalanced(uint loss, uint profitToCover, uint coveredByRewards);
   event RebalancedDebt(uint loss, uint profitToCover, uint coveredByRewards);
-  event PancakeFeesClaimed(uint fee0, uint fee1);
-  event PancakeRewardsClaimed(uint reward, uint bonusReward);
+  event UniV3FeesClaimed(uint fee0, uint fee1);
   //endregion ------------------------------------------------ Events
 
   //region ------------------------------------------------ Data types
@@ -37,14 +40,7 @@ library PancakeConverterStrategyLogicLib {
     PairBasedStrategyLogicLib.PairState pair;
     // additional (specific) state
 
-    uint tokenId;
-    // farming
-    address rewardToken;
-    address bonusRewardToken;
-    uint256 startTime;
-    uint256 endTime;
-
-    /// @notice reserve space for future needs
+    /// @dev reserve space for future needs
     uint[10] __gap;
   }
 
@@ -64,120 +60,72 @@ library PancakeConverterStrategyLogicLib {
     uint poolPrice;
     uint poolPriceAdjustment;
   }
-
-  struct EnterLocalVariables {
-    bool depositorSwapTokens;
-    uint128 liquidity;
-    uint tokenId;
-    int24 lowerTick;
-    int24 upperTick;
-  }
-
-  struct IsReadyToHardWorkLocal {
-    address tokenA;
-    address tokenB;
-    uint rewardInTermOfTokenA;
-    uint bonusRewardInTermOfTokenA;
-    uint fee0;
-    uint fee1;
-  }
-
-  struct ExitLocal {
-    address strategyProfitHolder;
-    uint128 liquidity;
-    uint reward;
-    uint bonusReward;
-  }
   //endregion ------------------------------------------------ Data types
 
   //region ------------------------------------------------ Helpers
 
-  /// @param controllerPool [controller, pool]
+  /// @dev Gets the liquidator swap slippage based on the pool type (stable or volatile).
+  /// @param pool The IPancakeV3Pool instance.
+  /// @return The liquidator swap slippage percentage.
+  function _getLiquidatorSwapSlippage(IPancakeV3Pool pool) internal view returns (uint) {
+    return isStablePool(pool) ? LIQUIDATOR_SWAP_SLIPPAGE_STABLE : LIQUIDATOR_SWAP_SLIPPAGE_VOLATILE;
+  }
+
+  /// @notice Check if the given pool is a stable pool.
+  /// @param pool The Uniswap V3 pool.
+  /// @return A boolean indicating if the pool is stable.
+  function isStablePool(IPancakeV3Pool pool) public view returns (bool) {
+    return pool.fee() == 100;
+  }
+
   /// @param fuseThresholds Fuse thresholds for tokens (stable pool only)
   function initStrategyState(
     State storage state,
-    address[2] calldata controllerPool,
+    address controller_,
+    address pool,
     int24 tickRange,
     int24 rebalanceTickRange,
     address asset_,
-    bool isStablePool,
     uint[4] calldata fuseThresholds
   ) external {
-    require(controllerPool[1] != address(0), AppErrors.ZERO_ADDRESS);
-    address token0 = IPancakeV3Pool(controllerPool[1]).token0();
-    address token1 = IPancakeV3Pool(controllerPool[1]).token1();
+    require(pool != address(0), AppErrors.ZERO_ADDRESS);
+    address token0 = IPancakeV3Pool(pool).token0();
+    address token1 = IPancakeV3Pool(pool).token1();
 
     int24[4] memory tickData;
     {
-      int24 tickSpacing = PancakeLib.tickSpacing();
+      int24 tickSpacing = PancakeLib.getTickSpacing(IPancakeV3Pool(pool).fee());
       if (tickRange != 0) {
-        require(tickRange == tickRange / tickSpacing * tickSpacing, PancakeStrategyErrors.INCORRECT_TICK_RANGE);
-        require(rebalanceTickRange == rebalanceTickRange / tickSpacing * tickSpacing, PancakeStrategyErrors.INCORRECT_REBALANCE_TICK_RANGE);
+        require(tickRange == tickRange / tickSpacing * tickSpacing, PairBasedStrategyLib.INCORRECT_TICK_RANGE);
+        require(rebalanceTickRange == rebalanceTickRange / tickSpacing * tickSpacing, PairBasedStrategyLib.INCORRECT_REBALANCE_TICK_RANGE);
       }
       tickData[0] = tickSpacing;
-      (tickData[1], tickData[2]) = PancakeDebtLib.calcTickRange(IPancakeV3Pool(controllerPool[1]), tickRange, tickSpacing);
+      (tickData[1], tickData[2]) = PancakeDebtLib.calcTickRange(pool, tickRange, tickSpacing);
       tickData[3] = rebalanceTickRange;
     }
 
     PairBasedStrategyLogicLib.setInitialDepositorValues(
       state.pair,
-      [controllerPool[1], asset_, token0, token1],
+      [pool, asset_, token0, token1],
       tickData,
-      isStablePool,
+      isStablePool(IPancakeV3Pool(pool)),
       fuseThresholds
     );
 
-    address liquidator = IController(controllerPool[0]).liquidator();
+    address liquidator = IController(controller_).liquidator();
     IERC20(token0).approve(liquidator, type(uint).max);
     IERC20(token1).approve(liquidator, type(uint).max);
-    IERC20(token0).approve(address(PANCAKE_NFT), type(uint).max);
-    IERC20(token1).approve(address(PANCAKE_NFT), type(uint).max);
-  }
-
-  function initFarmingState(
-    State storage state,
-    IncentiveKey calldata key
-  ) external {
-    state.rewardToken = key.rewardToken;
-    state.bonusRewardToken = key.bonusRewardToken;
-    state.startTime = key.startTime;
-    state.endTime = key.endTime;
   }
 
   function createSpecificName(PairBasedStrategyLogicLib.PairState storage pairState) external view returns (string memory) {
-    return string(abi.encodePacked("Pancake ", IERC20Metadata(pairState.tokenA).symbol(), "/", IERC20Metadata(pairState.tokenB).symbol()));
-  }
-
-  function getIncentiveKey(State storage state) internal view returns (IncentiveKey memory) {
-    return IncentiveKey(state.rewardToken, state.bonusRewardToken, state.pair.pool, state.startTime, state.endTime);
-  }
-
-  function getFees(State storage state) public view returns (uint fee0, uint fee1) {
-    (fee0, fee1) = PancakeLib.getFees(IPancakeV3Pool(state.pair.pool), PANCAKE_NFT, state.tokenId);
-  }
-
-  function getPoolReserves(PairBasedStrategyLogicLib.PairState storage pairState) external view returns (
-    uint[] memory reserves
-  ) {
-    reserves = new uint[](2);
-    (uint160 sqrtRatioX96, , , , , ,) = IPancakeV3Pool(pairState.pool).globalState();
-
-    (reserves[0], reserves[1]) = PancakeLib.getAmountsForLiquidity(
-      sqrtRatioX96,
-      pairState.lowerTick,
-      pairState.upperTick,
-      pairState.totalLiquidity
+    return string(abi.encodePacked(
+      "UniV3 ",
+      IERC20Metadata(pairState.tokenA).symbol(),
+      "/",
+      IERC20Metadata(pairState.tokenB).symbol(),
+      "-",
+      StringLib._toString(IPancakeV3Pool(pairState.pool).fee()))
     );
-
-    if (pairState.depositorSwapTokens) {
-      (reserves[0], reserves[1]) = (reserves[1], reserves[0]);
-    }
-  }
-
-  /// @dev Gets the liquidator swap slippage based on the pool type (stable or volatile).
-  /// @return The liquidator swap slippage percentage.
-  function _getLiquidatorSwapSlippage(bool isStablePool) internal pure returns (uint) {
-    return isStablePool ? LIQUIDATOR_SWAP_SLIPPAGE_STABLE : LIQUIDATOR_SWAP_SLIPPAGE_VOLATILE;
   }
 
   /// @notice Calculate proportions of the tokens for entry kind 1
@@ -192,265 +140,169 @@ library PancakeConverterStrategyLogicLib {
   }
   //endregion ------------------------------------------------ Helpers
 
-  //region ------------------------------------------------ Join the pool
+  //region ------------------------------------------------ Pool info
+  /// @notice Retrieve the reserves of a Uniswap V3 pool managed by this contract.
+  /// @param pairState The State storage containing the pool's information.
+  /// @return reserves An array containing the reserve amounts of the contract owned liquidity.
+  function getPoolReserves(PairBasedStrategyLogicLib.PairState storage pairState) external view returns (
+    uint[] memory reserves
+  ) {
+    reserves = new uint[](2);
+    (uint160 sqrtRatioX96, , , , , ,) = IPancakeV3Pool(pairState.pool).slot0();
 
-  function enter(
-    State storage state,
-    uint[] memory amountsDesired_
-  ) external returns (uint[] memory amountsConsumed, uint liquidityOut) {
-    EnterLocalVariables memory vars = EnterLocalVariables({
-      depositorSwapTokens : state.pair.depositorSwapTokens,
-      liquidity : 0,
-      tokenId : state.tokenId,
-      lowerTick : state.pair.lowerTick,
-      upperTick : state.pair.upperTick
-    });
+    (reserves[0], reserves[1]) = PancakeLib.getAmountsForLiquidity(
+      sqrtRatioX96,
+      pairState.lowerTick,
+      pairState.upperTick,
+      pairState.totalLiquidity
+    );
 
-    (address token0, address token1) = vars.depositorSwapTokens
-      ? (state.pair.tokenB, state.pair.tokenA)
-      : (state.pair.tokenA, state.pair.tokenB);
-    if (vars.depositorSwapTokens) {
-      (amountsDesired_[0], amountsDesired_[1]) = (amountsDesired_[1], amountsDesired_[0]);
-    }
-
-    amountsConsumed = new uint[](2);
-
-    if (vars.tokenId > 0) {
-      (,,,,int24 nftLowerTick, int24 nftUpperTick,,,,,) = PANCAKE_NFT.positions(vars.tokenId);
-      if (nftLowerTick != vars.lowerTick || nftUpperTick != vars.upperTick) {
-        PANCAKE_NFT.burn(vars.tokenId);
-        vars.tokenId = 0;
-      }
-    }
-
-    IncentiveKey memory key = getIncentiveKey(state);
-
-    if (vars.tokenId == 0) {
-      (vars.tokenId, vars.liquidity, amountsConsumed[0], amountsConsumed[1]) = PANCAKE_NFT.mint(
-        IPancakeNonfungiblePositionManager.MintParams(
-          token0,
-          token1,
-          vars.lowerTick,
-          vars.upperTick,
-          amountsDesired_[0],
-          amountsDesired_[1],
-          0,
-          0,
-          address(this),
-          block.timestamp
-        )
-      );
-
-      state.tokenId = vars.tokenId;
-
-      PANCAKE_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), vars.tokenId);
-    } else {
-      (vars.liquidity, amountsConsumed[0], amountsConsumed[1]) = PANCAKE_NFT.increaseLiquidity(
-        IPancakeNonfungiblePositionManager.IncreaseLiquidityParams(
-          vars.tokenId,
-          amountsDesired_[0],
-          amountsDesired_[1],
-          0,
-          0,
-          block.timestamp
-        )
-      );
-
-      if (state.pair.totalLiquidity > 0) {
-        // get reward amounts
-        (uint reward, uint bonusReward) = _collectRewards(key, vars.tokenId);
-
-        // exit farming (undeposit)
-        FARMING_CENTER.exitFarming(key, vars.tokenId, false);
-
-        // claim rewards and send to profit holder
-        address strategyProfitHolder = state.pair.strategyProfitHolder;
-        _claimRewards(state.rewardToken, strategyProfitHolder, reward);
-        _claimRewards(state.bonusRewardToken, strategyProfitHolder, bonusReward);
-      } else {
-        ALGEBRA_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), vars.tokenId);
-      }
-    }
-
-    FARMING_CENTER.enterFarming(key, vars.tokenId, 0, false);
-
-    state.pair.totalLiquidity += vars.liquidity;
-    liquidityOut = uint(vars.liquidity);
-  }
-  //endregion ------------------------------------------------ Join the pool
-
-  //region ------------------------------------------------ Exit the pool
-
-  /// @param emergency Emergency exit (only withdraw, don't claim any rewards or make any other additional actions)
-  function exit(
-    State storage state,
-    uint128 liquidityAmountToExit,
-    bool emergency
-  ) external returns (uint[] memory amountsOut) {
-    ExitLocal memory v;
-
-    amountsOut = new uint[](2);
-    v.strategyProfitHolder = state.pair.strategyProfitHolder;
-    IncentiveKey memory key = getIncentiveKey(state);
-
-    v.liquidity = state.pair.totalLiquidity;
-
-    require(v.liquidity >= liquidityAmountToExit, PancakeStrategyErrors.WRONG_LIQUIDITY);
-
-    // we assume here, that liquidity is not zero (otherwise it doesn't worth to call exit)
-    uint tokenId = state.tokenId;
-
-    // get reward amounts
-    if (! emergency) {
-      (v.reward, v.bonusReward) = _collectRewards(key, tokenId);
-    }
-
-    // exit farming (undeposit)
-    FARMING_CENTER.exitFarming(getIncentiveKey(state), state.tokenId, false);
-
-    // claim rewards and send to profit holder
-    if (! emergency) {
-      _claimRewards(state.rewardToken, v.strategyProfitHolder, v.reward);
-      _claimRewards(state.bonusRewardToken, v.strategyProfitHolder, v.bonusReward);
-    }
-
-    // withdraw nft
-    FARMING_CENTER.withdrawToken(tokenId, address(this), '');
-
-    // burn liquidity
-    (amountsOut[0], amountsOut[1]) = ALGEBRA_NFT.decreaseLiquidity(IPancakeNonfungiblePositionManager.DecreaseLiquidityParams(tokenId, liquidityAmountToExit, 0, 0, block.timestamp));
-
-    {
-      // collect tokens and fee
-      (uint collected0, uint collected1) = ALGEBRA_NFT.collect(IPancakeNonfungiblePositionManager.CollectParams(tokenId, address(this), type(uint128).max, type(uint128).max));
-
-      uint fee0 = collected0 > amountsOut[0] ? (collected0 - amountsOut[0]) : 0;
-      uint fee1 = collected1 > amountsOut[1] ? (collected1 - amountsOut[1]) : 0;
-
-      emit PancakeFeesClaimed(fee0, fee1);
-
-      if (state.pair.depositorSwapTokens) {
-        (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
-        (fee0, fee1) = (fee1, fee0);
-      }
-
-      // send fees to profit holder
-      if (fee0 > 0) {
-        IERC20(state.pair.tokenA).safeTransfer(v.strategyProfitHolder, fee0);
-      }
-      if (fee1 > 0) {
-        IERC20(state.pair.tokenB).safeTransfer(v.strategyProfitHolder, fee1);
-      }
-    }
-
-    v.liquidity -= liquidityAmountToExit;
-    state.pair.totalLiquidity = v.liquidity;
-
-    if (v.liquidity != 0) {
-      ALGEBRA_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), tokenId);
-      FARMING_CENTER.enterFarming(key, tokenId, 0, false);
+    if (pairState.depositorSwapTokens) {
+      (reserves[0], reserves[1]) = (reserves[1], reserves[0]);
     }
   }
 
+  /// @notice Retrieve the fees generated by a Uniswap V3 pool managed by this contract.
+  /// @param pairState The State storage containing the pool's information.
+  /// @return fee0 The fees generated for the first token in the pool.
+  /// @return fee1 The fees generated for the second token in the pool.
+  function getFees(PairBasedStrategyLogicLib.PairState storage pairState) public view returns (uint fee0, uint fee1) {
+    PancakeLib.PoolPosition memory position = PancakeLib.PoolPosition(pairState.pool, pairState.lowerTick, pairState.upperTick, pairState.totalLiquidity, address(this));
+    (fee0, fee1) = PancakeLib.getFees(position);
+  }
+
+  /// @notice Estimate the exit amounts for a given liquidity amount in a Uniswap V3 pool.
+  /// @param liquidityAmountToExit The amount of liquidity to exit.
+  /// @return amountsOut An array containing the estimated exit amounts for each token in the pool.
   function quoteExit(
     PairBasedStrategyLogicLib.PairState storage pairState,
     uint128 liquidityAmountToExit
   ) public view returns (uint[] memory amountsOut) {
-    (uint160 sqrtRatioX96, , , , , ,) = IPancakeV3Pool(pairState.pool).globalState();
     amountsOut = new uint[](2);
+    (uint160 sqrtRatioX96, , , , , ,) = IPancakeV3Pool(pairState.pool).slot0();
+
     (amountsOut[0], amountsOut[1]) = PancakeLib.getAmountsForLiquidity(
       sqrtRatioX96,
       pairState.lowerTick,
       pairState.upperTick,
       liquidityAmountToExit
     );
+
     if (pairState.depositorSwapTokens) {
       (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
     }
   }
-  //endregion ------------------------------------------------ Exit the pool
+  //endregion ------------------------------------------------ Pool info
 
-  //region ------------------------------------------------ Rewards
+  //region ------------------------------------------------ Join the pool
+  /// @notice Enter the pool and provide liquidity with desired token amounts.
+  /// @param pool The Uniswap V3 pool to provide liquidity to.
+  /// @param lowerTick The lower tick value for the pool.
+  /// @param upperTick The upper tick value for the pool.
+  /// @param amountsDesired_ An array containing the desired amounts of tokens to provide liquidity.
+  /// @param totalLiquidity The current total liquidity in the pool.
+  /// @param _depositorSwapTokens A boolean indicating if need to use token B instead of token A.
+  /// @return amountsConsumed An array containing the consumed amounts for each token in the pool.
+  /// @return liquidityOut The amount of liquidity added to the pool.
+  /// @return totalLiquidityNew The updated total liquidity after providing liquidity.
+  function enter(
+    IPancakeV3Pool pool,
+    int24 lowerTick,
+    int24 upperTick,
+    uint[] memory amountsDesired_,
+    uint128 totalLiquidity,
+    bool _depositorSwapTokens
+  ) external returns (uint[] memory amountsConsumed, uint liquidityOut, uint128 totalLiquidityNew) {
+    amountsConsumed = new uint[](2);
 
-  function isReadyToHardWork(State storage state, ITetuConverter converter, address controller) external view returns (bool isReady) {
-    IsReadyToHardWorkLocal memory v;
-    v.tokenA = state.pair.tokenA;
-    v.tokenB = state.pair.tokenB;
-    address h = state.pair.strategyProfitHolder;
-
-    if (state.pair.totalLiquidity != 0) {
-      address rewardToken = state.rewardToken;
-      address bonusRewardToken = state.bonusRewardToken;
-      IncentiveKey memory key = getIncentiveKey(state);
-      (uint reward, uint bonusReward) = FARMING_CENTER.eternalFarming().getRewardInfo(key, state.tokenId);
-      reward += IERC20(rewardToken).balanceOf(h);
-      bonusReward += IERC20(bonusRewardToken).balanceOf(h);
-      ITetuLiquidator liquidator = ITetuLiquidator(IController(controller).liquidator());
-      if (reward > 0) {
-        v.rewardInTermOfTokenA = liquidator.getPrice(rewardToken, v.tokenA, reward);
+    if (amountsDesired_[1] > 0) {
+      if (_depositorSwapTokens) {
+        (amountsDesired_[0], amountsDesired_[1]) = (amountsDesired_[1], amountsDesired_[0]);
       }
-      if (v.bonusRewardInTermOfTokenA > 0) {
-        v.bonusRewardInTermOfTokenA = liquidator.getPrice(bonusRewardToken, v.tokenA, bonusReward);
+      uint128 newLiquidity;
+      (amountsConsumed[0], amountsConsumed[1], newLiquidity) = PancakeLib.addLiquidityPreview(address(pool), lowerTick, upperTick, amountsDesired_[0], amountsDesired_[1]);
+      pool.mint(address(this), lowerTick, upperTick, newLiquidity, "");
+      liquidityOut = uint(newLiquidity);
+      totalLiquidityNew = totalLiquidity + newLiquidity;
+      if (_depositorSwapTokens) {
+        (amountsConsumed[0], amountsConsumed[1]) = (amountsConsumed[1], amountsConsumed[0]);
       }
-      (v.fee0, v.fee1) = getFees(state);
     }
 
-    // check claimable amounts and compare with thresholds
-    if (state.pair.depositorSwapTokens) {
-      (v.fee0, v.fee1) = (v.fee1, v.fee0);
-    }
-
-    v.fee0 += IERC20(v.tokenA).balanceOf(h);
-    v.fee1 += IERC20(v.tokenB).balanceOf(h);
-
-    IPriceOracle oracle = AppLib._getPriceOracle(converter);
-    uint priceA = oracle.getAssetPrice(v.tokenA);
-    uint priceB = oracle.getAssetPrice(v.tokenB);
-
-    uint fee0USD = v.fee0 * priceA / 1e18;
-    uint fee1USD = v.fee1 * priceB / 1e18;
-
-    return
-      fee0USD > HARD_WORK_USD_FEE_THRESHOLD
-      || fee1USD > HARD_WORK_USD_FEE_THRESHOLD
-      || v.rewardInTermOfTokenA * priceA / 1e18 > HARD_WORK_USD_FEE_THRESHOLD
-      || v.bonusRewardInTermOfTokenA * priceA / 1e18 > HARD_WORK_USD_FEE_THRESHOLD
-    ;
+    return (amountsConsumed, liquidityOut, totalLiquidityNew);
   }
 
-  function claimRewards(State storage state) external returns (
+  //endregion ------------------------------------------------ Join the pool
+
+  //region ------------------------------------------------ Exit from the pool
+  /// @notice Exit the pool and collect tokens proportional to the liquidity amount to exit.
+  /// @param pairState The State storage object.
+  /// @param liquidityAmountToExit The amount of liquidity to exit.
+  /// @return amountsOut An array containing the collected amounts for each token in the pool.
+  function exit(
+    PairBasedStrategyLogicLib.PairState storage pairState,
+    uint128 liquidityAmountToExit
+  ) external returns (uint[] memory amountsOut) {
+    IPancakeV3Pool pool = IPancakeV3Pool(pairState.pool);
+    int24 lowerTick = pairState.lowerTick;
+    int24 upperTick = pairState.upperTick;
+    uint128 liquidity = pairState.totalLiquidity;
+    bool _depositorSwapTokens = pairState.depositorSwapTokens;
+
+    require(liquidity >= liquidityAmountToExit, PancakeStrategyErrors.WRONG_LIQUIDITY);
+
+    amountsOut = new uint[](2);
+    (amountsOut[0], amountsOut[1]) = pool.burn(lowerTick, upperTick, liquidityAmountToExit);
+
+    // all fees will be collected but not returned in amountsOut
+    pool.collect(address(this), lowerTick, upperTick, type(uint128).max, type(uint128).max);
+
+    pairState.totalLiquidity = liquidity - liquidityAmountToExit;
+
+    if (_depositorSwapTokens) {
+      (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
+    }
+  }
+  //endregion ------------------------------------------------ Exit from the pool
+
+  //region ------------------------------------------------ Claims
+  /// @notice Claim rewards from the Uniswap V3 pool.
+  /// @return tokensOut An array containing tokenA and tokenB.
+  /// @return amountsOut An array containing the amounts of token0 and token1 claimed as rewards.
+  function claimRewards(PairBasedStrategyLogicLib.PairState storage pairState) external returns (
     address[] memory tokensOut,
     uint[] memory amountsOut,
     uint[] memory balancesBefore
   ) {
-    address strategyProfitHolder = state.pair.strategyProfitHolder;
-    uint tokenId = state.tokenId;
-    tokensOut = new address[](4);
-    tokensOut[0] = state.pair.tokenA;
-    tokensOut[1] = state.pair.tokenB;
-    tokensOut[2] = state.rewardToken;
-    tokensOut[3] = state.bonusRewardToken;
+    address strategyProfitHolder = pairState.strategyProfitHolder;
+    IPancakeV3Pool pool = IPancakeV3Pool(pairState.pool);
+    int24 lowerTick = pairState.lowerTick;
+    int24 upperTick = pairState.upperTick;
+    tokensOut = new address[](2);
+    tokensOut[0] = pairState.tokenA;
+    tokensOut[1] = pairState.tokenB;
 
-    balancesBefore = new uint[](4);
+    balancesBefore = new uint[](2);
     for (uint i; i < tokensOut.length; i++) {
       balancesBefore[i] = IERC20(tokensOut[i]).balanceOf(address(this));
     }
 
-    amountsOut = new uint[](4);
-    if (tokenId > 0 && state.pair.totalLiquidity > 0) {
-      (amountsOut[0], amountsOut[1]) = FARMING_CENTER.collect(IPancakeNonfungiblePositionManager.CollectParams(tokenId, address(this), type(uint128).max, type(uint128).max));
+    amountsOut = new uint[](2);
+    if (pairState.totalLiquidity > 0) {
+      pool.burn(lowerTick, upperTick, 0);
+      (amountsOut[0], amountsOut[1]) = pool.collect(
+        address(this),
+        lowerTick,
+        upperTick,
+        type(uint128).max,
+        type(uint128).max
+      );
+    }
 
-      emit PancakeFeesClaimed(amountsOut[0], amountsOut[1]);
+    emit UniV3FeesClaimed(amountsOut[0], amountsOut[1]);
 
-      if (state.pair.depositorSwapTokens) {
-        (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
-      }
-
-      (amountsOut[2], amountsOut[3]) = _collectRewards(getIncentiveKey(state), tokenId);
-      amountsOut[2] = _claimRewards(tokensOut[2], address(0), amountsOut[2]);
-      amountsOut[3] = _claimRewards(tokensOut[3], address(0), amountsOut[3]);
-
-      emit PancakeRewardsClaimed(amountsOut[2], amountsOut[3]);
+    if (pairState.depositorSwapTokens) {
+      (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
     }
 
     for (uint i; i < tokensOut.length; ++i) {
@@ -460,6 +312,46 @@ library PancakeConverterStrategyLogicLib {
         amountsOut[i] += b;
       }
     }
+  }
+
+  function isReadyToHardWork(PairBasedStrategyLogicLib.PairState storage pairState, ITetuConverter converter) external view returns (
+    bool isReady
+  ) {
+    // check claimable amounts and compare with thresholds
+    (uint fee0, uint fee1) = getFees(pairState);
+
+    if (pairState.depositorSwapTokens) {
+      (fee0, fee1) = (fee1, fee0);
+    }
+
+    address tokenA = pairState.tokenA;
+    address tokenB = pairState.tokenB;
+    address h = pairState.strategyProfitHolder;
+
+    fee0 += IERC20(tokenA).balanceOf(h);
+    fee1 += IERC20(tokenB).balanceOf(h);
+
+    IPriceOracle oracle = AppLib._getPriceOracle(converter);
+    uint priceA = oracle.getAssetPrice(tokenA);
+    uint priceB = oracle.getAssetPrice(tokenB);
+
+    uint fee0USD = fee0 * priceA / 1e18;
+    uint fee1USD = fee1 * priceB / 1e18;
+
+    return fee0USD > HARD_WORK_USD_FEE_THRESHOLD || fee1USD > HARD_WORK_USD_FEE_THRESHOLD;
+  }
+
+  function sendFeeToProfitHolder(PairBasedStrategyLogicLib.PairState storage pairState, uint fee0, uint fee1) external {
+    address strategyProfitHolder = pairState.strategyProfitHolder;
+    require(strategyProfitHolder != address (0), PancakeStrategyErrors.ZERO_PROFIT_HOLDER);
+    if (pairState.depositorSwapTokens) {
+      IERC20(pairState.tokenA).safeTransfer(strategyProfitHolder, fee1);
+      IERC20(pairState.tokenB).safeTransfer(strategyProfitHolder, fee0);
+    } else {
+      IERC20(pairState.tokenA).safeTransfer(strategyProfitHolder, fee0);
+      IERC20(pairState.tokenB).safeTransfer(strategyProfitHolder, fee1);
+    }
+    emit UniV3FeesClaimed(fee0, fee1);
   }
 
   function calcEarned(address asset, address controller, address[] memory rewardTokens, uint[] memory amounts) external view returns (uint) {
@@ -477,47 +369,9 @@ library PancakeConverterStrategyLogicLib {
 
     return earned;
   }
-
-  /// @notice Claim rewards if any, send them to {strategyProfitHolder} if !skipTransfer, hide exceptions
-  /// @param to Transfer rewards to {to}, skip transfer if 0
-  function _claimRewards(address token, address to, uint rewardAmount) internal returns (uint rewardOut) {
-    if (rewardAmount != 0) {
-      try FARMING_CENTER.claimReward(
-        token, address(this), 0, rewardAmount
-      ) returns (uint /*reward*/) {
-        // if previous calls of claimReward were failed and current call is successful,
-        // we can receive reward > rewardAmount here but we will receive only rewardAmount on the balance.
-        // Most probably it's enough to transfer min(rewardAmount, reward) but it's more reliable to check balance
-        if (to != address(0)) {
-          rewardOut = Math.min(rewardAmount, IERC20(token).balanceOf(address(this)));
-          if (rewardOut != 0) {
-            IERC20(token).safeTransfer(to, rewardOut);
-          }
-        }
-      } catch {
-        // an exception in reward-claiming shouldn't stop hardwork / withdraw
-      }
-    }
-
-    return rewardOut;
-  }
-
-  /// @notice Collect rewards, hide exceptions
-  function _collectRewards(IncentiveKey memory key, uint tokenId) internal returns (uint reward, uint bonusReward) {
-    try FARMING_CENTER.collectRewards(
-      key, tokenId
-    ) returns (uint rewardAmount, uint bonusRewardAmount) {
-      (reward, bonusReward) = (rewardAmount, bonusRewardAmount);
-    } catch {
-      // an exception in reward-claiming shouldn't stop hardwork / withdraw
-    }
-
-    return (reward, bonusReward);
-  }
-  //endregion ------------------------------------------------ Rewards
+  //endregion ------------------------------------------------ Claims
 
   //region ------------------------------------------------ Rebalance
-
   /// @notice Determine if the strategy needs to be rebalanced.
   /// @return needRebalance A boolean indicating if {rebalanceNoSwaps} should be called
   function needStrategyRebalance(PairBasedStrategyLogicLib.PairState storage pairState, ITetuConverter converter_) external view returns (
@@ -537,8 +391,8 @@ library PancakeConverterStrategyLogicLib {
 
   /// @notice Make rebalance without swaps (using borrowing only).
   /// @param converterLiquidator [TetuConverter, TetuLiquidator]
-  /// @param checkNeedRebalance_ True if the function should ensure that the rebalance is required
   /// @param totalAssets_ Current value of totalAssets()
+  /// @param checkNeedRebalance_ True if the function should ensure that the rebalance is required
   /// @return tokenAmounts Token amounts for deposit. If length == 0 - rebalance wasn't made and no deposit is required.
   function rebalanceNoSwaps(
     IConverterStrategyBase.ConverterStrategyBaseState storage csbs,
@@ -557,12 +411,7 @@ library PancakeConverterStrategyLogicLib {
     v.poolPrice = PancakeLib.getPrice(address(v.pool), pairState.tokenB) * v.poolPriceAdjustment;
     bool needRebalance;
     int24 tick = PancakeDebtLib.getCurrentTick(v.pool);
-    (needRebalance, v.fuseStatusChangedAB, v.fuseStatusAB) = PairBasedStrategyLogicLib.needStrategyRebalance(
-      pairState,
-      v.converter,
-      tick,
-      v.poolPrice
-    );
+    (needRebalance,v.fuseStatusChangedAB, v.fuseStatusAB) = PairBasedStrategyLogicLib.needStrategyRebalance(pairState, v.converter, tick, v.poolPrice);
 
     // update fuse status if necessary
     if (needRebalance) {
@@ -578,7 +427,6 @@ library PancakeConverterStrategyLogicLib {
 
       uint loss;
       (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmountsPair(v.converter, totalAssets_, v.tokenA, v.tokenB, v.liquidationThresholdsAB);
-
       if (loss != 0) {
         ConverterStrategyBaseLib2.coverLossAndCheckResults(csbs, splitter, loss);
       }
@@ -604,7 +452,7 @@ library PancakeConverterStrategyLogicLib {
     v.liquidationThresholdsAB[0] = AppLib._getLiquidationThreshold(liquidityThresholds_[v.tokenA]);
     v.liquidationThresholdsAB[1] = AppLib._getLiquidationThreshold(liquidityThresholds_[v.tokenB]);
     uint poolPriceDecimals = IERC20Metadata(v.tokenA).decimals();
-    v.poolPriceAdjustment = poolPriceDecimals < 18 ? 10**(18 - poolPriceDecimals) : 1;
+    v.poolPriceAdjustment = poolPriceDecimals < 18 ? 10 ** (18 - poolPriceDecimals) : 1;
   }
 
   /// @notice Get proportion of not-underlying in the pool, [0...1e18]
@@ -622,6 +470,7 @@ library PancakeConverterStrategyLogicLib {
   //endregion ------------------------------------------------ Rebalance
 
   //region ------------------------------------------------ WithdrawByAgg
+  /// @notice Calculate amounts to be deposited to pool, update pairState.lower/upperTick, fix loss / profitToCover
   /// @param addr_ [tokenToSwap, aggregator, controller, converter, splitter]
   /// @param values_ [amountToSwap_, profitToCover, oldTotalAssets, entryToPool]
   /// @return completed All debts were closed, leftovers were swapped to proper proportions
@@ -638,26 +487,33 @@ library PancakeConverterStrategyLogicLib {
     bool completed,
     uint[] memory tokenAmountsOut
   ) {
+    uint entryToPool = values_[3];
     address[2] memory tokens = [pairState.tokenA, pairState.tokenB];
 
     // Calculate amounts to be deposited to pool, calculate loss, fix profitToCover
     uint[] memory tokenAmounts;
     uint loss;
-    (completed, tokenAmounts, loss) = PairBasedStrategyLogicLib.withdrawByAggStep(addr_, values_, swapData, planEntryData, tokens, liquidationThresholds);
+    (completed, tokenAmounts, loss) = PairBasedStrategyLogicLib.withdrawByAggStep(
+      addr_,
+      values_,
+      swapData,
+      planEntryData,
+      tokens,
+      liquidationThresholds
+    );
 
     // cover loss
     if (loss != 0) {
       ConverterStrategyBaseLib2.coverLossAndCheckResults(
         csbs,
-        addr_[4], // splitter
+        addr_[4],
         loss
       );
     }
     emit RebalancedDebt(loss, values_[1], 0);
 
-    // uint entryToPool = values_[3];
-    if (values_[3] == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
-      || (values_[3] == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
+    if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
+      || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
     ) {
       // We are going to enter to the pool: update lowerTick and upperTick, initialize tokenAmountsOut
       (pairState.lowerTick, pairState.upperTick) = PancakeDebtLib._calcNewTickRange(
@@ -668,10 +524,8 @@ library PancakeConverterStrategyLogicLib {
       );
       tokenAmountsOut = tokenAmounts;
     }
-
     return (completed, tokenAmountsOut); // hide warning
   }
   //endregion ------------------------------------------------ WithdrawByAgg
 
 }
-

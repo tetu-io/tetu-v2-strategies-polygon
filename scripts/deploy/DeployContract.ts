@@ -61,6 +61,16 @@ const libraries = new Map<string, string[]>([
 
   // Tetu converter (for debug)
   ['TetuConverter', ['TetuConverterLogicLib']],
+  // Pancake
+  [
+    'PancakeConverterStrategy',
+    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'PancakeConverterStrategyLogicLib', 'PairBasedStrategyLib', 'PairBasedStrategyLogicLib'],
+  ],
+  ['PancakeConverterStrategyLogicLib', ['PancakeLib', 'PancakeDebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib', 'PairBasedStrategyLib']],
+  ['PancakeDebtLib', ['PancakeLib', 'ConverterStrategyBaseLib2', 'BorrowLib', 'PairBasedStrategyLogicLib']],
+  ['PancakeLibFacade', ['PancakeLib']],
+  ['PancakeDebtLibFacade', ['PancakeLib']],
+  ['PancakeConverterStrategyLogicLibFacade', ['PancakeConverterStrategyLogicLib']],
 ]);
 
 export async function deployContractSilently<T extends ContractFactory>(

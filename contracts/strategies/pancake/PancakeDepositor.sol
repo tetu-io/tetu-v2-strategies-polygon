@@ -2,50 +2,55 @@
 pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Initializable.sol";
-import "../DepositorBase.sol";
 import "./PancakeStrategyErrors.sol";
 import "./PancakeConverterStrategyLogicLib.sol";
+import "../DepositorBase.sol";
+import "../../integrations/pancake/IPancakeV3MintCallback.sol";
 
-
-abstract contract PancakeDepositor is DepositorBase, Initializable {
+/// @title PancakeDepositor
+/// @dev Abstract contract that is designed to interact with Uniswap V3 pools and manage liquidity.
+///      Inherits from IPancakeMintCallback, DepositorBase, and Initializable.
+abstract contract PancakeDepositor is IPancakeV3MintCallback, DepositorBase, Initializable {
   using SafeERC20 for IERC20;
 
-  //region  -------------------------------------------- Constants
+  /////////////////////////////////////////////////////////////////////
+  ///                CONSTANTS
+  /////////////////////////////////////////////////////////////////////
 
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant PANCAKE_DEPOSITOR_VERSION = "1.0.0";
 
   uint internal constant IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_A = 0;
   uint internal constant IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_B = 1;
-  uint internal constant IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_RT = 2;
-  uint internal constant IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_BRT = 3;
-  //endregion  -------------------------------------------- Constants
 
-  //region  -------------------------------------------- Variables
+  /////////////////////////////////////////////////////////////////////
+  ///                VARIABLES
+  /////////////////////////////////////////////////////////////////////
+
   /// @dev State variable to store the current state of the whole strategy
   PancakeConverterStrategyLogicLib.State internal state;
 
   /// @dev reserve space for future needs
-  uint[100 - 65] private __gap; // todo calc gap
-  //endregion  -------------------------------------------- Variables
+  uint[100 - 60] private __gap;
 
-  //region  -------------------------------------------- View
-  /// @return nums Balances of [tokenA, tokenB, rewardToken, bonusRewardToken] for profit holder
+  /////////////////////////////////////////////////////////////////////
+  ///                       View
+  /////////////////////////////////////////////////////////////////////
+
+  /// @return nums Balances of [tokenA, tokenB] for profit holder
   function getSpecificState() external view returns (
     uint[] memory nums
   ) {
-    address profitHolder = state.pair.strategyProfitHolder;
-    nums = new uint[](4);
-    nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_A] = IERC20(state.pair.tokenA).balanceOf(profitHolder);
-    nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_B] = IERC20(state.pair.tokenB).balanceOf(profitHolder);
-    nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_RT] = IERC20(state.rewardToken).balanceOf(profitHolder);
-    nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_BRT] = IERC20(state.bonusRewardToken).balanceOf(profitHolder); // todo
+    address strategyProfitHolder = state.pair.strategyProfitHolder;
+    nums = new uint[](2);
+    nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_A] = IERC20(state.pair.tokenA).balanceOf(strategyProfitHolder);
+    nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_B] = IERC20(state.pair.tokenB).balanceOf(strategyProfitHolder);
   }
 
   /// @notice Returns the fees for the current state.
   /// @return fee0 and fee1.
   function getFees() public view returns (uint fee0, uint fee1) {
-    return PancakeConverterStrategyLogicLib.getFees(state);
+    return PancakeConverterStrategyLogicLib.getFees(state.pair);
   }
 
   /// @notice Returns the pool assets.
@@ -82,12 +87,41 @@ abstract contract PancakeDepositor is DepositorBase, Initializable {
   function _depositorTotalSupply() override internal view virtual returns (uint) {
     return uint(state.pair.totalLiquidity);
   }
-  //endregion  -------------------------------------------- View
 
-  //region  -------------------------------------------- Enter, exit
+  /////////////////////////////////////////////////////////////////////
+  ///                CALLBACK
+  /////////////////////////////////////////////////////////////////////
+
+  /// @notice Callback function called by Uniswap V3 pool on mint operation.
+  /// @param amount0Owed The amount of token0 owed to the pool.
+  /// @param amount1Owed The amount of token1 owed to the pool.
+  function pancakeV3MintCallback(
+    uint amount0Owed,
+    uint amount1Owed,
+    bytes calldata /*_data*/
+  ) external override {
+    require(msg.sender == state.pair.pool, PancakeStrategyErrors.NOT_CALLBACK_CALLER);
+    if (amount0Owed != 0) IERC20(state.pair.depositorSwapTokens ? state.pair.tokenB : state.pair.tokenA).safeTransfer(msg.sender, amount0Owed);
+    if (amount1Owed != 0) IERC20(state.pair.depositorSwapTokens ? state.pair.tokenA : state.pair.tokenB).safeTransfer(msg.sender, amount1Owed);
+  }
+
+  /////////////////////////////////////////////////////////////////////
+  ///             Enter, exit
+  /////////////////////////////////////////////////////////////////////
+
   /// @notice Handles the deposit operation.
-  function _depositorEnter(uint[] memory amountsDesired_) override internal virtual returns (uint[] memory amountsConsumed, uint liquidityOut) {
-    (amountsConsumed, liquidityOut) = PancakeConverterStrategyLogicLib.enter(state, amountsDesired_);
+  function _depositorEnter(uint[] memory amountsDesired_) override internal virtual returns (
+    uint[] memory amountsConsumed,
+    uint liquidityOut
+  ) {
+    (amountsConsumed, liquidityOut, state.pair.totalLiquidity) = PancakeConverterStrategyLogicLib.enter(
+      IPancakeV3Pool(state.pair.pool),
+      state.pair.lowerTick,
+      state.pair.upperTick,
+      amountsDesired_,
+      state.pair.totalLiquidity,
+      state.pair.depositorSwapTokens
+    );
   }
 
   /// @notice Handles the withdrawal operation.
@@ -95,18 +129,28 @@ abstract contract PancakeDepositor is DepositorBase, Initializable {
   /// @param emergency Emergency exit (only withdraw, don't claim any rewards or make any other additional actions)
   /// @return amountsOut The amounts of the tokens withdrawn.
   function _depositorExit(uint liquidityAmount, bool emergency) override internal virtual returns (uint[] memory amountsOut) {
-    amountsOut = PancakeConverterStrategyLogicLib.exit(state, uint128(liquidityAmount), emergency);
+    uint fee0;
+    uint fee1;
+    if (! emergency) {
+      (fee0, fee1) = getFees();
+    }
+    amountsOut = PancakeConverterStrategyLogicLib.exit(state.pair, uint128(liquidityAmount));
+    if (! emergency) {
+      PancakeConverterStrategyLogicLib.sendFeeToProfitHolder(state.pair, fee0, fee1);
+    }
   }
 
   /// @notice Returns the amount of tokens that would be withdrawn based on the provided liquidity amount.
   /// @param liquidityAmount The amount of liquidity to quote the withdrawal for.
-  /// @return amountsOut The amounts of the tokens that would be withdrawn.
+  /// @return amountsOut The amounts of the tokens that would be withdrawn, underlying is first
   function _depositorQuoteExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
     amountsOut = PancakeConverterStrategyLogicLib.quoteExit(state.pair, uint128(liquidityAmount));
   }
-  //endregion  -------------------------------------------- Enter, exit
 
-  //region  -------------------------------------------- Claim rewards
+  /////////////////////////////////////////////////////////////////////
+  ///             Claim rewards
+  /////////////////////////////////////////////////////////////////////
+
   /// @notice Claims all possible rewards.
   /// @return tokensOut An array containing the addresses of the reward tokens,
   /// @return amountsOut An array containing the amounts of the reward tokens.
@@ -115,7 +159,6 @@ abstract contract PancakeDepositor is DepositorBase, Initializable {
     uint[] memory amountsOut,
     uint[] memory balancesBefore
   ) {
-    return PancakeConverterStrategyLogicLib.claimRewards(state);
+    (tokensOut, amountsOut, balancesBefore) = PancakeConverterStrategyLogicLib.claimRewards(state.pair);
   }
-  //endregion  -------------------------------------------- Claim rewards
 }

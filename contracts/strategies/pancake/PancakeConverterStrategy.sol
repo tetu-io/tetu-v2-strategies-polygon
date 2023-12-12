@@ -4,12 +4,16 @@ pragma solidity 0.8.17;
 import "../ConverterStrategyBase.sol";
 import "./PancakeDepositor.sol";
 import "./PancakeConverterStrategyLogicLib.sol";
+import "./PancakeStrategyErrors.sol";
 import "../../libs/AppPlatforms.sol";
 import "../../interfaces/IRebalancingV2Strategy.sol";
 import "../pair/PairBasedStrategyLib.sol";
-import "./PancakeStrategyErrors.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
 
+/// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for Pancake
+/// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
+///         by utilizing fill-up and swap methods depending on the range size of the liquidity provided.
+/// @author a17
 contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IRebalancingV2Strategy {
 
   //region ------------------------------------------------- Constants
@@ -29,29 +33,26 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
   /// @param pool_ The address of the pool.
   /// @param tickRange_ The tick range for the liquidity position.
   /// @param rebalanceTickRange_ The tick range for rebalancing.
+  /// @param fuseThresholds Price thresholds for tokens [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
   function init(
     address controller_,
     address splitter_,
     address converter_,
     address pool_,
-    int24 tickRange_, // todo
-    int24 rebalanceTickRange_, // todo
-    bool isStablePool,// todo
-    IncentiveKey memory key, // todo
+    int24 tickRange_,
+    int24 rebalanceTickRange_,
     uint[4] calldata fuseThresholds
   ) external initializer {
     __ConverterStrategyBase_init(controller_, splitter_, converter_);
     PancakeConverterStrategyLogicLib.initStrategyState(
       state,
-      [controller_, pool_],
+      controller_,
+      pool_,
       tickRange_,
       rebalanceTickRange_,
       ISplitter(splitter_).asset(),
-      isStablePool,
       fuseThresholds
     );
-
-    PancakeConverterStrategyLogicLib.initFarmingState(state, key);
 
     // setup specific name for UI
     StrategyLib2._changeStrategySpecificName(baseState, PancakeConverterStrategyLogicLib.createSpecificName(state.pair));
@@ -78,6 +79,8 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
     PairBasedStrategyLib.setFuseThresholds(state.pair.fuseAB, values);
   }
 
+  /// @dev Set a dedicated contract for rewards for properly counting.
+  ///      It is safe to allow change it to operator - we suppose the contract only temporally store the last rewards.
   function setStrategyProfitHolder(address strategyProfitHolder) external {
     StrategyLib2.onlyOperators(controller());
     state.pair.strategyProfitHolder = strategyProfitHolder;
@@ -101,12 +104,12 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
   function isReadyToHardWork() override external virtual view returns (bool) {
     return !needRebalance()
     && !_isFuseTriggeredOn()
-    && PancakeConverterStrategyLogicLib.isReadyToHardWork(state, _csbs.converter, controller());
+    && PancakeConverterStrategyLogicLib.isReadyToHardWork(state.pair, _csbs.converter);
   }
 
   /// @notice Check if the strategy needs rebalancing.
-  /// @return A boolean indicating if the strategy needs rebalancing.
-  function needRebalance() public view returns (bool) {
+  /// @return A boolean indicating if {rebalanceNoSwaps} should be called.
+  function needRebalance() public view override returns (bool) {
     return PancakeConverterStrategyLogicLib.needStrategyRebalance(state.pair, _csbs.converter);
   }
 
@@ -115,7 +118,7 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
   /// @return tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
   /// @return nums [totalLiquidity, fuse-status-tokenA, fuse-status-tokenB, withdrawDone, 4 thresholds of token A, 4 thresholds of token B]
   /// @return boolValues [isStablePool, depositorSwapTokens]
-  function getDefaultState() external override view returns (
+  function getDefaultState() external view override returns (
     address[] memory addr,
     int24[] memory tickData,
     uint[] memory nums,
@@ -123,27 +126,12 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
   ) {
     return PairBasedStrategyLogicLib.getDefaultState(state.pair);
   }
-
   //endregion ---------------------------------------------- METRIC VIEWS
 
-  //region --------------------------------------------- CALLBACKS
-
-  function onERC721Received( // todo
-    address,
-    address,
-    uint256,
-    bytes memory
-  ) external pure returns (bytes4) {
-    return this.onERC721Received.selector;
-  }
-
-  //endregion --------------------------------------------- CALLBACKS
-
   //region--------------------------------------------- REBALANCE
-
   /// @notice Rebalance using borrow/repay only, no swaps
   /// @param checkNeedRebalance Revert if rebalance is not needed. Pass false to deposit after withdrawByAgg-iterations
-  function rebalanceNoSwaps(bool checkNeedRebalance) external {
+  function rebalanceNoSwaps(bool checkNeedRebalance) external override {
     address _controller = controller();
     StrategyLib2.onlyOperators(_controller);
 
@@ -206,13 +194,14 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
     bytes memory planEntryData,
     uint entryToPool
   ) external returns (bool completed) {
-    // restriction "operator only" is checked inside UniswapV3ConverterStrategyLogicLib.withdrawByAggStep
+    // restriction "operator only" is checked inside PancakeConverterStrategyLogicLib.withdrawByAggStep
 
     // fix price changes, exit from the pool
     (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
 
     // check "operator only", make withdraw step, cover-loss, send profit to cover, prepare to enter to the pool
     uint[] memory tokenAmounts;
+
     (completed, tokenAmounts) = PancakeConverterStrategyLogicLib.withdrawByAggStep(
       _csbs,
       [tokenToSwap_, aggregator_, controller(), address(_csbs.converter), baseState.splitter],
@@ -235,13 +224,15 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
     ConverterStrategyBaseLib2.fixTooHighInvestedAssets(baseState.asset, oldTotalAssets, _csbs);
   }
 
-  function getPropNotUnderlying18() external view returns (uint) {
+  /// @notice Calculate proportions of [underlying, not-underlying] required by the internal pool of the strategy
+  /// @return Proportion of the not-underlying [0...1e18]
+  function getPropNotUnderlying18() external view override returns (uint) {
     return PancakeConverterStrategyLogicLib.getPropNotUnderlying18(state.pair);
   }
-
   //endregion ------------------------------------ Withdraw by iterations
 
   //region--------------------------------------------- INTERNAL LOGIC
+
   function _beforeDeposit(
     ITetuConverter converter_,
     uint amount_,
@@ -252,7 +243,7 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
   ) {
     require(!needRebalance(), PancakeStrategyErrors.NEED_REBALANCE);
     (uint prop0, uint prop1) = PancakeConverterStrategyLogicLib.getEntryDataProportions(
-      IPancakePool(state.pair.pool),
+      IPancakeV3Pool(state.pair.pool),
       state.pair.lowerTick,
       state.pair.upperTick,
       state.pair.depositorSwapTokens
@@ -276,8 +267,8 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
   }
 
   /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
-  /// @return earned The amount of earned rewards.
-  /// @return lost The amount of lost rewards.
+  /// @return earned The amount of earned rewards
+  /// @return lost The amount of lost rewards
   /// @return assetBalanceAfterClaim The asset balance after claiming rewards.
   /// @return paidDebtToInsurance Earned amount spent on debt-to-insurance payment
   function _handleRewards() override internal virtual returns (
@@ -287,9 +278,11 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
     uint paidDebtToInsurance
   ) {
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
-    earned = PancakeConverterStrategyLogicLib.calcEarned(state.pair.tokenA, controller(), rewardTokens, amounts);
+    address asset = baseState.asset;
+    earned = PancakeConverterStrategyLogicLib.calcEarned(asset, controller(), rewardTokens, amounts);
     paidDebtToInsurance = _rewardsLiquidation(rewardTokens, amounts);
-    return (earned, lost, AppLib.balance(baseState.asset), paidDebtToInsurance);
+    lost = 0; // hide warning
+    assetBalanceAfterClaim = AppLib.balance(asset);
   }
 
   /// @notice Deposit given amount to the pool.
@@ -299,7 +292,7 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     uint strategyLoss
   ) {
-    if (PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB.status)) {
+    if (_isFuseTriggeredOn()) {
       uint[] memory tokenAmounts = new uint[](2);
       tokenAmounts[0] = amount_;
       emit OnDepositorEnter(tokenAmounts, tokenAmounts);
@@ -322,7 +315,7 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
     return false;
   }
 
-  /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit
+  /// @notice Prepare to rebalance: fix price changes, call depositor exit if totalLiquidity != 0
   function _rebalanceBefore() internal returns (uint profitToCover, uint oldTotalAssets) {
     (, profitToCover) = _fixPriceChanges(true);
     oldTotalAssets = totalAssets() - profitToCover;

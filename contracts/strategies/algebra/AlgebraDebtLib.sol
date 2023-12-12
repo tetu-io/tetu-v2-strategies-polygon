@@ -5,9 +5,7 @@ import "../ConverterStrategyBaseLib.sol";
 import "../ConverterStrategyBaseLib2.sol";
 import "./AlgebraLib.sol";
 import "./AlgebraStrategyErrors.sol";
-import "./AlgebraConverterStrategyLogicLib.sol";
 import "../../libs/BorrowLib.sol";
-import "../pair/PairBasedStrategyLib.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
 
 library AlgebraDebtLib {

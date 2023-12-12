@@ -1,17 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.17;
 
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV2.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
 import "./UniswapV3Lib.sol";
 import "./Uni3StrategyErrors.sol";
-import "./UniswapV3ConverterStrategyLogicLib.sol";
-import "../ConverterStrategyBaseLib.sol";
-import "../ConverterStrategyBaseLib2.sol";
 import "../../libs/BorrowLib.sol";
-import "../../interfaces/IPairBasedStrategyReaderAccess.sol";
-import "../pair/PairBasedStrategyLib.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
 
 library UniswapV3DebtLib {
