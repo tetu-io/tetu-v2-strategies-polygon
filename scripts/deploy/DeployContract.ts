@@ -70,7 +70,7 @@ const libraries = new Map<string, string[]>([
   ['PancakeDebtLib', ['PancakeLib', 'ConverterStrategyBaseLib2', 'BorrowLib', 'PairBasedStrategyLogicLib']],
   ['PancakeLibFacade', ['PancakeLib']],
   ['PancakeDebtLibFacade', ['PancakeLib']],
-  ['PancakeConverterStrategyLogicLibFacade', ['PancakeConverterStrategyLogicLib']],
+  ['PancakeConverterStrategyLogicLibFacade', ['PancakeConverterStrategyLogicLib', 'PairBasedStrategyLogicLib']],
 ]);
 
 export async function deployContractSilently<T extends ContractFactory>(

@@ -34,6 +34,7 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
   /// @param tickRange_ The tick range for the liquidity position.
   /// @param rebalanceTickRange_ The tick range for rebalancing.
   /// @param fuseThresholds Price thresholds for tokens [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
+  /// @param chef_ MasterChefV3
   function init(
     address controller_,
     address splitter_,
@@ -41,13 +42,13 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
     address pool_,
     int24 tickRange_,
     int24 rebalanceTickRange_,
-    uint[4] calldata fuseThresholds
+    uint[4] calldata fuseThresholds,
+    address chef_
   ) external initializer {
     __ConverterStrategyBase_init(controller_, splitter_, converter_);
     PancakeConverterStrategyLogicLib.initStrategyState(
       state,
-      controller_,
-      pool_,
+      [controller_, pool_, chef_],
       tickRange_,
       rebalanceTickRange_,
       ISplitter(splitter_).asset(),

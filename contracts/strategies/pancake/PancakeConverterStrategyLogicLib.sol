@@ -34,7 +34,8 @@ library PancakeConverterStrategyLogicLib {
   //region ------------------------------------------------ Events
   event Rebalanced(uint loss, uint profitToCover, uint coveredByRewards);
   event RebalancedDebt(uint loss, uint profitToCover, uint coveredByRewards);
-  event UniV3FeesClaimed(uint fee0, uint fee1);
+  event PancakeFeesClaimed(uint fee0, uint fee1);
+  event PancakeRewardsClaimed(uint amount);
   //endregion ------------------------------------------------ Events
 
   //region ------------------------------------------------ Data types
@@ -102,43 +103,52 @@ library PancakeConverterStrategyLogicLib {
     return pool.fee() == 100;
   }
 
+  /// @param controllerPoolChef [controller, pool, master chef v3]
   /// @param fuseThresholds Fuse thresholds for tokens (stable pool only)
   function initStrategyState(
     State storage state,
-    address controller_,
-    address pool,
+    address[3] memory controllerPoolChef,
     int24 tickRange,
     int24 rebalanceTickRange,
     address asset_,
     uint[4] calldata fuseThresholds
   ) external {
-    require(pool != address(0), AppErrors.ZERO_ADDRESS);
-    address token0 = IPancakeV3Pool(pool).token0();
-    address token1 = IPancakeV3Pool(pool).token1();
+    require(controllerPoolChef[1] != address(0), AppErrors.ZERO_ADDRESS);
+    address token0 = IPancakeV3Pool(controllerPoolChef[1]).token0();
+    address token1 = IPancakeV3Pool(controllerPoolChef[1]).token1();
 
     int24[4] memory tickData;
     {
-      int24 tickSpacing = PancakeLib.getTickSpacing(IPancakeV3Pool(pool).fee());
+      int24 tickSpacing = PancakeLib.getTickSpacing(IPancakeV3Pool(controllerPoolChef[1]).fee());
       if (tickRange != 0) {
         require(tickRange == tickRange / tickSpacing * tickSpacing, PairBasedStrategyLib.INCORRECT_TICK_RANGE);
         require(rebalanceTickRange == rebalanceTickRange / tickSpacing * tickSpacing, PairBasedStrategyLib.INCORRECT_REBALANCE_TICK_RANGE);
       }
       tickData[0] = tickSpacing;
-      (tickData[1], tickData[2]) = PancakeDebtLib.calcTickRange(pool, tickRange, tickSpacing);
+      (tickData[1], tickData[2]) = PancakeDebtLib.calcTickRange(controllerPoolChef[1], tickRange, tickSpacing);
       tickData[3] = rebalanceTickRange;
     }
 
+    IPancakeMasterChefV3 chef = IPancakeMasterChefV3(payable(controllerPoolChef[2]));
+    IPancakeNonfungiblePositionManager nft = IPancakeNonfungiblePositionManager(payable(chef.nonfungiblePositionManager()));
+    state.chef = chef;
+
     PairBasedStrategyLogicLib.setInitialDepositorValues(
       state.pair,
-      [pool, asset_, token0, token1],
+      [controllerPoolChef[1], asset_, token0, token1],
       tickData,
-      isStablePool(IPancakeV3Pool(pool)),
+      isStablePool(IPancakeV3Pool(controllerPoolChef[1])),
       fuseThresholds
     );
 
-    address liquidator = IController(controller_).liquidator();
+    address liquidator = IController(controllerPoolChef[0]).liquidator();
+
     IERC20(token0).approve(liquidator, type(uint).max);
     IERC20(token1).approve(liquidator, type(uint).max);
+    IERC20(token0).approve(address(nft), type(uint).max);
+    IERC20(token1).approve(address(nft), type(uint).max);
+    IERC20(token0).approve(address(chef), type(uint).max); // todo check
+    IERC20(token1).approve(address(chef), type(uint).max); // todo check
   }
 
   function createSpecificName(PairBasedStrategyLogicLib.PairState storage pairState) external view returns (string memory) {
@@ -237,6 +247,7 @@ library PancakeConverterStrategyLogicLib {
       upperTick: state.pair.upperTick,
       chef: state.chef
     });
+    console.log("enter.1");
     IPancakeNonfungiblePositionManager nft = IPancakeNonfungiblePositionManager(payable(vars.chef.nonfungiblePositionManager()));
 
     amountsConsumed = new uint[](2);
@@ -281,7 +292,7 @@ library PancakeConverterStrategyLogicLib {
           address(this),
           block.timestamp
         ));
-        console.log("enter.8");
+        console.log("enter.8.nft balance", nft.balanceOf(address(this)));
         state.tokenId = vars.tokenId;
         nft.safeTransferFrom(address(this), address(vars.chef), vars.tokenId);
         console.log("enter.9");
@@ -348,49 +359,73 @@ library PancakeConverterStrategyLogicLib {
   /// @notice Claim rewards from the Uniswap V3 pool.
   /// @return tokensOut An array containing tokenA and tokenB.
   /// @return amountsOut An array containing the amounts of token0 and token1 claimed as rewards.
-  function claimRewards(PairBasedStrategyLogicLib.PairState storage pairState) external returns (
+  function claimRewards(State storage state) external returns (
     address[] memory tokensOut,
     uint[] memory amountsOut,
     uint[] memory balancesBefore
   ) {
-    address strategyProfitHolder = pairState.strategyProfitHolder;
-    IPancakeV3Pool pool = IPancakeV3Pool(pairState.pool);
-    int24 lowerTick = pairState.lowerTick;
-    int24 upperTick = pairState.upperTick;
-    tokensOut = new address[](2);
-    tokensOut[0] = pairState.tokenA;
-    tokensOut[1] = pairState.tokenB;
+    console.log("claimRewards.1");
+    address strategyProfitHolder = state.pair.strategyProfitHolder;
+    console.log("claimRewards.2.strategyProfitHolder", strategyProfitHolder);
+    IPancakeMasterChefV3 chef = state.chef;
+    uint tokenId = state.tokenId;
+    console.log("claimRewards.3.tokenId", tokenId);
 
-    balancesBefore = new uint[](2);
+    tokensOut = new address[](3);
+    tokensOut[0] = state.pair.tokenA;
+    tokensOut[1] = state.pair.tokenB;
+    tokensOut[2] = chef.CAKE();
+    console.log("claimRewards.3.CAKE", tokensOut[2]);
+
+    balancesBefore = new uint[](3);
     for (uint i; i < tokensOut.length; i++) {
       balancesBefore[i] = IERC20(tokensOut[i]).balanceOf(address(this));
+      console.log("claimRewards.4.balancesBefore[i]", balancesBefore[i]);
     }
 
-    amountsOut = new uint[](2);
-    if (pairState.totalLiquidity > 0) {
-      pool.burn(lowerTick, upperTick, 0);
-      (amountsOut[0], amountsOut[1]) = pool.collect(
-        address(this),
-        lowerTick,
-        upperTick,
-        type(uint128).max,
-        type(uint128).max
-      );
-    }
+    amountsOut = new uint[](3);
+    if (tokenId != 0 && state.pair.totalLiquidity != 0) {
+      console.log("claimRewards.5.collect");
+      // get fees
+      chef.collect(INonfungiblePositionManagerStruct.CollectParams(tokenId, address(this), type(uint128).max, type(uint128).max));
+      emit PancakeFeesClaimed(amountsOut[0], amountsOut[1]);
+      console.log("claimRewards.6");
 
-    emit UniV3FeesClaimed(amountsOut[0], amountsOut[1]);
+      if (state.pair.depositorSwapTokens) {
+        (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
+      }
 
-    if (pairState.depositorSwapTokens) {
-      (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
-    }
+      console.log("claimRewards.7");
+      // claim rewards
+      _harvest(chef, tokenId);
 
-    for (uint i; i < tokensOut.length; ++i) {
-      uint b = IERC20(tokensOut[i]).balanceOf(strategyProfitHolder);
-      if (b > 0) {
-        IERC20(tokensOut[i]).transferFrom(strategyProfitHolder, address(this), b);
-        amountsOut[i] += b;
+      console.log("claimRewards.8");
+
+      amountsOut[2] = AppLib.sub0(IERC20(tokensOut[2]).balanceOf(address(this)), balancesBefore[2]);
+      if (amountsOut[2] != 0) {
+        emit PancakeRewardsClaimed(amountsOut[2]);
       }
     }
+    for (uint i; i < tokensOut.length; ++i) {
+      uint b = IERC20(tokensOut[i]).balanceOf(strategyProfitHolder);
+      if (b != 0) {
+        IERC20(tokensOut[i]).transferFrom(strategyProfitHolder, address(this), b);
+        amountsOut[i] += b;
+        console.log("claimRewards.9.amountsOut[i]", amountsOut[i]);
+      }
+    }
+
+  }
+
+  /// @notice Collect rewards, hide exceptions
+  function _harvest(IPancakeMasterChefV3 chef, uint tokenId) internal returns (uint reward) {
+    try chef.harvest(tokenId, address(this)) returns (uint rewardAmount) {
+      reward = rewardAmount;
+    } catch {
+      // an exception in reward-claiming shouldn't stop hardwork / withdraw
+    }
+
+    return reward;
   }
 
   function isReadyToHardWork(PairBasedStrategyLogicLib.PairState storage pairState, ITetuConverter converter) external view returns (
@@ -430,7 +465,7 @@ library PancakeConverterStrategyLogicLib {
       IERC20(pairState.tokenA).safeTransfer(strategyProfitHolder, fee0);
       IERC20(pairState.tokenB).safeTransfer(strategyProfitHolder, fee1);
     }
-    emit UniV3FeesClaimed(fee0, fee1);
+    emit PancakeFeesClaimed(fee0, fee1);
   }
 
   function calcEarned(address asset, address controller, address[] memory rewardTokens, uint[] memory amounts) external view returns (uint) {

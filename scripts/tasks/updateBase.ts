@@ -25,8 +25,8 @@ async function main() {
   const CONTROLLER = "0x255707B70BF90aa112006E1b07B9AeA6De021424";
 
   const signer = (await ethers.getSigners())[0];
-  console.log("signer", signer.address);
   // const signer = await DeployerUtilsLocal.impersonate("0xF1dCce3a6c321176C62b71c091E3165CC9C3816E"); // for debug
+  console.log("signer", signer.address);
 
   await RunHelper.runAndWait(async () => ControllerV2__factory.connect(CONTROLLER, signer).upgradeProxy([
       "0x32f7C3a5319A612C1992f021aa70510bc9F16161",

@@ -268,6 +268,7 @@ library AlgebraConverterStrategyLogicLib {
 
     FARMING_CENTER.enterFarming(key, vars.tokenId, 0, false);
 
+    // todo probably we need to swap amountsConsumed depending on depositorSwapTokens in same way as in univ3
     state.pair.totalLiquidity += vars.liquidity;
     liquidityOut = uint(vars.liquidity);
   }

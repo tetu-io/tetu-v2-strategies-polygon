@@ -13,29 +13,24 @@ import "../../integrations/pancake/IPancakeV3MintCallback.sol";
 abstract contract PancakeDepositor is IPancakeV3MintCallback, DepositorBase, Initializable {
   using SafeERC20 for IERC20;
 
-  /////////////////////////////////////////////////////////////////////
-  ///                CONSTANTS
-  /////////////////////////////////////////////////////////////////////
+  //region ------------------------------------------------ Constants
 
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant PANCAKE_DEPOSITOR_VERSION = "1.0.0";
 
   uint internal constant IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_A = 0;
   uint internal constant IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_B = 1;
+  //endregion ------------------------------------------------ Constants
 
-  /////////////////////////////////////////////////////////////////////
-  ///                VARIABLES
-  /////////////////////////////////////////////////////////////////////
-
+  //region ------------------------------------------------ Variables
   /// @dev State variable to store the current state of the whole strategy
   PancakeConverterStrategyLogicLib.State internal state;
 
   /// @dev reserve space for future needs
   uint[100 - 60] private __gap;
+  //endregion ------------------------------------------------ Variables
 
-  /////////////////////////////////////////////////////////////////////
-  ///                       View
-  /////////////////////////////////////////////////////////////////////
+  //region ------------------------------------------------ View
 
   /// @return nums Balances of [tokenA, tokenB] for profit holder
   function getSpecificState() external view returns (
@@ -87,10 +82,9 @@ abstract contract PancakeDepositor is IPancakeV3MintCallback, DepositorBase, Ini
   function _depositorTotalSupply() override internal view virtual returns (uint) {
     return uint(state.pair.totalLiquidity);
   }
+  //endregion ------------------------------------------------ View
 
-  /////////////////////////////////////////////////////////////////////
-  ///                CALLBACK
-  /////////////////////////////////////////////////////////////////////
+  //region ------------------------------------------------ CALLBACK
 
   /// @notice Callback function called by Uniswap V3 pool on mint operation.
   /// @param amount0Owed The amount of token0 owed to the pool.
@@ -104,10 +98,9 @@ abstract contract PancakeDepositor is IPancakeV3MintCallback, DepositorBase, Ini
     if (amount0Owed != 0) IERC20(state.pair.depositorSwapTokens ? state.pair.tokenB : state.pair.tokenA).safeTransfer(msg.sender, amount0Owed);
     if (amount1Owed != 0) IERC20(state.pair.depositorSwapTokens ? state.pair.tokenA : state.pair.tokenB).safeTransfer(msg.sender, amount1Owed);
   }
+  //endregion ------------------------------------------------ CALLBACK
 
-  /////////////////////////////////////////////////////////////////////
-  ///             Enter, exit
-  /////////////////////////////////////////////////////////////////////
+  //region ------------------------------------------------ Enter, exit
 
   /// @notice Handles the deposit operation.
   function _depositorEnter(uint[] memory amountsDesired_) override internal virtual returns (
@@ -139,10 +132,9 @@ abstract contract PancakeDepositor is IPancakeV3MintCallback, DepositorBase, Ini
   function _depositorQuoteExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
     amountsOut = PancakeConverterStrategyLogicLib.quoteExit(state.pair, uint128(liquidityAmount));
   }
+  //endregion ------------------------------------------------ Enter, exit
 
-  /////////////////////////////////////////////////////////////////////
-  ///             Claim rewards
-  /////////////////////////////////////////////////////////////////////
+  //region ------------------------------------------------ Claim rewards
 
   /// @notice Claims all possible rewards.
   /// @return tokensOut An array containing the addresses of the reward tokens,
@@ -152,6 +144,8 @@ abstract contract PancakeDepositor is IPancakeV3MintCallback, DepositorBase, Ini
     uint[] memory amountsOut,
     uint[] memory balancesBefore
   ) {
-    (tokensOut, amountsOut, balancesBefore) = PancakeConverterStrategyLogicLib.claimRewards(state.pair);
+    (tokensOut, amountsOut, balancesBefore) = PancakeConverterStrategyLogicLib.claimRewards(state);
   }
+  //endregion ------------------------------------------------ Claim rewards
+
 }
