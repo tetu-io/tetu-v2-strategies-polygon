@@ -114,14 +114,7 @@ abstract contract PancakeDepositor is IPancakeV3MintCallback, DepositorBase, Ini
     uint[] memory amountsConsumed,
     uint liquidityOut
   ) {
-    (amountsConsumed, liquidityOut, state.pair.totalLiquidity) = PancakeConverterStrategyLogicLib.enter(
-      IPancakeV3Pool(state.pair.pool),
-      state.pair.lowerTick,
-      state.pair.upperTick,
-      amountsDesired_,
-      state.pair.totalLiquidity,
-      state.pair.depositorSwapTokens
-    );
+    (amountsConsumed, liquidityOut) = PancakeConverterStrategyLogicLib.enter(state, amountsDesired_);
   }
 
   /// @notice Handles the withdrawal operation.

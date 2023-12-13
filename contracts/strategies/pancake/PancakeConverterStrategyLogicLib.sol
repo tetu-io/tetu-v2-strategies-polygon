@@ -18,6 +18,9 @@ import "../../libs/AppLib.sol";
 import "../../libs/AppErrors.sol";
 import "../pair/PairBasedStrategyLib.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
+import "../../integrations/pancake/IPancakeNonfungiblePositionManager.sol";
+import "../../integrations/pancake/IPancakeMasterChefV3.sol";
+import "hardhat/console.sol";
 
 library PancakeConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -38,7 +41,12 @@ library PancakeConverterStrategyLogicLib {
 
   struct State {
     PairBasedStrategyLogicLib.PairState pair;
+
     // additional (specific) state
+
+    /// @notice The ID of the token that represents the minted position
+    uint tokenId;
+    IPancakeMasterChefV3 chef;
 
     /// @dev reserve space for future needs
     uint[10] __gap;
@@ -60,6 +68,22 @@ library PancakeConverterStrategyLogicLib {
     uint poolPrice;
     uint poolPriceAdjustment;
   }
+
+  struct EnterLocalVariables {
+    IPancakeV3Pool pool;
+    /// @notice A boolean indicating if need to use token B instead of token A.
+    bool depositorSwapTokens;
+    /// @notice The current total liquidity in the pool.
+    uint128 liquidity;
+    uint tokenId;
+    /// @notice The lower tick value for the pool.
+    int24 lowerTick;
+    /// @notice The upper tick value for the pool.
+    int24 upperTick;
+
+    IPancakeMasterChefV3 chef;
+  }
+
   //endregion ------------------------------------------------ Data types
 
   //region ------------------------------------------------ Helpers
@@ -119,7 +143,7 @@ library PancakeConverterStrategyLogicLib {
 
   function createSpecificName(PairBasedStrategyLogicLib.PairState storage pairState) external view returns (string memory) {
     return string(abi.encodePacked(
-      "UniV3 ",
+      "Pancake ",
       IERC20Metadata(pairState.tokenA).symbol(),
       "/",
       IERC20Metadata(pairState.tokenB).symbol(),
@@ -196,40 +220,95 @@ library PancakeConverterStrategyLogicLib {
 
   //region ------------------------------------------------ Join the pool
   /// @notice Enter the pool and provide liquidity with desired token amounts.
-  /// @param pool The Uniswap V3 pool to provide liquidity to.
-  /// @param lowerTick The lower tick value for the pool.
-  /// @param upperTick The upper tick value for the pool.
   /// @param amountsDesired_ An array containing the desired amounts of tokens to provide liquidity.
-  /// @param totalLiquidity The current total liquidity in the pool.
-  /// @param _depositorSwapTokens A boolean indicating if need to use token B instead of token A.
   /// @return amountsConsumed An array containing the consumed amounts for each token in the pool.
   /// @return liquidityOut The amount of liquidity added to the pool.
-  /// @return totalLiquidityNew The updated total liquidity after providing liquidity.
-  function enter(
-    IPancakeV3Pool pool,
-    int24 lowerTick,
-    int24 upperTick,
-    uint[] memory amountsDesired_,
-    uint128 totalLiquidity,
-    bool _depositorSwapTokens
-  ) external returns (uint[] memory amountsConsumed, uint liquidityOut, uint128 totalLiquidityNew) {
+  function enter(State storage state, uint[] memory amountsDesired_) external returns (
+    uint[] memory amountsConsumed,
+    uint liquidityOut
+  ) {
+    console.log("enter");
+    EnterLocalVariables memory vars = EnterLocalVariables({
+      pool: IPancakeV3Pool(state.pair.pool),
+      depositorSwapTokens: state.pair.depositorSwapTokens,
+      liquidity: 0,
+      tokenId: state.tokenId,
+      lowerTick: state.pair.lowerTick,
+      upperTick: state.pair.upperTick,
+      chef: state.chef
+    });
+    IPancakeNonfungiblePositionManager nft = IPancakeNonfungiblePositionManager(payable(vars.chef.nonfungiblePositionManager()));
+
     amountsConsumed = new uint[](2);
 
-    if (amountsDesired_[1] > 0) {
-      if (_depositorSwapTokens) {
+    if (amountsDesired_[1] != 0) {
+      console.log("enter.2");
+      (address token0, address token1) = vars.depositorSwapTokens
+        ? (state.pair.tokenB, state.pair.tokenA)
+        : (state.pair.tokenA, state.pair.tokenB);
+
+      console.log("enter.3.token0, token1", token0, token1);
+      if (vars.depositorSwapTokens) {
         (amountsDesired_[0], amountsDesired_[1]) = (amountsDesired_[1], amountsDesired_[0]);
+        console.log("enter.4");
       }
-      uint128 newLiquidity;
-      (amountsConsumed[0], amountsConsumed[1], newLiquidity) = PancakeLib.addLiquidityPreview(address(pool), lowerTick, upperTick, amountsDesired_[0], amountsDesired_[1]);
-      pool.mint(address(this), lowerTick, upperTick, newLiquidity, "");
-      liquidityOut = uint(newLiquidity);
-      totalLiquidityNew = totalLiquidity + newLiquidity;
-      if (_depositorSwapTokens) {
+
+      uint24 fee = vars.pool.fee();
+      console.log("enter.5.fee", fee);
+
+      if (vars.tokenId != 0) {
+        console.log("enter.6.tokenId", vars.tokenId);
+        (,,,,uint24 nftFee, int24 nftLowerTick, int24 nftUpperTick,,,,,) = nft.positions(vars.tokenId);
+        if (nftLowerTick != vars.lowerTick || nftUpperTick != vars.upperTick || nftFee != fee) {
+          vars.chef.withdraw(vars.tokenId, address(this)); // todo send rewards to strategyProfitHolder
+          nft.burn(vars.tokenId);
+          vars.tokenId = 0;
+        }
+      }
+
+      if (vars.tokenId == 0) {
+        console.log("enter.7");
+        (vars.tokenId, vars.liquidity, amountsConsumed[0], amountsConsumed[1]) = nft.mint(IPancakeNonfungiblePositionManager.MintParams(
+          token0,
+          token1,
+          fee,
+          vars.lowerTick,
+          vars.upperTick,
+          amountsDesired_[0],
+          amountsDesired_[1],
+          0,
+          0,
+          address(this),
+          block.timestamp
+        ));
+        console.log("enter.8");
+        state.tokenId = vars.tokenId;
+        nft.safeTransferFrom(address(this), address(vars.chef), vars.tokenId);
+        console.log("enter.9");
+      } else {
+        console.log("enter.10");
+        (vars.liquidity, amountsConsumed[0], amountsConsumed[1]) = vars.chef.increaseLiquidity(INonfungiblePositionManagerStruct.IncreaseLiquidityParams(
+          vars.tokenId,
+          amountsDesired_[0],
+          amountsDesired_[1],
+          0,
+          0,
+          block.timestamp
+        ));
+      }
+      console.log("enter.11");
+
+      state.pair.totalLiquidity += vars.liquidity;
+      liquidityOut = uint(vars.liquidity);
+
+      if (vars.depositorSwapTokens) { // todo do we need it?
+        console.log("enter.12");
         (amountsConsumed[0], amountsConsumed[1]) = (amountsConsumed[1], amountsConsumed[0]);
       }
     }
+    console.log("enter.13");
 
-    return (amountsConsumed, liquidityOut, totalLiquidityNew);
+    return (amountsConsumed, liquidityOut);
   }
 
   //endregion ------------------------------------------------ Join the pool

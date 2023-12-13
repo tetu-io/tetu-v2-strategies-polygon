@@ -4,6 +4,44 @@ pragma solidity 0.8.17;
 /// @notice Wraps Pancake V3 positions in the ERC721 non-fungible token interface
 /// @dev Restored from base-chain:0x46A15B0b27311cedF172AB29E4f4766fbE7F4364, events were removed
 interface IPancakeNonfungiblePositionManager {
+    struct CollectParams {
+        uint256 tokenId;
+        address recipient;
+        uint128 amount0Max;
+        uint128 amount1Max;
+    }
+
+    struct DecreaseLiquidityParams {
+        uint256 tokenId;
+        uint128 liquidity;
+        uint256 amount0Min;
+        uint256 amount1Min;
+        uint256 deadline;
+    }
+
+    struct IncreaseLiquidityParams {
+        uint256 tokenId;
+        uint256 amount0Desired;
+        uint256 amount1Desired;
+        uint256 amount0Min;
+        uint256 amount1Min;
+        uint256 deadline;
+    }
+
+    struct MintParams {
+        address token0;
+        address token1;
+        uint24 fee;
+        int24 tickLower;
+        int24 tickUpper;
+        uint256 amount0Desired;
+        uint256 amount1Desired;
+        uint256 amount0Min;
+        uint256 amount1Min;
+        address recipient;
+        uint256 deadline;
+    }
+
     function DOMAIN_SEPARATOR() external view returns (bytes32);
 
     function PERMIT_TYPEHASH() external view returns (bytes32);
@@ -18,11 +56,11 @@ interface IPancakeNonfungiblePositionManager {
 
     function burn(uint256 tokenId) external payable;
 
-    function collect(INonfungiblePositionManager.CollectParams memory params) external payable returns (uint256 amount0, uint256 amount1);
+    function collect(IPancakeNonfungiblePositionManager.CollectParams memory params) external payable returns (uint256 amount0, uint256 amount1);
 
     function createAndInitializePoolIfNecessary(address token0, address token1, uint24 fee, uint160 sqrtPriceX96) external payable returns (address pool);
 
-    function decreaseLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams memory params) external payable returns (uint256 amount0, uint256 amount1);
+    function decreaseLiquidity(IPancakeNonfungiblePositionManager.DecreaseLiquidityParams memory params) external payable returns (uint256 amount0, uint256 amount1);
 
     function deployer() external view returns (address);
 
@@ -30,7 +68,7 @@ interface IPancakeNonfungiblePositionManager {
 
     function getApproved(uint256 tokenId) external view returns (address);
 
-    function increaseLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams memory params) external payable returns (
+    function increaseLiquidity(IPancakeNonfungiblePositionManager.IncreaseLiquidityParams memory params) external payable returns (
         uint128 liquidity,
         uint256 amount0,
         uint256 amount1
@@ -38,7 +76,7 @@ interface IPancakeNonfungiblePositionManager {
 
     function isApprovedForAll(address owner, address operator) external view returns (bool);
 
-    function mint(INonfungiblePositionManager.MintParams memory params) external payable returns (
+    function mint(IPancakeNonfungiblePositionManager.MintParams memory params) external payable returns (
         uint256 tokenId,
         uint128 liquidity,
         uint256 amount0,
@@ -105,44 +143,4 @@ interface IPancakeNonfungiblePositionManager {
     function unwrapWETH9(uint256 amountMinimum, address recipient) external payable;
 
     receive() external payable;
-}
-
-interface INonfungiblePositionManager {
-    struct CollectParams {
-        uint256 tokenId;
-        address recipient;
-        uint128 amount0Max;
-        uint128 amount1Max;
-    }
-
-    struct DecreaseLiquidityParams {
-        uint256 tokenId;
-        uint128 liquidity;
-        uint256 amount0Min;
-        uint256 amount1Min;
-        uint256 deadline;
-    }
-
-    struct IncreaseLiquidityParams {
-        uint256 tokenId;
-        uint256 amount0Desired;
-        uint256 amount1Desired;
-        uint256 amount0Min;
-        uint256 amount1Min;
-        uint256 deadline;
-    }
-
-    struct MintParams {
-        address token0;
-        address token1;
-        uint24 fee;
-        int24 tickLower;
-        int24 tickUpper;
-        uint256 amount0Desired;
-        uint256 amount1Desired;
-        uint256 amount0Min;
-        uint256 amount1Min;
-        address recipient;
-        uint256 deadline;
-    }
 }

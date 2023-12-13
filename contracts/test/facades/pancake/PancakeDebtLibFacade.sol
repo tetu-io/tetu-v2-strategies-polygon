@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "../../libs/TokenAmountsLib.sol";
-import "../../integrations/pancake/IPancakeV3Pool.sol";
-import "../../strategies/pancake/PancakeDebtLib.sol";
+import "../../../libs/TokenAmountsLib.sol";
+import "../../../integrations/pancake/IPancakeV3Pool.sol";
+import "../../../strategies/pancake/PancakeDebtLib.sol";
 
 contract PancakeDebtLibFacade {
   function getEntryDataProportions(
