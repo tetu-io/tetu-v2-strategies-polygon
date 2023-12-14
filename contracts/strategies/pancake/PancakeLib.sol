@@ -3,6 +3,7 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "../../integrations/pancake/IPancakeV3Pool.sol";
+import {IPancakeMasterChefV3} from "../../integrations/pancake/IPancakeMasterChefV3.sol";
 
 /// @title PancakeSwap liquidity management helper
 /// @notice Provides functions for computing liquidity amounts from token amounts and prices
@@ -10,43 +11,13 @@ library PancakeLib {
   uint8 internal constant RESOLUTION = 96;
   uint internal constant Q96 = 0x1000000000000000000000000;
   uint private constant TWO_96 = 2 ** 96;
-  /// @dev The minimum value that can be returned from #getSqrtRatioAtTick. Equivalent to getSqrtRatioAtTick(MIN_TICK)
-  uint160 private constant MIN_SQRT_RATIO = 4295128739 + 1;
-  /// @dev The maximum value that can be returned from #getSqrtRatioAtTick. Equivalent to getSqrtRatioAtTick(MAX_TICK)
-  uint160 private constant MAX_SQRT_RATIO = 1461446703485210103287273052203988822378723970342 - 1;
   /// @dev The minimum tick that may be passed to #getSqrtRatioAtTick computed from log base 1.0001 of 2**-128
   int24 internal constant MIN_TICK = - 887272;
   /// @dev The maximum tick that may be passed to #getSqrtRatioAtTick computed from log base 1.0001 of 2**128
   int24 internal constant MAX_TICK = - MIN_TICK;
 
-  struct PoolPosition {
-    address pool;
-    int24 lowerTick;
-    int24 upperTick;
-    uint128 liquidity;
-    address owner;
-  }
-
-  function getTickSpacing(uint24 fee) external pure returns (int24) {
-    if (fee == 10000) {
-      return 200;
-    }
-    if (fee == 3000) {
-      return 60;
-    }
-    if (fee == 500) {
-      return 10;
-    }
-    return 1;
-  }
-
-  function getFees(PoolPosition memory position) public view returns (uint fee0, uint fee1) {
-    bytes32 positionId = _getPositionId(position);
-    IPancakeV3Pool pool = IPancakeV3Pool(position.pool);
-    (, int24 tick, , , , ,) = pool.slot0();
-    (, uint feeGrowthInside0Last, uint feeGrowthInside1Last, uint128 tokensOwed0, uint128 tokensOwed1) = pool.positions(positionId);
-    fee0 = _computeFeesEarned(position, true, feeGrowthInside0Last, tick) + uint(tokensOwed0);
-    fee1 = _computeFeesEarned(position, false, feeGrowthInside1Last, tick) + uint(tokensOwed1);
+  function getTickSpacing(IPancakeV3Pool pool) external view returns (int24) {
+    return pool.tickSpacing();
   }
 
   function addLiquidityPreview(address pool_, int24 lowerTick_, int24 upperTick_, uint amount0Desired_, uint amount1Desired_) external view returns (uint amount0Consumed, uint amount1Consumed, uint128 liquidityOut) {
@@ -316,53 +287,6 @@ library PancakeLib {
     return mulDivRoundingUp(liquidity, sqrtRatioBX96 - sqrtRatioAX96, Q96);
   }
 
-  function _computeFeesEarned(
-    PoolPosition memory position,
-    bool isZero,
-    uint feeGrowthInsideLast,
-    int24 tick
-  ) internal view returns (uint fee) {
-    IPancakeV3Pool pool = IPancakeV3Pool(position.pool);
-    uint feeGrowthOutsideLower;
-    uint feeGrowthOutsideUpper;
-    uint feeGrowthGlobal;
-    if (isZero) {
-      feeGrowthGlobal = pool.feeGrowthGlobal0X128();
-      (,, feeGrowthOutsideLower,,,,,) = pool.ticks(position.lowerTick);
-      (,, feeGrowthOutsideUpper,,,,,) = pool.ticks(position.upperTick);
-    } else {
-      feeGrowthGlobal = pool.feeGrowthGlobal1X128();
-      (,,, feeGrowthOutsideLower,,,,) = pool.ticks(position.lowerTick);
-      (,,, feeGrowthOutsideUpper,,,,) = pool.ticks(position.upperTick);
-    }
-
-  unchecked {
-    // calculate fee growth below
-    uint feeGrowthBelow;
-    if (tick >= position.lowerTick) {
-      feeGrowthBelow = feeGrowthOutsideLower;
-    } else {
-      feeGrowthBelow = feeGrowthGlobal - feeGrowthOutsideLower;
-    }
-
-    // calculate fee growth above
-    uint feeGrowthAbove;
-    if (tick < position.upperTick) {
-      feeGrowthAbove = feeGrowthOutsideUpper;
-    } else {
-      feeGrowthAbove = feeGrowthGlobal - feeGrowthOutsideUpper;
-    }
-
-    uint feeGrowthInside =
-    feeGrowthGlobal - feeGrowthBelow - feeGrowthAbove;
-    fee = mulDiv(
-      position.liquidity,
-      feeGrowthInside - feeGrowthInsideLast,
-      0x100000000000000000000000000000000
-    );
-  }
-  }
-
   /// @notice Calculates sqrt(1.0001^tick) * 2^96
   /// @dev Throws if |tick| > max tick
   /// @param tick The input tick for the above formula
@@ -430,178 +354,6 @@ library PancakeLib {
     sqrtPriceX96 = uint160(
       (ratio >> 32) + (ratio % (1 << 32) == 0 ? 0 : 1)
     );
-  }
-
-  /// @notice Calculates the greatest tick value such that getRatioAtTick(tick) <= ratio
-  /// @dev Throws in case sqrtPriceX96 < MIN_SQRT_RATIO, as MIN_SQRT_RATIO is the lowest value getRatioAtTick may
-  /// ever return.
-  /// @param sqrtPriceX96 The sqrt ratio for which to compute the tick as a Q64.96
-  /// @return tick The greatest tick for which the ratio is less than or equal to the input ratio
-  function _getTickAtSqrtRatio(uint160 sqrtPriceX96) internal pure returns (int24 tick) {
-    // second inequality must be < because the price can never reach the price at the max tick
-    require(
-      sqrtPriceX96 >= MIN_SQRT_RATIO && sqrtPriceX96 < MAX_SQRT_RATIO,
-      "R"
-    );
-    uint256 ratio = uint256(sqrtPriceX96) << 32;
-
-    uint256 r = ratio;
-    uint256 msb = 0;
-
-    assembly {
-      let f := shl(7, gt(r, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))
-      msb := or(msb, f)
-      r := shr(f, r)
-    }
-    assembly {
-      let f := shl(6, gt(r, 0xFFFFFFFFFFFFFFFF))
-      msb := or(msb, f)
-      r := shr(f, r)
-    }
-    assembly {
-      let f := shl(5, gt(r, 0xFFFFFFFF))
-      msb := or(msb, f)
-      r := shr(f, r)
-    }
-    assembly {
-      let f := shl(4, gt(r, 0xFFFF))
-      msb := or(msb, f)
-      r := shr(f, r)
-    }
-    assembly {
-      let f := shl(3, gt(r, 0xFF))
-      msb := or(msb, f)
-      r := shr(f, r)
-    }
-    assembly {
-      let f := shl(2, gt(r, 0xF))
-      msb := or(msb, f)
-      r := shr(f, r)
-    }
-    assembly {
-      let f := shl(1, gt(r, 0x3))
-      msb := or(msb, f)
-      r := shr(f, r)
-    }
-    assembly {
-      let f := gt(r, 0x1)
-      msb := or(msb, f)
-    }
-
-    if (msb >= 128) r = ratio >> (msb - 127);
-    else r = ratio << (127 - msb);
-
-    int256 log_2 = (int256(msb) - 128) << 64;
-
-    assembly {
-      r := shr(127, mul(r, r))
-      let f := shr(128, r)
-      log_2 := or(log_2, shl(63, f))
-      r := shr(f, r)
-    }
-    assembly {
-      r := shr(127, mul(r, r))
-      let f := shr(128, r)
-      log_2 := or(log_2, shl(62, f))
-      r := shr(f, r)
-    }
-    assembly {
-      r := shr(127, mul(r, r))
-      let f := shr(128, r)
-      log_2 := or(log_2, shl(61, f))
-      r := shr(f, r)
-    }
-    assembly {
-      r := shr(127, mul(r, r))
-      let f := shr(128, r)
-      log_2 := or(log_2, shl(60, f))
-      r := shr(f, r)
-    }
-    assembly {
-      r := shr(127, mul(r, r))
-      let f := shr(128, r)
-      log_2 := or(log_2, shl(59, f))
-      r := shr(f, r)
-    }
-    assembly {
-      r := shr(127, mul(r, r))
-      let f := shr(128, r)
-      log_2 := or(log_2, shl(58, f))
-      r := shr(f, r)
-    }
-    assembly {
-      r := shr(127, mul(r, r))
-      let f := shr(128, r)
-      log_2 := or(log_2, shl(57, f))
-      r := shr(f, r)
-    }
-    assembly {
-      r := shr(127, mul(r, r))
-      let f := shr(128, r)
-      log_2 := or(log_2, shl(56, f))
-      r := shr(f, r)
-    }
-    assembly {
-      r := shr(127, mul(r, r))
-      let f := shr(128, r)
-      log_2 := or(log_2, shl(55, f))
-      r := shr(f, r)
-    }
-    assembly {
-      r := shr(127, mul(r, r))
-      let f := shr(128, r)
-      log_2 := or(log_2, shl(54, f))
-      r := shr(f, r)
-    }
-    assembly {
-      r := shr(127, mul(r, r))
-      let f := shr(128, r)
-      log_2 := or(log_2, shl(53, f))
-      r := shr(f, r)
-    }
-    assembly {
-      r := shr(127, mul(r, r))
-      let f := shr(128, r)
-      log_2 := or(log_2, shl(52, f))
-      r := shr(f, r)
-    }
-    assembly {
-      r := shr(127, mul(r, r))
-      let f := shr(128, r)
-      log_2 := or(log_2, shl(51, f))
-      r := shr(f, r)
-    }
-    assembly {
-      r := shr(127, mul(r, r))
-      let f := shr(128, r)
-      log_2 := or(log_2, shl(50, f))
-    }
-
-    tick = _getFinalTick(log_2, sqrtPriceX96);
-  }
-
-  function _getFinalTick(int256 log_2, uint160 sqrtPriceX96) internal pure returns (int24 tick) {
-    // 128.128 number
-    int256 log_sqrt10001 = log_2 * 255738958999603826347141;
-
-    int24 tickLow =
-    int24(
-      (log_sqrt10001 - 3402992956809132418596140100660247210) >> 128
-    );
-    int24 tickHi =
-    int24(
-      (log_sqrt10001 + 291339464771989622907027621153398088495) >> 128
-    );
-
-    tick = (tickLow == tickHi)
-    ? tickLow
-    : (_getSqrtRatioAtTick(tickHi) <= sqrtPriceX96
-    ? tickHi
-    : tickLow);
-  }
-
-  function _getPositionId(PoolPosition memory position) internal pure returns (bytes32) {
-    return keccak256(abi.encodePacked(position.owner, position.lowerTick, position.upperTick));
   }
 
   function _countDigits(uint n) internal pure returns (uint) {

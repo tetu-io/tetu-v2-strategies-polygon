@@ -103,9 +103,8 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
   /// @notice Check if the strategy is ready for hard work.
   /// @return A boolean indicating if the strategy is ready for hard work.
   function isReadyToHardWork() override external virtual view returns (bool) {
-    return !needRebalance()
-    && !_isFuseTriggeredOn()
-    && PancakeConverterStrategyLogicLib.isReadyToHardWork(state.pair, _csbs.converter);
+    // for simplicity of implementation this function doesn't calculate fees and just returns true
+    return !needRebalance() && !_isFuseTriggeredOn();
   }
 
   /// @notice Check if the strategy needs rebalancing.
@@ -128,6 +127,19 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
     return PairBasedStrategyLogicLib.getDefaultState(state.pair);
   }
   //endregion ---------------------------------------------- METRIC VIEWS
+
+  //region --------------------------------------------- CALLBACKS
+
+  function onERC721Received(
+    address,
+    address,
+    uint256,
+    bytes memory
+  ) external pure returns (bytes4) {
+    return this.onERC721Received.selector;
+  }
+
+  //endregion --------------------------------------------- CALLBACKS
 
   //region--------------------------------------------- REBALANCE
   /// @notice Rebalance using borrow/repay only, no swaps

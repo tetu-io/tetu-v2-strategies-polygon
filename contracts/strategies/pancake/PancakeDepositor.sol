@@ -42,12 +42,6 @@ abstract contract PancakeDepositor is IPancakeV3MintCallback, DepositorBase, Ini
     nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_B] = IERC20(state.pair.tokenB).balanceOf(strategyProfitHolder);
   }
 
-  /// @notice Returns the fees for the current state.
-  /// @return fee0 and fee1.
-  function getFees() public view returns (uint fee0, uint fee1) {
-    return PancakeConverterStrategyLogicLib.getFees(state.pair);
-  }
-
   /// @notice Returns the pool assets.
   /// @return poolAssets An array containing the addresses of the pool assets.
   function _depositorPoolAssets() override internal virtual view returns (address[] memory poolAssets) {
@@ -115,15 +109,7 @@ abstract contract PancakeDepositor is IPancakeV3MintCallback, DepositorBase, Ini
   /// @param emergency Emergency exit (only withdraw, don't claim any rewards or make any other additional actions)
   /// @return amountsOut The amounts of the tokens withdrawn.
   function _depositorExit(uint liquidityAmount, bool emergency) override internal virtual returns (uint[] memory amountsOut) {
-    uint fee0;
-    uint fee1;
-    if (! emergency) {
-      (fee0, fee1) = getFees();
-    }
-    amountsOut = PancakeConverterStrategyLogicLib.exit(state.pair, uint128(liquidityAmount));
-    if (! emergency) {
-      PancakeConverterStrategyLogicLib.sendFeeToProfitHolder(state.pair, fee0, fee1);
-    }
+    amountsOut = PancakeConverterStrategyLogicLib.exit(state, uint128(liquidityAmount), emergency);
   }
 
   /// @notice Returns the amount of tokens that would be withdrawn based on the provided liquidity amount.

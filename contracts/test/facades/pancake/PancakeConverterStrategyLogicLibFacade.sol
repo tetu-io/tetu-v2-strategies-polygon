@@ -18,13 +18,12 @@ contract PancakeConverterStrategyLogicLibFacade {
     state.pair.strategyProfitHolder = strategyProfitHolder;
   }
 
-  function enter(
-    uint[] memory amountsDesired_
-  ) external returns (
-    uint[] memory amountsConsumed,
-    uint liquidityOut
-  ) {
+  function enter(uint[] memory amountsDesired_) external returns (uint[] memory amountsConsumed, uint liquidityOut) {
     return PancakeConverterStrategyLogicLib.enter(state, amountsDesired_);
+  }
+
+  function exit(uint128 liquidityAmountToExit, bool emergency) external returns (uint[] memory amountsOut) {
+    return PancakeConverterStrategyLogicLib.exit(state, liquidityAmountToExit, emergency);
   }
 
   function initStrategyState(
@@ -55,4 +54,23 @@ contract PancakeConverterStrategyLogicLibFacade {
   ) {
     return PairBasedStrategyLogicLib.getDefaultState(state.pair);
   }
+
+  function getPoolReserves() external view returns (
+    uint[] memory reserves
+  ) {
+    return PancakeConverterStrategyLogicLib.getPoolReserves(state.pair);
+  }
+
+  function quoteExit(uint128 liquidityAmountToExit) public view returns (uint[] memory amountsOut) {
+    return PancakeConverterStrategyLogicLib.quoteExit(state.pair, liquidityAmountToExit);
+  }
+
+//  function onERC721Received(
+//    address,
+//    address,
+//    uint256,
+//    bytes memory
+//  ) external pure returns (bytes4) {
+//    return this.onERC721Received.selector;
+//  }
 }

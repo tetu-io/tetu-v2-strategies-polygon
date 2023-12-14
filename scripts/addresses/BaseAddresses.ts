@@ -52,6 +52,8 @@ export class BaseAddresses {
     public static PANCAKE_POOL_USDC_USDbC = "0x29Ed55B18Af0Add137952CB3E29FB77B32fCE426".toLowerCase();
     public static PANCAKE_POOL_DAI_USDbC_LP = "0xe4eFf19c7AcE186ba39fD3eD639B2D34171f7efF".toLowerCase();
 
+    public static TETU_PANCAKE_3_SWAPPER = "0x8aAc356B49e75DAbd4384689b00A02DA68cde62B".toLowerCase();
+
 //endregion ----------------------------------------------------- PancakeSwap
 
 }
