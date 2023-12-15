@@ -51,6 +51,7 @@ export interface IPancakeStateInputParams {
   tokenA: string;
   tokenB: string;
   cakeToken: string;
+  swapTokens: boolean;
 }
 export interface IPancakeSaverParams {
   amounts?: BigNumber[];
@@ -69,6 +70,8 @@ export class PancakeState {
     p: IPancakeStateInputParams,
     ps?: IPancakeSaverParams
   ): Promise<IPancakeState> {
+    const index0 = p.swapTokens ? 1 : 0;
+    const index1 = p.swapTokens ? 0 : 1;
     const tokenId = (await p.funcGetPairState()).tokenId.toNumber();
     return {
       title,
@@ -91,16 +94,16 @@ export class PancakeState {
         : +formatUnits((await p.nft.positions(tokenId)).tokensOwed1, 6),
       totalLiquidity: (await p.funcGetPairState()).pair.totalLiquidity,
       retAmountTokenB: ps?.amounts
-        ? +formatUnits(ps?.amounts[1], 6)
+        ? +formatUnits(ps?.amounts[index1], 6)
         : 0,
       retAmountTokenA: ps?.amounts
-        ? +formatUnits(ps?.amounts[0], 6)
+        ? +formatUnits(ps?.amounts[index0], 6)
         : 0,
       retRewardsTokenB: ps?.rewardAmounts
-        ? +formatUnits(ps?.rewardAmounts[1], 6)
+        ? +formatUnits(ps?.rewardAmounts[index1], 6)
         : 0,
       retRewardsTokenA: ps?.rewardAmounts
-        ? +formatUnits(ps?.rewardAmounts[0], 6)
+        ? +formatUnits(ps?.rewardAmounts[index0], 6)
         : 0,
       retRewardsCAKE: ps?.rewardAmounts
         ? +formatUnits(ps?.rewardAmounts[2], 18)
