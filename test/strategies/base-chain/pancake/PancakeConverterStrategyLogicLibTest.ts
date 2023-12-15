@@ -145,7 +145,7 @@ describe('PancakeConverterStrategyLogicLibTest', function () {
       await UniversalUtils.makePoolVolume(
         signer,
         state,
-        BaseAddresses.TETU_PANCAKE_3_SWAPPER,
+        BaseAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
         parseUnits('10000', 6).mul(multy)
       );
     }
@@ -221,7 +221,7 @@ describe('PancakeConverterStrategyLogicLibTest', function () {
       const facadePair = await MockHelper.createPairBasedStrategyLogicLibFacade(signer);
       const facadeDebtLib = (await DeployerUtils.deployContract(signer, 'PancakeDebtLibFacade')) as PancakeDebtLibFacade;
 
-      const pool = IPancakeV3Pool__factory.connect(BaseAddresses.PANCAKE_POOL_USDC_USDbC, signer);
+      const pool = IPancakeV3Pool__factory.connect(BaseAddresses.PANCAKE_POOL_USDC_USDbC_LP_100, signer);
       const token0 = await pool.token0();
       const token1 = await pool.token1();
       console.log("token0", await IERC20Metadata__factory.connect(token0, signer).symbol());
@@ -279,7 +279,7 @@ describe('PancakeConverterStrategyLogicLibTest', function () {
 
       await facade.initStrategyState(
         "0x255707B70BF90aa112006E1b07B9AeA6De021424",
-        BaseAddresses.PANCAKE_POOL_USDC_USDbC,
+        BaseAddresses.PANCAKE_POOL_USDC_USDbC_LP_100,
         0,
         0,
         BaseAddresses.USDC_TOKEN,

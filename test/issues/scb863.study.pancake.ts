@@ -34,7 +34,7 @@ describe("Scb863 @skip-on-coverage", () => {
     const facade = await MockHelper.createPairBasedStrategyLogicLibFacade(signer);
     const facadeDebtLib = (await DeployerUtils.deployContract(signer, 'PancakeDebtLibFacade')) as PancakeDebtLibFacade;
 
-    const pool = IPancakeV3Pool__factory.connect(BaseAddresses.PANCAKE_POOL_USDC_USDbC, signer);
+    const pool = IPancakeV3Pool__factory.connect(BaseAddresses.PANCAKE_POOL_USDC_USDbC_LP_100, signer);
     const token0 = await pool.token0();
     const token1 = await pool.token1();
 

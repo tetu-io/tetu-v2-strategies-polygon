@@ -97,13 +97,6 @@ library PancakeConverterStrategyLogicLib {
 
   //region ------------------------------------------------ Helpers
 
-  /// @notice Check if the given pool is a stable pool.
-  /// @param pool The Uniswap V3 pool.
-  /// @return A boolean indicating if the pool is stable.
-  function isStablePool(IPancakeV3Pool pool) public view returns (bool) {
-    return pool.fee() == 100;
-  }
-
   /// @param controllerPoolChef [controller, pool, master chef v3]
   /// @param fuseThresholds Fuse thresholds for tokens (stable pool only)
   function initStrategyState(
@@ -152,6 +145,17 @@ library PancakeConverterStrategyLogicLib {
     IERC20(token1).approve(address(chef), type(uint).max); // todo check
   }
 
+  //endregion ------------------------------------------------ Helpers
+
+  //region ------------------------------------------------ Pool info
+
+  /// @notice Check if the given pool is a stable pool.
+  /// @param pool The Uniswap V3 pool.
+  /// @return A boolean indicating if the pool is stable.
+  function isStablePool(IPancakeV3Pool pool) public view returns (bool) {
+    return pool.fee() == 100;
+  }
+
   function createSpecificName(PairBasedStrategyLogicLib.PairState storage pairState) external view returns (string memory) {
     return string(abi.encodePacked(
       "Pancake ",
@@ -180,9 +184,7 @@ library PancakeConverterStrategyLogicLib {
   function getEntryDataProportions(IPancakeV3Pool pool, int24 lowerTick, int24 upperTick, bool depositorSwapTokens) external view returns (uint, uint) {
     return PancakeDebtLib.getEntryDataProportions(pool, lowerTick, upperTick, depositorSwapTokens);
   }
-  //endregion ------------------------------------------------ Helpers
 
-  //region ------------------------------------------------ Pool info
   /// @notice Retrieve the reserves of a Uniswap V3 pool managed by this contract.
   /// @param pairState The State storage containing the pool's information.
   /// @return reserves An array containing the reserve amounts of the contract owned liquidity.
@@ -370,7 +372,7 @@ library PancakeConverterStrategyLogicLib {
     console.log("exit.7.state.pair.totalLiquidity", state.pair.totalLiquidity);
   }
 
-  /// @notice Estimate the exit amounts for a given liquidity amount in a Uniswap V3 pool.
+  /// @notice Estimate the exit amounts for a given liquidity amount in a PancakeSwap V3 pool.
   /// @param liquidityAmountToExit The amount of liquidity to exit.
   /// @return amountsOut An array containing the estimated exit amounts for each token in the pool.
   function quoteExit(

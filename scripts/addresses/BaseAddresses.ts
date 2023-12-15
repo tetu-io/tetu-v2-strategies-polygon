@@ -49,10 +49,11 @@ export class BaseAddresses {
     /** From list of transactions: https://basescan.org/address/0x3af75af6f056d4d72c1675da919aebf908a109d6 */
     public static PANCAKE_SWAP_ROUTER = "0x1b81D678ffb9C0263b24A97847620C99d213eB14".toLowerCase();
 
-    public static PANCAKE_POOL_USDC_USDbC = "0x29Ed55B18Af0Add137952CB3E29FB77B32fCE426".toLowerCase();
-    public static PANCAKE_POOL_DAI_USDbC_LP = "0xe4eFf19c7AcE186ba39fD3eD639B2D34171f7efF".toLowerCase();
+    public static PANCAKE_POOL_USDC_USDbC_LP_100 = "0x29Ed55B18Af0Add137952CB3E29FB77B32fCE426".toLowerCase();
+    public static PANCAKE_POOL_DAI_USDbC_LP_100 = "0xe4eFf19c7AcE186ba39fD3eD639B2D34171f7efF".toLowerCase();
+    public static PANCAKE_POOL_CAKE_WETH_10000 = "0x03C33a2fC0D444a5B61E573f9e1A285357a694fc".toLowerCase();
 
-    public static TETU_PANCAKE_3_SWAPPER = "0x8aAc356B49e75DAbd4384689b00A02DA68cde62B".toLowerCase();
+    public static TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER = "0x8aAc356B49e75DAbd4384689b00A02DA68cde62B".toLowerCase();
 
 //endregion ----------------------------------------------------- PancakeSwap
 

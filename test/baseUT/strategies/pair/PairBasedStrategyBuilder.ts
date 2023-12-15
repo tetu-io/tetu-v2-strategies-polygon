@@ -2,7 +2,36 @@ import {Misc} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
-import {AlgebraConverterStrategy, AlgebraConverterStrategy__factory, AlgebraLib, ControllerV2, ControllerV2__factory, ConverterStrategyBase__factory, ConverterStrategyBaseLibFacade2, IERC20__factory, IERC20Metadata, IERC20Metadata__factory, IRebalancingV2Strategy, IRebalancingV2Strategy__factory, ISetupPairBasedStrategy__factory, IStrategyV2, ITetuConverter, ITetuConverter__factory, ITetuLiquidator, KyberConverterStrategy, KyberConverterStrategy__factory, KyberLib, StrategySplitterV2, SwapHelper, TetuVaultV2, UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory, UniswapV3Lib, VaultFactory__factory} from "../../../../typechain";
+import {
+  AlgebraConverterStrategy,
+  AlgebraConverterStrategy__factory,
+  AlgebraLib,
+  ControllerV2,
+  ControllerV2__factory,
+  ConverterStrategyBase__factory,
+  ConverterStrategyBaseLibFacade2,
+  IERC20__factory,
+  IERC20Metadata,
+  IERC20Metadata__factory,
+  IRebalancingV2Strategy,
+  IRebalancingV2Strategy__factory,
+  ISetupPairBasedStrategy__factory,
+  IStrategyV2,
+  ITetuConverter,
+  ITetuConverter__factory,
+  ITetuLiquidator,
+  KyberConverterStrategy,
+  KyberConverterStrategy__factory,
+  KyberLib,
+  PancakeLib,
+  StrategySplitterV2,
+  SwapHelper,
+  TetuVaultV2,
+  UniswapV3ConverterStrategy,
+  UniswapV3ConverterStrategy__factory,
+  UniswapV3Lib,
+  VaultFactory__factory
+} from "../../../../typechain";
 import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../utils/ConverterUtils";
@@ -64,7 +93,7 @@ export interface IStrategyBasicInfo {
   swapper: string;
   quoter: string;
   pool: string;
-  lib: UniswapV3Lib | AlgebraLib | KyberLib;
+  lib: UniswapV3Lib | AlgebraLib | KyberLib | PancakeLib;
   swapHelper?: SwapHelper;
 }
 
