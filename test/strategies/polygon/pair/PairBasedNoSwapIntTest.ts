@@ -13,7 +13,12 @@ import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../../baseUT/strategies/pair/PairBasedStrategyBuilder";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
-import {PLATFORM_ALGEBRA, PLATFORM_UNIV3, PlatformsType} from "../../../baseUT/strategies/AppPlatforms";
+import {
+  PLATFORM_ALGEBRA,
+  PLATFORM_PANCAKE,
+  PLATFORM_UNIV3,
+  PlatformsType
+} from "../../../baseUT/strategies/AppPlatforms";
 import {differenceInPercentsNumLessThan} from "../../../baseUT/utils/MathUtils";
 import {PairStrategyFixtures} from "../../../baseUT/strategies/pair/PairStrategyFixtures";
 import {
@@ -108,6 +113,7 @@ describe('PairBasedNoSwapIntTest', function() {
         const TEST_SETUPS: Record<PlatformsType, ITestSetup> = {
           [PLATFORM_UNIV3]: {sharePriceDeviation: 1e-7},
           [PLATFORM_ALGEBRA]: {sharePriceDeviation: 1e-7},
+          [PLATFORM_PANCAKE]: {sharePriceDeviation: 1e-7},
           /**
            * on "npm run coverage" we have a problem with sharePriceDeviation = 1e-7
            * expected 1 to be close to 1.0000231642199326 +/- 1e-7
@@ -960,6 +966,7 @@ describe('PairBasedNoSwapIntTest', function() {
               {sharePriceDeviation: 2e-8, increaseOutput: false},
           ],
           [PLATFORM_ALGEBRA]: [{sharePriceDeviation: 2e-8, increaseOutput: true}],
+          [PLATFORM_PANCAKE]: [{sharePriceDeviation: 2e-8, increaseOutput: true}],
           // [PLATFORM_KYBER]: [{sharePriceDeviation: 2e-8, increaseOutput: true}],
         };
 
@@ -1148,6 +1155,9 @@ describe('PairBasedNoSwapIntTest', function() {
           ],
           [PLATFORM_ALGEBRA]: [
             {priceUp: false, countCycles: 2, depositAmount: "5000"}
+          ],
+          [PLATFORM_PANCAKE]: [
+            // todo
           ],
           // [PLATFORM_KYBER]: [
           //   {priceUp: false, countCycles: 2, depositAmount: "1000"}

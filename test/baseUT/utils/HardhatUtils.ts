@@ -6,6 +6,8 @@ export const HARDHAT_NETWORK_ID = 31337;
 export const POLYGON_NETWORK_ID = 137;
 export const BASE_NETWORK_ID = 8453;
 
+export const ZKEVM_NETWORK_ID = 1101;
+
 interface IEnvData {
   rpcUrl: string;
   forkBlock: number;
@@ -61,6 +63,8 @@ export class HardhatUtils {
                   : block
               : env.baseForkBlock
       );
+    } else if (chainId === ZKEVM_NETWORK_ID) {
+      await reset(env.zkevmRpcUrl, block ? block === -1 ? undefined : block : env.zkevmForkBlock);
     } else {
       throw new Error('Unknown chain id ' + chainId);
     }
@@ -74,6 +78,8 @@ export class HardhatUtils {
       return {rpcUrl: env.maticRpcUrl, forkBlock: env.maticForkBlock};
     } else if (chainId === BASE_NETWORK_ID) {
       return {rpcUrl: env.baseRpcUrl, forkBlock: env.baseForkBlock};
+    } else if (chainId === ZKEVM_NETWORK_ID) {
+      return {rpcUrl: env.zkevmRpcUrl, forkBlock: env.zkevmForkBlock};
     }
   }
 }

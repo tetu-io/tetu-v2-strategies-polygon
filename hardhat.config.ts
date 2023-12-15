@@ -58,12 +58,14 @@ export default {
           EnvSetup.getEnv().hardhatChainId === 1 ? EnvSetup.getEnv().ethRpcUrl :
             EnvSetup.getEnv().hardhatChainId === 137 ? EnvSetup.getEnv().maticRpcUrl :
                 EnvSetup.getEnv().hardhatChainId === 8453 ? EnvSetup.getEnv().baseRpcUrl :
-                    undefined,
+                    EnvSetup.getEnv().hardhatChainId === 1101? EnvSetup.getEnv().zkevmRpcUrl :
+                       undefined,
         blockNumber:
           EnvSetup.getEnv().hardhatChainId === 1 ? EnvSetup.getEnv().ethForkBlock !== 0 ? EnvSetup.getEnv().ethForkBlock : undefined :
             EnvSetup.getEnv().hardhatChainId === 137 ? EnvSetup.getEnv().maticForkBlock !== 0 ? EnvSetup.getEnv().maticForkBlock : undefined :
                 EnvSetup.getEnv().hardhatChainId === 8453 ? EnvSetup.getEnv().baseForkBlock !== 0 ? EnvSetup.getEnv().baseForkBlock : undefined :
-                    undefined,
+  	            EnvSetup.getEnv().hardhatChainId === 1101 ? EnvSetup.getEnv().zkevmForkBlock !== 0 ? EnvSetup.getEnv().zkevmForkBlock : undefined :
+                        undefined,
       } : undefined,
       accounts: {
         mnemonic: 'test test test test test test test test test test test junk',
@@ -90,6 +92,17 @@ export default {
       verify: {
         etherscan: {
           apiKey: EnvSetup.getEnv().networkScanKeyBase
+        }
+      }
+    },
+    zkevm: {
+      url: EnvSetup.getEnv().zkevmRpcUrl || '',
+      chainId: 1101,
+      accounts: [EnvSetup.getEnv().privateKey],
+      gasPrice: 1000000000,
+      verify: {
+        etherscan: {
+          apiKey: EnvSetup.getEnv().networkScanKeyZkevm
         }
       }
     },
@@ -123,6 +136,7 @@ export default {
       sepolia: EnvSetup.getEnv().networkScanKey,
       polygon: EnvSetup.getEnv().networkScanKeyMatic || EnvSetup.getEnv().networkScanKey,
       base: EnvSetup.getEnv().networkScanKeyBase || EnvSetup.getEnv().networkScanKey,
+      zkevm: EnvSetup.getEnv().networkScanKeyZkevm || EnvSetup.getEnv().networkScanKey,
     },
     customChains: [
       {
@@ -132,7 +146,15 @@ export default {
           apiURL: "https://api.basescan.org/api",
           browserURL: "https://basescan.org"
         }
-      }
+      },
+      {
+        network: "zkevm",
+        chainId: 1101,
+        urls: {
+          apiURL: "https://api-zkevm.polygonscan.com/api",
+          browserURL: "https://zkevm.polygonscan.com/"
+        }
+      },
     ]
   },
   verify: {

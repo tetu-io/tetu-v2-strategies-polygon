@@ -1,6 +1,7 @@
 /* tslint:disable:variable-name */
 export class BaseAddresses {
     public static GOV_ADDRESS = "0x3f5075195b96B60d7D26b5cDe93b64A6D9bF33e2".toLowerCase()
+    public static TETU_CONTROLLER = "0x255707B70BF90aa112006E1b07B9AeA6De021424".toLowerCase();
     public static TETU_CONVERTER = "0x51002Cad5e6FbE3856311f431E1c41c46Acc5D47".toLowerCase()
     public static TETU_CONVERTER_PRICE_ORACLE = "0x2783E44E629617194F93AB67355028865c9117b4".toLowerCase()
 
@@ -38,15 +39,15 @@ export class BaseAddresses {
     public static PANCAKE_SWAP_TOKEN = "0x3055913c90Fcc1A6CE9a358911721eEb942013A1".toLowerCase();
     public static PANCAKE_MASTER_CHEF_V3 = "0xC6A2Db661D5a5690172d8eB0a7DEA2d3008665A3".toLowerCase();
     public static PANCAKE_NONFUNGIBLE_POSITION_MANAGER = "0x46a15b0b27311cedf172ab29e4f4766fbe7f4364".toLowerCase();
-    /** From list of transactions: https://basescan.org/address/0x3af75af6f056d4d72c1675da919aebf908a109d6 */
-    public static PANCAKE_QUOTER_V2 = "0x864ED564875BdDD6F421e226494a0E7c071C06f8".toLowerCase(); // todo 0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997
-    /** From list of transactions: https://basescan.org/address/0x3af75af6f056d4d72c1675da919aebf908a109d6 */
+    /** From https://pancakeswap.finance/farms?chain=polygonZkEVM */
+    public static PANCAKE_QUOTER_V2 = "0x864ED564875BdDD6F421e226494a0E7c071C06f8".toLowerCase();
+    /** From list of transactions: https://basescan.org/address/0x3af75af6f056d4d72c1675da919aebf908a109d6 (creator of Quoter2) */
     public static PANCAKE_SMART_ROUTER = "0x678Aa4bF4E210cf2166753e054d5b7c31cc7fa86".toLowerCase();
-    /** From list of transactions: https://basescan.org/address/0x3af75af6f056d4d72c1675da919aebf908a109d6 */
+    /** From list of transactions: https://basescan.org/address/0x3af75af6f056d4d72c1675da919aebf908a109d6 (creator of Quoter2) */
     public static PANCAKE_MIXED_ROUTE_QUOTER_V1 = "0x4c650FB471fe4e0f476fD3437C3411B1122c4e3B".toLowerCase();
-    /** From list of transactions: https://basescan.org/address/0x3af75af6f056d4d72c1675da919aebf908a109d6 */
+    /** From list of transactions: https://basescan.org/address/0x3af75af6f056d4d72c1675da919aebf908a109d6 (creator of Quoter2) */
     public static PANCAKE_SMART_ROUTER_HELPER = "0x13f4EA83D0bd40E75C8222255bc855a974568Dd4".toLowerCase();
-    /** From list of transactions: https://basescan.org/address/0x3af75af6f056d4d72c1675da919aebf908a109d6 */
+    /** From list of transactions: https://basescan.org/address/0x3af75af6f056d4d72c1675da919aebf908a109d6 (creator of Quoter2) */
     public static PANCAKE_SWAP_ROUTER = "0x1b81D678ffb9C0263b24A97847620C99d213eB14".toLowerCase();
 
     public static PANCAKE_POOL_USDC_USDbC_LP_100 = "0x29Ed55B18Af0Add137952CB3E29FB77B32fCE426".toLowerCase();
