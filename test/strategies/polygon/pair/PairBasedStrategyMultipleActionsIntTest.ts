@@ -99,6 +99,7 @@ describe('PairBasedStrategyMultipleActionsIntTest @skip-on-coverage', function()
        */
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          POLYGON_NETWORK_ID,
           strategyInfo.name,
           signer,
           signer2,
@@ -234,7 +235,7 @@ describe('PairBasedStrategyMultipleActionsIntTest @skip-on-coverage', function()
      * Prepare initial balances of both users.
      */
     async function prepareStrategy(): Promise<IPrepareResults> {
-      const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(PLATFORM_UNIV3, signer, signer2);
+      const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(POLYGON_NETWORK_ID, PLATFORM_UNIV3, signer, signer2);
 
       // deploy second strategy
       const strategy2 = UniswapV3ConverterStrategy__factory.connect(

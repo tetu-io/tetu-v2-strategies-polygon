@@ -13,6 +13,7 @@ interface IBuildPairStrategyParams {
 
 export class PairStrategyFixtures {
   static async buildPairStrategyUsdcXXX(
+    chainId: number,
     strategyName: string,
     signer: SignerWithAddress,
     signer2: SignerWithAddress,

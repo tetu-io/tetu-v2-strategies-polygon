@@ -205,7 +205,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
 
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(POLYGON_NETWORK_ID, strategyInfo.name, signer, signer2);
 
         await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
         return b;
@@ -310,7 +310,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
 
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(POLYGON_NETWORK_ID, strategyInfo.name, signer, signer2);
 
         await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
         return b;

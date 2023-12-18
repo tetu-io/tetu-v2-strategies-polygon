@@ -130,6 +130,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
         async function createStrategy(): Promise<IBuilderResults> {
           const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+            POLYGON_NETWORK_ID,
             strategyInfo.name,
             signer,
             signer2,
@@ -1108,6 +1109,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          POLYGON_NETWORK_ID,
           strategyInfo.name,
           signer,
           signer2,
@@ -1198,6 +1200,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          POLYGON_NETWORK_ID,
           strategyInfo.name,
           signer,
           signer2,
@@ -1292,6 +1295,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          POLYGON_NETWORK_ID,
           strategyInfo.name,
           signer,
           signer2,
@@ -1625,6 +1629,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          POLYGON_NETWORK_ID,
           strategyInfo.name,
           signer,
           signer2,

@@ -24,7 +24,7 @@ import {
   ITetuConverter__factory,
   IUniswapV3Pool__factory,
   KyberConverterStrategy__factory,
-  KyberLib,
+  KyberLib, PancakeLib,
   TetuVaultV2,
   UniswapV3ConverterStrategy__factory,
   UniswapV3Lib
@@ -184,7 +184,7 @@ export interface IStateParams {
 
 export interface IGetStateParams {
   eventsSet?: IEventsSet;
-  lib?: KyberLib | UniswapV3Lib | AlgebraLib;
+  lib?: KyberLib | UniswapV3Lib | AlgebraLib | PancakeLib;
   additionalParamValues?: number[];
 }
 

@@ -228,6 +228,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
 
       async function prepareStrategy(): Promise<IPrepareStrategyResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          POLYGON_NETWORK_ID,
           strategyInfo.name,
           signer,
           signer2,
@@ -723,6 +724,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
 
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          POLYGON_NETWORK_ID,
           strategyInfo.name,
           signer,
           signer2,

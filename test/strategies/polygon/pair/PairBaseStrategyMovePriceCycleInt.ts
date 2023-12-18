@@ -229,6 +229,7 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
 
     async function prepareStrategy(): Promise<IBuilderResults> {
       const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+        POLYGON_NETWORK_ID,
         strategyInfo.name,
         signer,
         signer2,

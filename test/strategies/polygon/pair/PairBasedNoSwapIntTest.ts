@@ -83,6 +83,7 @@ describe('PairBasedNoSwapIntTest', function() {
   platforms.forEach(function (platformType: PlatformsType) {
     async function createStrategy(): Promise<IBuilderResults> {
       const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+        POLYGON_NETWORK_ID,
         platformType,
         signer,
         signer2,
