@@ -22,7 +22,7 @@ import {
   ITetuLiquidator,
   KyberConverterStrategy,
   KyberConverterStrategy__factory,
-  KyberLib,
+  KyberLib, PancakeConverterStrategy__factory,
   PancakeLib,
   StrategySplitterV2,
   SwapHelper,
@@ -43,6 +43,7 @@ import {IStateParams} from "../../utils/StateUtilsNum";
 import {parseUnits} from "ethers/lib/utils";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../AppPlatforms";
 import {MockHelper} from "../../helpers/MockHelper";
+import {BaseAddresses} from "../../../../scripts/addresses/BaseAddresses";
 
 /**
  * Kyber PID for most current block
@@ -136,7 +137,7 @@ export class PairBasedStrategyBuilder {
       controllerAsGov: ControllerV2,
       core: CoreAddresses,
       data: IVaultStrategyInfo,
-      lib: UniswapV3Lib | AlgebraLib | KyberLib
+      lib: UniswapV3Lib | AlgebraLib | KyberLib | PancakeLib
   ): Promise<IBuilderResults> {
     const signer = p.signer;
     const gov = await Misc.impersonate(p.gov);
@@ -145,7 +146,7 @@ export class PairBasedStrategyBuilder {
     const strategy = IRebalancingV2Strategy__factory.connect(data.strategy.address, gov);
 
     // whitlist the strategy in the converter
-    await ConverterUtils.whitelist([strategy.address]);
+    await ConverterUtils.whitelist([strategy.address], p.converter);
     const state = await PackedData.getDefaultState(strategy);
 
     // prices should be the same in the pool and in the oracle
@@ -206,6 +207,7 @@ export class PairBasedStrategyBuilder {
     }
   }
 
+//region Polygon
   static async buildUniv3(p: IBuilderParams): Promise<IBuilderResults> {
     const signer = p.signer;
     const gov = await Misc.impersonate(p.gov);
@@ -339,4 +341,47 @@ export class PairBasedStrategyBuilder {
     const lib = await DeployerUtils.deployContract(signer, 'KyberLib') as KyberLib;
     return this.build(p, controllerAsGov, core, data, lib);
   }
+//endregion Polygon
+
+//region Base chain
+  static async buildPancake(p: IBuilderParams): Promise<IBuilderResults> {
+    const signer = p.signer;
+    const gov = await Misc.impersonate(p.gov);
+    const core = Addresses.getCore() as CoreAddresses;
+    const controller = ControllerV2__factory.connect(core.controller, gov);
+
+    const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
+      p.asset,
+      p.vaultName,
+      async(_splitterAddress: string) => {
+        const _strategy = PancakeConverterStrategy__factory.connect(
+          await DeployerUtils.deployProxy(signer, 'PancakeConverterStrategy'),
+          gov,
+        );
+
+        await _strategy.init(
+          core.controller,
+          _splitterAddress,
+          p.converter,
+          p.pool,
+          0,
+          0,
+          [0, 0, Misc.MAX_UINT, 0],
+          BaseAddresses.PANCAKE_MASTER_CHEF_V3
+        );
+
+        return _strategy as unknown as IStrategyV2;
+      },
+      controller,
+      gov,
+      p.buffer ?? 1000,
+      p.depositFee ?? 300,
+      p.withdrawFee ?? 300,
+      false,
+    );
+
+    const lib = await DeployerUtils.deployContract(signer, 'PancakeLib') as PancakeLib;
+    return this.build(p, controller, core, data, lib);
+  }
+//endregion Base chain
 }

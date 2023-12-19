@@ -17,12 +17,21 @@ import {
   Misc,
 } from '../../../scripts/utils/Misc';
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
+import {ethers} from "hardhat";
 
 export class ConverterUtils {
 
   public static async whitelist(adrs: string[], converterAddress?: string) {
-    const signer = await Misc.impersonate(MaticAddresses.GOV_ADDRESS);
-    const converterControllerAddr = await TetuConverter__factory.connect(converterAddress || getConverterAddress(), signer).controller();
+    console.log("whitelist strategy in converter", converterAddress);
+    const tetuConverterAddress = converterAddress || getConverterAddress();
+    const user = await Misc.impersonate(ethers.Wallet.createRandom().address);
+    const governance = await IConverterController__factory.connect(
+      await ITetuConverter__factory.connect(tetuConverterAddress, user).controller(),
+      user
+    ).governance();
+
+    const signer = await Misc.impersonate(governance);
+    const converterControllerAddr = await TetuConverter__factory.connect(tetuConverterAddress, signer).controller();
     const converterController = IConverterController__factory.connect(converterControllerAddr, signer);
     const converterControllerGovernanceAddr = await converterController.governance();
     const converterControllerGovernance = await DeployerUtilsLocal.impersonate(converterControllerGovernanceAddr);
@@ -30,6 +39,7 @@ export class ConverterUtils {
     const contrl = ConverterController__factory.connect(converterControllerAddr, converterControllerGovernance);
 
     await contrl.setWhitelistValues(adrs, true);
+    console.log("whitelisted");
   }
 
   /**
