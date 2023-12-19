@@ -6,6 +6,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../ConverterStrategyBaseLib.sol";
 import "../../interfaces/IPoolProportionsProvider.sol";
 import "../../libs/BorrowLib.sol";
+import "hardhat/console.sol";
 
 /// @notice Library for the UniV3-like strategies with two tokens in the pool
 /// @dev The library contains quoteWithdrawStep/withdrawStep-related logic
@@ -173,6 +174,7 @@ library PairBasedStrategyLib {
     address tokenToSwap,
     uint amountToSwap
   ){
+    console.log("quoteWithdrawStep.1");
     (uint[] memory prices,
       uint[] memory decs
     ) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(ITetuConverter(converterLiquidator_[0])), tokens, 2);
@@ -191,6 +193,7 @@ library PairBasedStrategyLib {
       usePoolProportions: entryDataValues[0] == type(uint).max,
       entryDataParam: entryDataValues[1]
     });
+    console.log("quoteWithdrawStep.2");
     return _quoteWithdrawStep(p);
   }
 
@@ -350,6 +353,7 @@ library PairBasedStrategyLib {
     address tokenToSwap,
     uint amountToSwap
   ) {
+    console.log("_quoteWithdrawStep.1");
     uint indexTokenToSwapPlus1;
     (indexTokenToSwapPlus1, amountToSwap,) = IterationPlanLib.buildIterationPlan(
       [address(p.converter), address(p.liquidator)],
@@ -368,6 +372,7 @@ library PairBasedStrategyLib {
         p.entryDataParam
       ]
     );
+    console.log("_quoteWithdrawStep.2");
     if (indexTokenToSwapPlus1 != 0) {
       tokenToSwap = p.tokens[indexTokenToSwapPlus1 - 1];
     }
@@ -380,6 +385,7 @@ library PairBasedStrategyLib {
   function _withdrawStep(IterationPlanLib.SwapRepayPlanParams memory p, SwapByAggParams memory aggParams) internal returns (
     bool completed
   ) {
+    console.log("_withdrawStep.1");
     (uint idxToSwap1, uint amountToSwap, uint idxToRepay1) = IterationPlanLib.buildIterationPlan(
       [address(p.converter), address(p.liquidator)],
       p.tokens,
@@ -397,6 +403,7 @@ library PairBasedStrategyLib {
         p.entryDataParam
       ]
     );
+    console.log("_withdrawStep.2");
 
     bool[4] memory actions = [
       p.planKind == IterationPlanLib.PLAN_SWAP_ONLY || p.planKind == IterationPlanLib.PLAN_SWAP_REPAY, // swap 1
@@ -404,10 +411,12 @@ library PairBasedStrategyLib {
       p.planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY, // swap 2
       p.planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY // repay 2
       ];
+    console.log("_withdrawStep.3");
 
     if (idxToSwap1 != 0 && actions[IDX_SWAP_1]) {
       (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
     }
+    console.log("_withdrawStep.4");
 
     if (idxToRepay1 != 0 && actions[IDX_REPAY_1]) {
       ConverterStrategyBaseLib._repayDebt(
@@ -417,12 +426,17 @@ library PairBasedStrategyLib {
         IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this))
       );
     }
+    console.log("_withdrawStep.5");
 
     if (idxToSwap1 != 0) {
+      console.log("_withdrawStep.6");
       if (actions[IDX_SWAP_2]) {
+        console.log("_withdrawStep.7");
         (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
+        console.log("_withdrawStep.8");
 
         if (actions[IDX_REPAY_2] && idxToRepay1 != 0) {
+          console.log("_withdrawStep.9");
           // see calculations inside estimateSwapAmountForRepaySwapRepay
           // There are two possibilities here:
           // 1) All collateral asset available on balance was swapped. We need additional repay to get assets in right proportions
@@ -432,11 +446,14 @@ library PairBasedStrategyLib {
             idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET,
             idxToRepay1 - 1
           );
+          console.log("_withdrawStep.10");
 
           if (borrowInsteadRepay) {
+            console.log("_withdrawStep.11");
             _borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, true);
 
           } else if (amountToRepay2 > p.liquidationThresholds[idxToRepay1 - 1]) {
+            console.log("_withdrawStep.12");
             _secondRepay(p, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, idxToRepay1 - 1, amountToRepay2, type(uint).max);
           }
         }
@@ -448,10 +465,12 @@ library PairBasedStrategyLib {
           && p.usePoolProportions  // we use proportions from the pool
           && p.propNotUnderlying18 != 0 && p.propNotUnderlying18 != 1e18 // BorrowLib doesn't allow prop=0
         ) {
+          console.log("_withdrawStep.13");
           _fixLeftoversProportions(p);
         }
       }
     }
+    console.log("_withdrawStep.14");
 
     // Withdraw is completed on last iteration (no debts, swapping leftovers)
     return idxToRepay1 == 0;

@@ -9,6 +9,7 @@ import "../../interfaces/IRebalancingV2Strategy.sol";
 import "./Uni3StrategyErrors.sol";
 import "../pair/PairBasedStrategyLib.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
+import "hardhat/console.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
@@ -156,6 +157,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @notice Get info about a swap required by next call of {withdrawByAggStep} within the given plan
   function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap) {
     // restriction "operator only" is checked inside {initWithdrawLocal} in {quoteWithdrawStep}
+    console.log("quoteWithdrawByAgg.tokenToSwap", tokenToSwap);
+    console.log("quoteWithdrawByAgg.amountToSwap", amountToSwap);
 
     // estimate amounts to be withdrawn from the pool
     uint totalLiquidity = state.pair.totalLiquidity;

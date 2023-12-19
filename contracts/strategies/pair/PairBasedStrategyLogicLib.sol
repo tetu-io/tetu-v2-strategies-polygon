@@ -5,6 +5,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "../ConverterStrategyBaseLib.sol";
 import "./PairBasedStrategyLib.sol";
 import "../ConverterStrategyBaseLib2.sol";
+import "hardhat/console.sol";
 
 /// @notice Library for the UniV3-like strategies with two tokens in the pool
 library PairBasedStrategyLogicLib {
@@ -121,11 +122,13 @@ library PairBasedStrategyLogicLib {
     bytes memory planEntryData,
     address controller
   ) internal view { // it's internal because it initializes {dest}
+    console.log("PBS.initWithdrawLocal.1");
     dest.controller = controller;
     StrategyLib2.onlyOperators(dest.controller);
 
     dest.planKind = IterationPlanLib.getEntryKind(planEntryData);
     (dest.propNotUnderlying18, dest.entryDataParam)  = PairBasedStrategyLib._extractProp(dest.planKind, planEntryData);
+    console.log("PBS.initWithdrawLocal.2");
 
     dest.tokens = new address[](2);
     (dest.tokens[0], dest.tokens[1]) = (tokens_[0], tokens_[1]);
@@ -264,6 +267,7 @@ library PairBasedStrategyLogicLib {
     address tokenToSwap,
     uint amountToSwap
   ) {
+    console.log("PBS.quoteWithdrawByAgg", amounts_[0], amounts_[1]);
     // check operator-only, initialize w
     WithdrawLocal memory w;
     initWithdrawLocal(
@@ -273,6 +277,7 @@ library PairBasedStrategyLogicLib {
       planEntryData,
       controller_
     );
+    console.log("PBS.quoteWithdrawByAgg.1");
 
     (tokenToSwap, amountToSwap) = PairBasedStrategyLib.quoteWithdrawStep(
       [address(converter_), address(AppLib._getLiquidator(w.controller))],
@@ -282,6 +287,7 @@ library PairBasedStrategyLogicLib {
       w.planKind,
       [w.propNotUnderlying18, w.entryDataParam]
     );
+    console.log("PBS.amountToSwap", amountToSwap);
 
     if (amountToSwap != 0) {
       // withdrawByAggStep will execute REPAY1 - SWAP - REPAY2
