@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "../../integrations/aave/AggregatorInterface.sol";
+import "../../../integrations/aave/AggregatorInterface.sol";
 
 /// @notice A source of asset's price for AAVE3 price oracle
 ///         See price oracle 0xb023e699F5a33916Ea823A16485e259257cA8Bd1

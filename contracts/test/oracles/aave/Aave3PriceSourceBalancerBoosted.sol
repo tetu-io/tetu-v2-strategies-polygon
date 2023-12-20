@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "../../integrations/aave/AggregatorInterface.sol";
+import "../../../integrations/aave/AggregatorInterface.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
-import "../../integrations/balancer/IComposableStablePool.sol";
-import "../../integrations/balancer/ILinearPool.sol";
-import "../../integrations/balancer/IBVault.sol";
+import "../../../integrations/balancer/IComposableStablePool.sol";
+import "../../../integrations/balancer/ILinearPool.sol";
+import "../../../integrations/balancer/IBVault.sol";
 // import "hardhat/console.sol";
 
 interface ISwapper {

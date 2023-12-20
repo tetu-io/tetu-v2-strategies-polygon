@@ -41,7 +41,7 @@ import {UniversalTestUtils} from "../../utils/UniversalTestUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {IStateParams} from "../../utils/StateUtilsNum";
 import {parseUnits} from "ethers/lib/utils";
-import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../AppPlatforms";
+import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_PANCAKE, PLATFORM_UNIV3} from "../AppPlatforms";
 import {MockHelper} from "../../helpers/MockHelper";
 import {BaseAddresses} from "../../../../scripts/addresses/BaseAddresses";
 
@@ -129,6 +129,8 @@ export class PairBasedStrategyBuilder {
       await PriceOracleImitatorUtils.algebra(signer, state.pool, state.tokenA);
     } else if (platform === PLATFORM_KYBER) {
       await PriceOracleImitatorUtils.kyber(signer, state.pool, state.tokenA);
+    } else if (platform === PLATFORM_PANCAKE) {
+      await PriceOracleImitatorUtils.pancakeBaseChain(signer, state.pool, state.tokenA);
     } else throw Error(`setPriceImitator: unknown platform ${platform}`);
   }
 

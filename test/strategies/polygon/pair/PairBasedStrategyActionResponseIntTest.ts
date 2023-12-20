@@ -6,7 +6,7 @@ import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {
   ConverterStrategyBase__factory,
   IController__factory,
-  IERC20__factory, IERC20Metadata__factory,
+  IERC20__factory, IERC20Metadata__factory, ISwapper__factory,
 
 } from '../../../../typechain';
 import {Misc} from "../../../../scripts/utils/Misc";
@@ -36,9 +36,6 @@ import {
   PLAN_SWAP_REPAY_0
 } from "../../../baseUT/AppConstants";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
-import {
-  ISwapper__factory
-} from "../../../../typechain/factories/contracts/test/aave/Aave3PriceSourceBalancerBoosted.sol";
 import {controlGasLimitsEx} from "../../../../scripts/utils/GasLimitUtils";
 import {BigNumber} from "ethers";
 import {CaptureEvents, IEventsSet} from "../../../baseUT/strategies/CaptureEvents";
@@ -166,7 +163,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               let snapshotLevel0: string;
               before(async function () {
                 snapshotLevel0 = await TimeUtils.snapshot();
-                await makeDeposit();
+                // await makeDeposit();
               });
               after(async function () {
                 await TimeUtils.rollback(snapshotLevel0);
@@ -195,7 +192,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                 let snapshotLevel1Each: string;
                 before(async function () {
                   snapshotLevel1 = await TimeUtils.snapshot();
-                  await prepareStrategy();
                 });
                 after(async function () {
                   await TimeUtils.rollback(snapshotLevel1);
@@ -207,11 +203,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   await TimeUtils.rollback(snapshotLevel1Each);
                 });
 
-                async function prepareStrategy() {
-                  // nothing to do
-                }
-
                 it("totalLiquidity should be > 0", async () => {
+                  await makeDeposit();
                   const state = await PackedData.getDefaultState(b.strategy);
                   expect(state.totalLiquidity.gt(0)).eq(true);
                 });

@@ -9,8 +9,8 @@ import {
   IAave3PriceOracle__factory, IAlgebraPool__factory,
   IBVault__factory,
   IComposableStablePool__factory,
-  ILinearPool__factory, IPool__factory, IPriceOracle__factory,
-  IUniswapV3Pool__factory
+  ILinearPool__factory, IMoonwellComptroller__factory, IPancakeV3Pool__factory, IPool__factory, IPriceOracle__factory,
+  IUniswapV3Pool__factory, MoonwellPriceOraclePancakePool
 } from "../../../typechain";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {BigNumber} from "ethers";
@@ -158,20 +158,42 @@ export class PriceOracleImitatorUtils {
     signer: SignerWithAddress,
     pool: string,
     stableToken: string,
-    stableTokenPrice: string = '100000000'
   ) {
-    const poolOwner = await Misc.impersonate(MaticAddresses.AAVE3_POOL_OWNER);
-    const priceOracleAsPoolOwner: IAave3PriceOracle = IAave3PriceOracle__factory.connect(MaticAddresses.AAVE3_PRICE_ORACLE, poolOwner);
+    const admin = await IMoonwellComptroller__factory.connect(BaseAddresses.MOONWELL_COMPTROLLER, signer).admin();
 
-    const univ3Pool = IUniswapV3Pool__factory.connect(pool, signer)
-    const token0 = await univ3Pool.token0()
-    const token1 = await univ3Pool.token1()
-    const volatileToken = token0.toLowerCase() === stableToken.toLowerCase() ? token1 : token0
-    const sources: AggregatorInterface[] = [
-      await DeployerUtils.deployContract(signer, 'Aave3PriceSourceFixed', stableTokenPrice) as AggregatorInterface,
-      await DeployerUtils.deployContract(signer, 'Aave3PriceSourceUniswapV3', pool, volatileToken) as AggregatorInterface
-    ]
+    const pancakePool = IPancakeV3Pool__factory.connect(pool, signer);
+    const token0 = await pancakePool.token0();
+    const token1 = await pancakePool.token1();
+    const volatileToken = token0.toLowerCase() === stableToken.toLowerCase() ? token1 : token0;
 
-    await priceOracleAsPoolOwner.setAssetSources([stableToken, volatileToken], sources.map(x => x.address));
+    const stableMToken = stableToken.toLowerCase() === BaseAddresses.USDbC_TOKEN.toLowerCase()
+      ? BaseAddresses.MOONWELL_USDBC
+      : stableToken.toLowerCase() === BaseAddresses.USDC_TOKEN.toLowerCase()
+        ? BaseAddresses.USDC_TOKEN
+        : "";
+
+    const volatileMToken = volatileToken.toLowerCase() === BaseAddresses.USDbC_TOKEN.toLowerCase()
+      ? BaseAddresses.MOONWELL_USDBC
+      : volatileToken.toLowerCase() === BaseAddresses.USDC_TOKEN.toLowerCase()
+        ? BaseAddresses.USDC_TOKEN
+        : "";
+
+    if (!stableMToken || !volatileMToken) {
+      throw Error("pancakeBaseChain is not able to detect mToken");
+    }
+
+    const priceOracle = await DeployerUtils.deployContract(
+      signer,
+      'MoonwellPriceOraclePancakePool',
+      stableMToken,
+      stableToken,
+      parseUnits("1", 18),
+      volatileMToken,
+      volatileToken,
+      pool,
+      BaseAddresses.MOONWELL_PRICE_ORACLE
+    ) as MoonwellPriceOraclePancakePool;
+
+    await IMoonwellComptroller__factory.connect(BaseAddresses.MOONWELL_COMPTROLLER, await Misc.impersonate(admin))._setPriceOracle(priceOracle.address);
   }
 }

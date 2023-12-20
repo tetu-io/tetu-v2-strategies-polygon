@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "../../integrations/aave/AggregatorInterface.sol";
-import "../../integrations/uniswap/IUniswapV3Pool.sol";
+import "../../../integrations/aave/AggregatorInterface.sol";
+import "../../../integrations/uniswap/IUniswapV3Pool.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 
 /// @notice A source of asset's price for AAVE3 price oracle

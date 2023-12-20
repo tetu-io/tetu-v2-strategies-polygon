@@ -4,8 +4,13 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {
-  ConverterStrategyBase__factory, IController__factory,
-  IERC20__factory, IRebalancingV2Strategy, ISetupPairBasedStrategy__factory, UniswapV3ConverterStrategy__factory,
+  ConverterStrategyBase__factory,
+  IController__factory,
+  IERC20__factory,
+  IRebalancingV2Strategy,
+  ISetupPairBasedStrategy__factory,
+  ISwapper__factory,
+  UniswapV3ConverterStrategy__factory,
 } from '../../../../typechain';
 import {Misc} from "../../../../scripts/utils/Misc";
 import {formatUnits, parseUnits} from 'ethers/lib/utils';
@@ -19,9 +24,6 @@ import {PackedData} from "../../../baseUT/utils/PackedData";
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
-import {
-  ISwapper__factory
-} from "../../../../typechain/factories/contracts/test/aave/Aave3PriceSourceBalancerBoosted.sol";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {IGetStateParams, IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
