@@ -380,7 +380,27 @@ describe('IterationPlanLibTest', () => {
         });
 
         expect(r.amountToSwapA).eq(0);
-        expect(r.amountToSwapB).approximately(144.3376 * 1.008 / 1.004, 0.1);
+        expect(r.amountToSwapB).approximately(134.555422, 0.1);
+      });
+
+      it("should return expected amount-to-swap of B token when decimals are different", async () => {
+        const r = await makeEstimateSwapAmount({
+          balancesAB: ["0", "9534"],
+          indicesAB: [0, 1],
+          propB: "0.0034",
+
+          totalCollateralA: "12947",
+          totalBorrowB: "9345",
+
+          collateralA: "12947",
+          amountToRepayB: "9345",
+
+          decimals: [6, 18],
+          prices: ["1.1", "0.9"],
+        });
+
+        expect(r.amountToSwapA).eq(0);
+        expect(r.amountToSwapB).approximately(134.555422, 0.1);
       });
     });
   });

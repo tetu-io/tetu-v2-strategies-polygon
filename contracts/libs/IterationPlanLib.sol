@@ -6,7 +6,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "./AppErrors.sol";
 import "./AppLib.sol";
-import "hardhat/console.sol";
 
 /// @notice Support of withdraw iteration plans
 library IterationPlanLib {
@@ -193,15 +192,12 @@ library IterationPlanLib {
     uint amountToSwap,
     uint indexToRepayPlus1
   ) {
-    console.log("_buildIterationPlan.1");
     GetIterationPlanLocal memory v;
     v.asset = p.tokens[indexAsset];
     v.token = p.tokens[indexToken];
 
     v.assetBalance = IERC20(v.asset).balanceOf(address(this)) + p.balanceAdditions[indexAsset];
     v.tokenBalance = IERC20(p.tokens[indexToken]).balanceOf(address(this)) + p.balanceAdditions[indexToken];
-    console.log("_buildIterationPlan.v.assetBalance", v.assetBalance);
-    console.log("_buildIterationPlan.v.tokenBalance", v.tokenBalance);
 
     if (p.planKind == IterationPlanLib.PLAN_SWAP_ONLY) {
       v.swapLeftoversNeeded = true;
@@ -209,7 +205,6 @@ library IterationPlanLib {
       uint requestedAmount = requestedBalance == type(uint).max
         ? type(uint).max
         : AppLib.sub0(requestedBalance, v.assetBalance);
-      console.log("_buildIterationPlan.requestedAmount", requestedAmount);
 
       if (requestedAmount < p.liquidationThresholds[indexAsset]) {
         // we don't need to repay any debts anymore, but we should swap leftovers
@@ -223,13 +218,9 @@ library IterationPlanLib {
 
         // reverse debt
         (v.debtReverse, v.collateralReverse) = p.converter.getDebtAmountCurrent(address(this), v.token, v.asset, true);
-        console.log("_buildIterationPlan.v.debtReverse", v.debtReverse);
-        console.log("_buildIterationPlan.v.collateralReverse", v.collateralReverse);
         if (v.debtReverse < AppLib.DUST_AMOUNT_TOKENS) { // there is reverse debt or the reverse debt is dust debt
           // direct debt
           (v.totalDebt, v.totalCollateral) = p.converter.getDebtAmountCurrent(address(this), v.asset, v.token, true);
-          console.log("_buildIterationPlan.v.totalDebt", v.totalDebt);
-          console.log("_buildIterationPlan.v.totalCollateral", v.totalCollateral);
 
           if (v.totalDebt < AppLib.DUST_AMOUNT_TOKENS) { // there is direct debt or the direct debt is dust debt
             // This is final iteration - we need to swap leftovers and get amounts on balance in proper proportions.
@@ -239,7 +230,6 @@ library IterationPlanLib {
           } else {
             // repay direct debt
             if (p.planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY) {
-              console.log("_buildIterationPlan.1");
               (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanRepaySwapRepay(
                 p,
                 [v.assetBalance, v.tokenBalance],
@@ -249,7 +239,6 @@ library IterationPlanLib {
                 p.entryDataParam
               );
             } else {
-              console.log("_buildIterationPlan.2");
               (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanForSellAndRepay(
                 requestedAmount,
                 p,
@@ -265,7 +254,6 @@ library IterationPlanLib {
         } else {
           // repay reverse debt
           if (p.planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY) {
-            console.log("_buildIterationPlan.3");
             (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanRepaySwapRepay(
               p,
               [v.tokenBalance, v.assetBalance],
@@ -275,7 +263,6 @@ library IterationPlanLib {
               p.entryDataParam
             );
           } else {
-            console.log("_buildIterationPlan.4");
             (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanForSellAndRepay(
               requestedAmount == type(uint).max
                 ? type(uint).max
@@ -319,27 +306,16 @@ library IterationPlanLib {
     uint amountToSwap,
     uint indexToRepayPlus1
   ) {
-    console.log("_buildPlanRepaySwapRepay.balancesAB", balancesAB[0], balancesAB[1]);
-    console.log("_buildPlanRepaySwapRepay.idxAB", idxAB[0], idxAB[1]);
-    console.log("propB", propB);
-    console.log("totalAB", totalAB[0], totalAB[1]);
-    console.log("requiredAmountToReduceDebt", requiredAmountToReduceDebt);
-
     // use all available tokenB to repay debt and receive as much as possible tokenA
     uint amountToRepay = Math.min(balancesAB[1], totalAB[1]);
-    console.log("_buildPlanRepaySwapRepay.1");
 
     uint collateralAmount;
     if (amountToRepay >= AppLib.DUST_AMOUNT_TOKENS) {
-      console.log("_buildPlanRepaySwapRepay.2");
       uint swappedAmountOut;
       //
       (collateralAmount, swappedAmountOut) = p.converter.quoteRepay(address(this), p.tokens[idxAB[0]], p.tokens[idxAB[1]], amountToRepay);
-      console.log("_buildPlanRepaySwapRepay.3");
       if (collateralAmount > swappedAmountOut) { // SCB-789
-        console.log("_buildPlanRepaySwapRepay.4");
         collateralAmount -= swappedAmountOut;
-        console.log("_buildPlanRepaySwapRepay.5");
       }
     } else {
       amountToRepay = 0;
@@ -358,22 +334,19 @@ library IterationPlanLib {
       collateralAmount,
       amountToRepay
     );
-    console.log("_buildPlanRepaySwapRepay.6.amountToSwap", amountToSwap);
-    console.log("_buildPlanRepaySwapRepay.6.swapB", swapB);
 
     if (swapB) {
-      console.log("_buildPlanRepaySwapRepay.8.requiredAmountToReduceDebt", requiredAmountToReduceDebt);
+      // edge case: swap B => A; for simplicity, we don't take into account requiredAmountToReduceDebt
       return (idxAB[1] + 1, amountToSwap, idxAB[1] + 1);
     } else {
+      // swap A => B
       if (requiredAmountToReduceDebt != 0) {
-        console.log("_buildPlanRepaySwapRepay.7");
         // probably it worth to increase amount to swap?
         uint requiredAmountToSwap = requiredAmountToReduceDebt * p.prices[idxAB[1]] * p.decs[idxAB[0]] / p.prices[idxAB[0]] / p.decs[idxAB[1]];
         amountToSwap = Math.max(amountToSwap, requiredAmountToSwap);
         amountToSwap = Math.min(amountToSwap, balancesAB[0] + collateralAmount);
       }
 
-      console.log("_buildPlanRepaySwapRepay.8");
       return (idxAB[0] + 1, amountToSwap, idxAB[1] + 1);
     }
   }
@@ -394,16 +367,6 @@ library IterationPlanLib {
     uint collateralA,
     uint amountToRepayB
   ) internal view returns(uint amountToSwap, bool swapB) {
-    console.log("estimateSwapAmountForRepaySwapRepay.balanceA", balancesAB[0]);
-    console.log("estimateSwapAmountForRepaySwapRepay.balanceB", balancesAB[1]);
-    console.log("estimateSwapAmountForRepaySwapRepay.indexA", indicesAB[0]);
-    console.log("estimateSwapAmountForRepaySwapRepay.indexB", indicesAB[1]);
-    console.log("estimateSwapAmountForRepaySwapRepay.propB", propB);
-    console.log("estimateSwapAmountForRepaySwapRepay.totalCollateralA", totalCollateralA);
-    console.log("estimateSwapAmountForRepaySwapRepay.totalBorrowB", totalBorrowB);
-    console.log("estimateSwapAmountForRepaySwapRepay.collateralA", collateralA);
-    console.log("estimateSwapAmountForRepaySwapRepay.amountToRepayB", amountToRepayB);
-
     // N - number of the state
     // bAN, bBN - balances of A and B; aAN, aBN - amounts of A and B; cAN, cBN - collateral/borrow amounts of A/B
     // alpha ~ cAN/cBN - estimated ratio of collateral/borrow
@@ -424,10 +387,6 @@ library IterationPlanLib {
     EstimateSwapAmountForRepaySwapRepayLocal memory v;
     v.x = 1e18 - propB;
     v.y = propB;
-    console.log("estimateSwapAmountForRepaySwapRepay.prices", p.prices[0], p.prices[1]);
-    console.log("estimateSwapAmountForRepaySwapRepay.decs", p.decs[0], p.decs[1]);
-    console.log("estimateSwapAmountForRepaySwapRepay.v.x", v.x);
-    console.log("estimateSwapAmountForRepaySwapRepay.v.y", v.y);
 // 1. repay 1
     // convert amounts A, amounts B to cost A, cost B in USD
     v.bA1 = (balancesAB[0] + collateralA) * p.prices[indicesAB[0]] / p.decs[indicesAB[0]];
@@ -435,10 +394,6 @@ library IterationPlanLib {
     v.cB1 = (totalBorrowB - amountToRepayB) * p.prices[indicesAB[1]] / p.decs[indicesAB[1]];
     v.alpha = 1e18 * totalCollateralA * p.prices[indicesAB[0]] * p.decs[indicesAB[1]]
       / p.decs[indicesAB[0]] / p.prices[indicesAB[1]] / totalBorrowB; // (!) approx estimation
-    console.log("estimateSwapAmountForRepaySwapRepay.v.bA1", v.bA1);
-    console.log("estimateSwapAmountForRepaySwapRepay.v.bB1", v.bB1);
-    console.log("estimateSwapAmountForRepaySwapRepay.v.cB1", v.cB1);
-    console.log("estimateSwapAmountForRepaySwapRepay.v.alpha", v.alpha);
 
 // 2. full swap
     v.aA2 = v.bA1;
@@ -446,32 +401,27 @@ library IterationPlanLib {
 
 // 3. repay 2
     // aB3 = (x * bB2 - Y * bA2) / (alpha * y + x)
-    console.log("estimateSwapAmountForRepaySwapRepay.v.aB3.start");
     v.aB3 = (
       v.x * (v.bB1 + v.aA2 * v.swapRatio / 1e18)    // bB2 = v.bB1 + v.aA2 * v.s / 1e18
       - v.y * (v.bA1 - v.aA2)                       // bA2 = v.bA1 - v.aA2;
     ) / (v.y * v.alpha / 1e18 + v.x);
-    console.log("estimateSwapAmountForRepaySwapRepay.v.aB3", v.aB3);
 
     if (v.aB3 > v.cB1) {
-      console.log("estimateSwapAmountForRepaySwapRepay.v.aA2.start");
       if (v.y * v.bA1 >= v.x * v.bB1) {
         // there is not enough debt to make second repay
         // we need to make partial swap and receive assets in right proportions in result
         // v.gamma = 1e18 * (v.y * v.bA1 - v.x * v.bB1) / (v.bA1 * (v.x * v.s / 1e18 + v.y));
-        v.aA2 = v.bA1 * (v.y * v.bA1 - v.x * v.bB1) / (v.bA1 * (v.x * v.swapRatio / 1e18 + v.y));
-        console.log("estimateSwapAmountForRepaySwapRepay.v.aA2", v.aA2);
+        v.aA2 = (v.y * v.bA1 - v.x * v.bB1) / (v.x * v.swapRatio / 1e18 + v.y);
       } else {
-        console.log("estimateSwapAmountForRepaySwapRepay.v.aB2.start");
-        v.aB2 = v.bA1 * (v.x * v.bB1 - v.y * v.bA1) / (v.bA1 * (v.x * v.swapRatio / 1e18 + v.y)) /* * 1e18 / v.swapRatio */ ;
-        console.log("estimateSwapAmountForRepaySwapRepay.v.aB2.end", v.aB2);
+        // scb-867: edge case, we need to make swap B => A
+        v.aB2 = (v.x * v.bB1 - v.y * v.bA1) / (v.x * v.swapRatio / 1e18 + v.y) /* * 1e18 / v.swapRatio */ ;
         swapB = true;
       }
     }
 
     return swapB
-      ? (v.aB2 * p.decs[indicesAB[1]] / p.prices[indicesAB[1]], true) // scb-876: swap B => A
-      : (v.aA2 * p.decs[indicesAB[0]] / p.prices[indicesAB[0]], swapB); // normal case: swap A => B
+      ? (v.aB2 * p.decs[indicesAB[1]] / p.prices[indicesAB[1]], true) // edge case: swap B => A
+      : (v.aA2 * p.decs[indicesAB[0]] / p.prices[indicesAB[0]], false); // normal case: swap A => B
   }
 
   /// @notice Prepare a plan to swap leftovers to required proportion
