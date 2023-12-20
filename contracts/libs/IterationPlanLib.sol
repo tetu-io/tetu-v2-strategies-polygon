@@ -107,6 +107,7 @@ library IterationPlanLib {
     uint cA1;
     uint cB1;
     uint aA2;
+    uint aB2;
   }
 //endregion ------------------------------------------------ Data types
 
@@ -357,10 +358,11 @@ library IterationPlanLib {
       collateralAmount,
       amountToRepay
     );
-    console.log("_buildPlanRepaySwapRepay.6");
+    console.log("_buildPlanRepaySwapRepay.6.amountToSwap", amountToSwap);
+    console.log("_buildPlanRepaySwapRepay.6.swapB", swapB);
 
     if (swapB) {
-      console.log("_buildPlanRepaySwapRepay.8");
+      console.log("_buildPlanRepaySwapRepay.8.requiredAmountToReduceDebt", requiredAmountToReduceDebt);
       return (idxAB[1] + 1, amountToSwap, idxAB[1] + 1);
     } else {
       if (requiredAmountToReduceDebt != 0) {
@@ -460,12 +462,16 @@ library IterationPlanLib {
         v.aA2 = v.bA1 * (v.y * v.bA1 - v.x * v.bB1) / (v.bA1 * (v.x * v.swapRatio / 1e18 + v.y));
         console.log("estimateSwapAmountForRepaySwapRepay.v.aA2", v.aA2);
       } else {
-        v.aA2 = v.bA1 * (v.x * v.bB1 - v.y * v.bA1) / (v.bA1 * (v.x * v.swapRatio / 1e18 + v.y)) /* * 1e18 / v.swapRatio */ ;
+        console.log("estimateSwapAmountForRepaySwapRepay.v.aB2.start");
+        v.aB2 = v.bA1 * (v.x * v.bB1 - v.y * v.bA1) / (v.bA1 * (v.x * v.swapRatio / 1e18 + v.y)) /* * 1e18 / v.swapRatio */ ;
+        console.log("estimateSwapAmountForRepaySwapRepay.v.aB2.end", v.aB2);
         swapB = true;
       }
     }
 
-    return (v.aA2 * p.decs[indicesAB[0]] / p.prices[indicesAB[0]], swapB);
+    return swapB
+      ? (v.aB2 * p.decs[indicesAB[1]] / p.prices[indicesAB[1]], true) // scb-876: swap B => A
+      : (v.aA2 * p.decs[indicesAB[0]] / p.prices[indicesAB[0]], swapB); // normal case: swap A => B
   }
 
   /// @notice Prepare a plan to swap leftovers to required proportion

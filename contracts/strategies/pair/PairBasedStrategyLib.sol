@@ -403,7 +403,9 @@ library PairBasedStrategyLib {
         p.entryDataParam
       ]
     );
-    console.log("_withdrawStep.2");
+    console.log("_withdrawStep.2.idxToSwap1", idxToSwap1);
+    console.log("_withdrawStep.2.amountToSwap", amountToSwap);
+    console.log("_withdrawStep.2.idxToRepay1", idxToRepay1);
 
     bool[4] memory actions = [
       p.planKind == IterationPlanLib.PLAN_SWAP_ONLY || p.planKind == IterationPlanLib.PLAN_SWAP_REPAY, // swap 1
@@ -416,7 +418,7 @@ library PairBasedStrategyLib {
     if (idxToSwap1 != 0 && actions[IDX_SWAP_1]) {
       (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
     }
-    console.log("_withdrawStep.4");
+    console.log("_withdrawStep.4.propNotUnderlying18", p.propNotUnderlying18);
 
     if (idxToRepay1 != 0 && actions[IDX_REPAY_1]) {
       ConverterStrategyBaseLib._repayDebt(
@@ -434,6 +436,8 @@ library PairBasedStrategyLib {
         console.log("_withdrawStep.7");
         (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
         console.log("_withdrawStep.8");
+        console.log("_withdrawStep.balance0", IERC20(p.tokens[0]).balanceOf(address(this)));
+        console.log("_withdrawStep.balance1", IERC20(p.tokens[1]).balanceOf(address(this)));
 
         if (actions[IDX_REPAY_2] && idxToRepay1 != 0) {
           console.log("_withdrawStep.9");
@@ -471,6 +475,9 @@ library PairBasedStrategyLib {
       }
     }
     console.log("_withdrawStep.14");
+    console.log("_withdrawStep.balance0", IERC20(p.tokens[0]).balanceOf(address(this)));
+    console.log("_withdrawStep.balance1", IERC20(p.tokens[1]).balanceOf(address(this)));
+
 
     // Withdraw is completed on last iteration (no debts, swapping leftovers)
     return idxToRepay1 == 0;
