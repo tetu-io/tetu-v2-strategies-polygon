@@ -366,7 +366,7 @@ library IterationPlanLib {
     uint totalBorrowB,
     uint collateralA,
     uint amountToRepayB
-  ) internal view returns(uint amountToSwap, bool swapB) {
+  ) internal pure returns(uint amountToSwap, bool swapB) {
     // N - number of the state
     // bAN, bBN - balances of A and B; aAN, aBN - amounts of A and B; cAN, cBN - collateral/borrow amounts of A/B
     // alpha ~ cAN/cBN - estimated ratio of collateral/borrow

@@ -229,7 +229,7 @@ export class PairStrategyFixtures {
       signer2,
       gov: BaseAddresses.GOV_ADDRESS,
       pool: BaseAddresses.PANCAKE_POOL_USDC_USDbC_LP_100,
-      asset: BaseAddresses.USDC_TOKEN,
+      asset: BaseAddresses.USDbC_TOKEN,
       vaultName: 'TetuV2_Pancake_USDC-USDbC-0.01%',
       converter: BaseAddresses.TETU_CONVERTER,
       profitHolderTokens: [BaseAddresses.USDC_TOKEN, BaseAddresses.USDbC_TOKEN, BaseAddresses.PANCAKE_SWAP_TOKEN],
@@ -244,8 +244,13 @@ export class PairStrategyFixtures {
           tokenOut: BaseAddresses.USDbC_TOKEN,
         }, {
           pool: BaseAddresses.PANCAKE_POOL_CAKE_WETH_10000,
-          swapper: BaseAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+          swapper: BaseAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
           tokenIn: BaseAddresses.PANCAKE_SWAP_TOKEN,
+          tokenOut: BaseAddresses.WETH_TOKEN,
+        }, {
+          pool: BaseAddresses.PANCAKE_POOL_USDbC_ETH_LP_100,
+          swapper: BaseAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
+          tokenIn: BaseAddresses.USDbC_TOKEN,
           tokenOut: BaseAddresses.WETH_TOKEN,
         },
       ],

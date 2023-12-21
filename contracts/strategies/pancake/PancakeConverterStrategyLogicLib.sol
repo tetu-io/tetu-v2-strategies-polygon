@@ -20,6 +20,7 @@ import "../pair/PairBasedStrategyLib.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
 import "../../integrations/pancake/IPancakeNonfungiblePositionManager.sol";
 import "../../integrations/pancake/IPancakeMasterChefV3.sol";
+import "hardhat/console.sol";
 
 library PancakeConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -448,6 +449,9 @@ library PancakeConverterStrategyLogicLib {
       if (token == asset) {
         earned += amounts[i];
       } else {
+        console.log("calcEarned.rewardTokens[i]", rewardTokens[i]);
+        console.log("calcEarned.asset", asset);
+        console.log("calcEarned.amounts[i]", amounts[i]);
         earned += liquidator.getPrice(rewardTokens[i], asset, amounts[i]);
       }
     }

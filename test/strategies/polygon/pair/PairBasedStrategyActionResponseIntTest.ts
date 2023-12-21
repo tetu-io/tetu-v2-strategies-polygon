@@ -163,7 +163,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               let snapshotLevel0: string;
               before(async function () {
                 snapshotLevel0 = await TimeUtils.snapshot();
-                // await makeDeposit();
+                await makeDeposit();
               });
               after(async function () {
                 await TimeUtils.rollback(snapshotLevel0);
@@ -204,7 +204,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                 });
 
                 it("totalLiquidity should be > 0", async () => {
-                  await makeDeposit();
                   const state = await PackedData.getDefaultState(b.strategy);
                   expect(state.totalLiquidity.gt(0)).eq(true);
                 });
@@ -212,6 +211,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
                   const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+                  console.log("Singer deposits 1000, asset balance", await IERC20Metadata__factory.connect(b.asset, signer).balanceOf(signer.address));
+                  console.log("asset", b.asset);
                   await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: GAS_LIMIT});
                   const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
                   expect(stateAfter.vault.totalAssets).gt(stateBefore.vault.totalAssets);
@@ -250,7 +251,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                     ? "U3S-9 No rebalance needed"
                     : platform === PLATFORM_ALGEBRA
                       ? "AS-9 No rebalance needed"
-                      : "KS-9 No rebalance needed";
+                      : platform === PLATFORM_PANCAKE
+                        ? "PS-9 No rebalance needed"
+                        : "KS-9 No rebalance needed";
 
                   await expect(
                     b.strategy.rebalanceNoSwaps(true, {gasLimit: GAS_LIMIT})
@@ -311,7 +314,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   const platform = await converterStrategyBase.PLATFORM();
 
                   // currently kyber's isReadyToHardWork returns true without need to call prepareToHardwork
-                  expect(await converterStrategyBase.isReadyToHardWork()).eq(platform === PLATFORM_KYBER);
+                  expect(await converterStrategyBase.isReadyToHardWork()).eq(platform === PLATFORM_KYBER || platform === PLATFORM_PANCAKE);
                 });
                 /** scb-776: isReadyToHardWork can return true just after hardwork call */
                 it.skip("isReadyToHardWork should return expected value after hardwork", async () => {
@@ -325,7 +328,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   expect(await converterStrategyBase.isReadyToHardWork()).eq(true);
                   await converterStrategyBase.doHardWork({gasLimit: GAS_LIMIT});
                   // currently kyber's isReadyToHardWork returns true without need to call prepareToHardwork
-                  expect(await converterStrategyBase.isReadyToHardWork()).eq(platform === PLATFORM_KYBER);
+                  expect(await converterStrategyBase.isReadyToHardWork()).eq(platform === PLATFORM_KYBER || platform === PLATFORM_PANCAKE);
                 });
 
                 it("withdraw should not exceed gas limits @skip-on-coverage", async () => {

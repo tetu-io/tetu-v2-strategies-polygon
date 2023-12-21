@@ -16,6 +16,7 @@ import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../libs/IterationPlanLib.sol";
 import "../interfaces/IConverterStrategyBase.sol";
+import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -559,6 +560,9 @@ library ConverterStrategyBaseLib {
       // Make full/partial repayment
       IERC20(borrowAsset).safeTransfer(address(converter_), amountRepay);
 
+      console.log("_closePositionExact.collateralAsset", collateralAsset);
+      console.log("_closePositionExact.borrowAsset", borrowAsset);
+      console.log("_closePositionExact.amountRepay", amountRepay);
       uint notUsedAmount;
       (collateralOut, notUsedAmount,,) = converter_.repay(collateralAsset, borrowAsset, amountRepay, address(this));
 
@@ -1270,10 +1274,14 @@ library ConverterStrategyBaseLib {
     // get amount of debt with debt-gap
     (uint needToRepay,) = converter.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset, true);
     amountSendToRepay = Math.min(amountToRepay < needToRepay ? amountToRepay : needToRepay, balanceBefore);
+    console.log("_repayDebt.needToRepay", needToRepay);
+    console.log("_repayDebt.amountSendToRepay", amountSendToRepay);
 
     // get expected amount without debt-gap
     uint swappedAmountOut;
     (expectedAmountOut, swappedAmountOut) = converter.quoteRepay(address(this), collateralAsset, borrowAsset, amountSendToRepay);
+    console.log("_repayDebt.expectedAmountOut", expectedAmountOut);
+    console.log("_repayDebt.swappedAmountOut", swappedAmountOut);
 
     if (expectedAmountOut > swappedAmountOut) {
       // SCB-789 Following situation is possible
@@ -1285,6 +1293,8 @@ library ConverterStrategyBaseLib {
       //       expectedAmountOut must be reduced on 9 here (!)
       expectedAmountOut -= swappedAmountOut;
     }
+    console.log("_repayDebt.expectedAmountOut", expectedAmountOut);
+    console.log("_repayDebt.balanceBefore", balanceBefore);
 
     // close the debt
     (, repaidAmountOut) = _closePositionExact(converter, collateralAsset, borrowAsset, amountSendToRepay, balanceBefore);
