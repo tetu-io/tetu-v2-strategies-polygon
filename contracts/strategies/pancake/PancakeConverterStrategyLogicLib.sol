@@ -20,7 +20,6 @@ import "../pair/PairBasedStrategyLib.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
 import "../../integrations/pancake/IPancakeNonfungiblePositionManager.sol";
 import "../../integrations/pancake/IPancakeMasterChefV3.sol";
-import "hardhat/console.sol";
 
 library PancakeConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -216,7 +215,6 @@ library PancakeConverterStrategyLogicLib {
     uint[] memory amountsConsumed,
     uint liquidityOut
   ) {
-    console.log("enter");
     EnterLocalVariables memory vars = EnterLocalVariables({
       pool: IPancakeV3Pool(state.pair.pool),
       depositorSwapTokens: state.pair.depositorSwapTokens,
@@ -226,28 +224,22 @@ library PancakeConverterStrategyLogicLib {
       upperTick: state.pair.upperTick,
       chef: state.chef
     });
-    console.log("enter.1");
     IPancakeNonfungiblePositionManager nft = IPancakeNonfungiblePositionManager(payable(vars.chef.nonfungiblePositionManager()));
 
     amountsConsumed = new uint[](2);
 
     if (amountsDesired_[1] != 0) {
-      console.log("enter.2");
       (address token0, address token1) = vars.depositorSwapTokens
         ? (state.pair.tokenB, state.pair.tokenA)
         : (state.pair.tokenA, state.pair.tokenB);
 
-      console.log("enter.3.token0, token1", token0, token1);
       if (vars.depositorSwapTokens) {
         (amountsDesired_[0], amountsDesired_[1]) = (amountsDesired_[1], amountsDesired_[0]);
-        console.log("enter.4");
       }
 
       uint24 fee = vars.pool.fee();
-      console.log("enter.5.fee", fee);
 
       if (vars.tokenId != 0) {
-        console.log("enter.6.tokenId", vars.tokenId);
         (,,,,uint24 nftFee, int24 nftLowerTick, int24 nftUpperTick,,,,,) = nft.positions(vars.tokenId);
         if (nftLowerTick != vars.lowerTick || nftUpperTick != vars.upperTick || nftFee != fee) {
           vars.chef.burn(vars.tokenId); // todo
@@ -256,7 +248,6 @@ library PancakeConverterStrategyLogicLib {
       }
 
       if (vars.tokenId == 0) {
-        console.log("enter.7");
         (vars.tokenId, vars.liquidity, amountsConsumed[0], amountsConsumed[1]) = nft.mint(IPancakeNonfungiblePositionManager.MintParams(
           token0,
           token1,
@@ -270,13 +261,9 @@ library PancakeConverterStrategyLogicLib {
           address(this),
           block.timestamp
         ));
-        console.log("enter.8.nft balance", nft.balanceOf(address(this)));
         state.tokenId = vars.tokenId;
         nft.safeTransferFrom(address(this), address(vars.chef), vars.tokenId);
-        console.log("enter.9");
       } else {
-        console.log("enter.10.amountsDesired_[0]", amountsDesired_[0]);
-        console.log("enter.10.amountsDesired_[1]", amountsDesired_[1]);
         (vars.liquidity, amountsConsumed[0], amountsConsumed[1]) = vars.chef.increaseLiquidity(INonfungiblePositionManagerStruct.IncreaseLiquidityParams(
           vars.tokenId,
           amountsDesired_[0],
@@ -286,17 +273,14 @@ library PancakeConverterStrategyLogicLib {
           block.timestamp
         ));
       }
-      console.log("enter.11");
 
       state.pair.totalLiquidity += vars.liquidity;
       liquidityOut = uint(vars.liquidity);
 
-      if (vars.depositorSwapTokens) { // todo do we need it?
-        console.log("enter.12");
+      if (vars.depositorSwapTokens) {
         (amountsConsumed[0], amountsConsumed[1]) = (amountsConsumed[1], amountsConsumed[0]);
       }
     }
-    console.log("enter.13");
 
     return (amountsConsumed, liquidityOut);
   }
@@ -314,7 +298,6 @@ library PancakeConverterStrategyLogicLib {
     uint128 liquidityAmountToExit,
     bool emergency
   ) external returns (uint[] memory amountsOut) {
-    console.log("exit.liquidityAmountToExit", liquidityAmountToExit);
     amountsOut = new uint[](2);
 
     ExitLocal memory v;
@@ -323,53 +306,42 @@ library PancakeConverterStrategyLogicLib {
 
     v.liquidity = state.pair.totalLiquidity;
     require(v.liquidity >= liquidityAmountToExit, PancakeStrategyErrors.WRONG_LIQUIDITY);
-    console.log("exit.v.liquidity", v.liquidity);
 
     v.tokenId = state.tokenId;
 
     // get reward amounts
     if (! emergency) {
-      console.log("exit.1");
       // claim rewards and temporary move them to strategyProfitHolder; we will get them back inside claimRewards
       v.reward = _harvest(v.chef, v.tokenId, v.strategyProfitHolder);
-      console.log("exit.1.v.reward", v.reward);
     }
 
     // burn liquidity
     (amountsOut[0], amountsOut[1]) = v.chef.decreaseLiquidity(INonfungiblePositionManagerStruct.DecreaseLiquidityParams(v.tokenId, liquidityAmountToExit, 0, 0, block.timestamp));
 
     // collect tokens and fee
-    console.log("exit.2");
     (uint collected0, uint collected1) = v.chef.collect(INonfungiblePositionManagerStruct.CollectParams(v.tokenId, address(this), type(uint128).max, type(uint128).max));
-    console.log("exit.3.collected0, collected1", collected0, collected1);
 
     uint fee0 = AppLib.sub0(collected0, amountsOut[0]);
     uint fee1 = AppLib.sub0(collected1, amountsOut[1]);
-    console.log("exit.3.fee0, fee1", fee0, fee1);
 
     emit PancakeFeesClaimed(fee0, fee1);
 
     if (state.pair.depositorSwapTokens) {
-      console.log("exit.4");
       (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
       (fee0, fee1) = (fee1, fee0);
     }
 
     // send fees to profit holder
     if (fee0 > 0) {
-      console.log("exit.5.fee0", fee0);
       IERC20(state.pair.tokenA).safeTransfer(v.strategyProfitHolder, fee0);
     }
     if (fee1 > 0) {
-      console.log("exit.6.fee1", fee1);
       IERC20(state.pair.tokenB).safeTransfer(v.strategyProfitHolder, fee1);
     }
 
 
     v.liquidity -= liquidityAmountToExit;
     state.pair.totalLiquidity = v.liquidity;
-
-    console.log("exit.7.state.pair.totalLiquidity", state.pair.totalLiquidity);
   }
 
   /// @notice Estimate the exit amounts for a given liquidity amount in a PancakeSwap V3 pool.
@@ -405,48 +377,37 @@ library PancakeConverterStrategyLogicLib {
     uint[] memory amountsOut,
     uint[] memory balancesBefore
   ) {
-    console.log("claimRewards.1");
     address strategyProfitHolder = state.pair.strategyProfitHolder;
-    console.log("claimRewards.2.strategyProfitHolder", strategyProfitHolder);
     IPancakeMasterChefV3 chef = state.chef;
     uint tokenId = state.tokenId;
-    console.log("claimRewards.3.tokenId", tokenId);
 
     tokensOut = new address[](3);
     tokensOut[0] = state.pair.tokenA;
     tokensOut[1] = state.pair.tokenB;
     tokensOut[2] = chef.CAKE();
-    console.log("claimRewards.3.CAKE", tokensOut[2]);
 
     balancesBefore = new uint[](3);
     for (uint i; i < tokensOut.length; i++) {
       balancesBefore[i] = IERC20(tokensOut[i]).balanceOf(address(this));
-      console.log("claimRewards.4.balancesBefore[i]", balancesBefore[i]);
     }
 
     amountsOut = new uint[](3);
     if (tokenId != 0 && state.pair.totalLiquidity != 0) {
-      console.log("claimRewards.5.collect");
       // get fees
       (amountsOut[0], amountsOut[1]) = chef.collect(INonfungiblePositionManagerStruct.CollectParams(tokenId, address(this), type(uint128).max, type(uint128).max));
       emit PancakeFeesClaimed(amountsOut[0], amountsOut[1]);
-      console.log("claimRewards.6.amounts", amountsOut[0], amountsOut[1], amountsOut[2]);
 
       if (state.pair.depositorSwapTokens) {
         (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
       }
 
-      console.log("claimRewards.7");
-
       // claim rewards, don't transfer them to strategyProfitHolder
       _harvest(chef, tokenId, address(0));
-
 
       amountsOut[2] = AppLib.sub0(IERC20(tokensOut[2]).balanceOf(address(this)), balancesBefore[2]);
       if (amountsOut[2] != 0) {
         emit PancakeRewardsClaimed(amountsOut[2]);
       }
-      console.log("claimRewards.8.amounts", amountsOut[0], amountsOut[1], amountsOut[2]);
     }
 
     // move tokens from strategyProfitHolder on balance
@@ -456,7 +417,6 @@ library PancakeConverterStrategyLogicLib {
       if (b != 0) {
         IERC20(tokensOut[i]).transferFrom(strategyProfitHolder, address(this), b);
         amountsOut[i] += b;
-        console.log("claimRewards.9.amountsOut[i]", amountsOut[i]);
       }
     }
 
