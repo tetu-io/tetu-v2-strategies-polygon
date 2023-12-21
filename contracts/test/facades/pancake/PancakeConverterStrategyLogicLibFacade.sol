@@ -38,6 +38,11 @@ contract PancakeConverterStrategyLogicLibFacade {
     PancakeConverterStrategyLogicLib.initStrategyState(state, [controller_, pool, chef_], tickRange, rebalanceTickRange, asset_, fuseThresholds);
   }
 
+  function moveTickRange(int24 increment) external {
+    state.pair.upperTick += increment;
+    state.pair.lowerTick += increment;
+  }
+
   function claimRewards() external returns (
     address[] memory tokensOut,
     uint[] memory amountsOut,

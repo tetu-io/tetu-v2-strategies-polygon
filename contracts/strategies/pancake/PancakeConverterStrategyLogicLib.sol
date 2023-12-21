@@ -238,13 +238,12 @@ library PancakeConverterStrategyLogicLib {
         (amountsDesired_[0], amountsDesired_[1]) = (amountsDesired_[1], amountsDesired_[0]);
       }
 
-      uint24 fee = vars.pool.fee();
-
       if (vars.tokenId != 0) {
-        (,,,,uint24 nftFee, int24 nftLowerTick, int24 nftUpperTick,,,,,) = nft.positions(vars.tokenId);
-        if (nftLowerTick != vars.lowerTick || nftUpperTick != vars.upperTick || nftFee != fee) {
-          // TODO The token must have 0 liquidity and all tokens must be collected first.
-          vars.chef.burn(vars.tokenId); // todo Check in test
+        (,,,,, int24 nftLowerTick, int24 nftUpperTick,,,,,) = nft.positions(vars.tokenId);
+        if (nftLowerTick != vars.lowerTick || nftUpperTick != vars.upperTick) {
+          // It's necessary to burn the nft.
+          // The token must have 0 liquidity and all tokens must be collected before the burning.
+          _exit(state, state.pair.totalLiquidity, false);
           vars.tokenId = 0;
         }
       }
@@ -266,10 +265,6 @@ library PancakeConverterStrategyLogicLib {
         state.tokenId = vars.tokenId;
         nft.safeTransferFrom(address(this), address(vars.chef), vars.tokenId);
       } else {
-        console.log("enter.state.pair.totalLiquidity", state.pair.totalLiquidity);
-        console.log("enter.vars.tokenId", vars.tokenId);
-        console.log("enter.amountsDesired_[0]", amountsDesired_[0]);
-        console.log("enter.amountsDesired_[1]", amountsDesired_[1]);
         (vars.liquidity, amountsConsumed[0], amountsConsumed[1]) = vars.chef.increaseLiquidity(INonfungiblePositionManagerStruct.IncreaseLiquidityParams(
           vars.tokenId,
           amountsDesired_[0],
@@ -304,6 +299,19 @@ library PancakeConverterStrategyLogicLib {
     uint128 liquidityAmountToExit,
     bool emergency
   ) external returns (uint[] memory amountsOut) {
+    return _exit(state, liquidityAmountToExit, emergency);
+  }
+
+  /// @notice Exit the pool and collect tokens proportional to the liquidity amount to exit.
+  /// @param state The State storage object.
+  /// @param liquidityAmountToExit The amount of liquidity to exit.
+  /// @param emergency Emergency exit (only withdraw, don't claim any rewards or make any other additional actions)
+  /// @return amountsOut An array containing the collected amounts for each token in the pool.
+  function _exit(
+    State storage state,
+    uint128 liquidityAmountToExit,
+    bool emergency
+  ) internal returns (uint[] memory amountsOut) {
     console.log("exit.liquidityAmountToExit", liquidityAmountToExit);
     amountsOut = new uint[](2);
 

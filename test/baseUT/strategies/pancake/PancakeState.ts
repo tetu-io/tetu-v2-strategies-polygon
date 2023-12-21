@@ -36,6 +36,8 @@ export interface IPancakeState {
   facadeCakeBalance: number;
   facadeBalanceTokenB: number;
   facadeBalanceTokenA: number;
+  tickLower: number;
+  tickUpper: number;
 }
 
 export interface IPancakeStateInputParams {
@@ -73,6 +75,7 @@ export class PancakeState {
     const index0 = p.swapTokens ? 1 : 0;
     const index1 = p.swapTokens ? 0 : 1;
     const tokenId = (await p.funcGetPairState()).tokenId.toNumber();
+
     return {
       title,
       tokenId,
@@ -119,6 +122,8 @@ export class PancakeState {
       facadeCakeBalance: +formatUnits(await IERC20Metadata__factory.connect(p.cakeToken, signer).balanceOf(p.strategy), 18),
       facadeBalanceTokenB: +formatUnits(await IERC20Metadata__factory.connect(p.tokenB, signer).balanceOf(p.strategy), 6),
       facadeBalanceTokenA: +formatUnits(await IERC20Metadata__factory.connect(p.tokenA, signer).balanceOf(p.strategy), 6),
+      tickLower: tokenId === 0 ? 0 : (await p.nft.positions(tokenId)).tickLower,
+      tickUpper: tokenId === 0 ? 0 : (await p.nft.positions(tokenId)).tickUpper,
     }
   }
 
@@ -146,7 +151,9 @@ export class PancakeState {
       "profitHolderBalanceTokenA",
       "facadeCakeBalance",
       "facadeBalanceTokenB",
-      "facadeBalanceTokenA"
+      "facadeBalanceTokenA",
+      "tickLower",
+      "tickUpper",
     ];
     const headers = [
       '',
@@ -174,7 +181,9 @@ export class PancakeState {
       item.profitHolderBalanceTokenA,
       item.facadeCakeBalance,
       item.facadeBalanceTokenB,
-      item.facadeBalanceTokenA
+      item.facadeBalanceTokenA,
+      item.tickLower,
+      item.tickUpper,
     ]);
 
     writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', { encoding: 'utf8', flag: 'w'});
