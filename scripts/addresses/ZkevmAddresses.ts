@@ -1,5 +1,6 @@
 export class ZkevmAddresses {
-  public static TETU_CONTROLLER = "TODO".toLowerCase();
+  public static TETU_LIQUIDATOR = "0xBcda73B7184D5974F77721db79ff8BA190b342ce";
+  public static TETU_CONTROLLER = "0x35B0329118790B8c8FC36262812D92a4923C6795";
 
 //region ----------------------------------------------------- Assets
   public static MATIC = "0xa2036f0538221a77A3937F1379699f44945018d0".toLowerCase();
@@ -34,7 +35,7 @@ export class ZkevmAddresses {
 
   public static PANCAKE_POOL_USDT_USDC_LP = "0xca06375be938a2d6eF311dfaFab7E326d55D23Cc".toLowerCase();
 
-  public static TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER = "TODO".toLowerCase();
+  public static TETU_PANCAKE3_SWAPPER = "0xa075F8FF74941Fae5bf9Fd48736E4422474A5A66".toLowerCase();
 
 //endregion ----------------------------------------------------- PancakeSwap
 

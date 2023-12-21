@@ -18,7 +18,7 @@ import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/
 import {PairStrategyFixtures} from "../../../baseUT/strategies/pair/PairStrategyFixtures";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
-import {HardhatUtils, POLYGON_NETWORK_ID} from "../../../baseUT/utils/HardhatUtils";
+import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID} from "../../../baseUT/utils/HardhatUtils";
 import {
   FUSE_IDX_LOWER_LIMIT_OFF,
   FUSE_IDX_LOWER_LIMIT_ON,
@@ -36,6 +36,7 @@ import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
 //region Constants
   const DEFAULT_SWAP_AMOUNT_RATIO = 1.01;
+  const CHAINS_IN_ORDER_EXECUTION: number[] = [BASE_NETWORK_ID, POLYGON_NETWORK_ID];
 //endregion Constants
 
 //region Variables
@@ -43,21 +44,6 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
   let signer: SignerWithAddress;
   let signer2: SignerWithAddress;
 //endregion Variables
-
-  //region before, after
-  before(async function () {
-    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
-    snapshotBefore = await TimeUtils.snapshot();
-    [signer, signer2] = await ethers.getSigners();
-
-    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
-  })
-
-  after(async function () {
-    await HardhatUtils.restoreBlockFromEnv();
-    await TimeUtils.rollback(snapshotBefore);
-  });
-//endregion before, after
 
 //region Utils
   interface IPriceFuseStatus {
@@ -102,7 +88,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
         state.tokenA,
         state.tokenB,
         movePricesUpDown,
-          swapAmountRatio ?? DEFAULT_SWAP_AMOUNT_RATIO
+        swapAmountRatio ?? DEFAULT_SWAP_AMOUNT_RATIO
       );
       console.log("movePriceToChangeFuseStatus.swapAmount", totalSwapAmount);
       await UniversalUtils.makePoolVolume(signer, state, b.swapper, totalSwapAmount);
@@ -189,193 +175,216 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       thresholds: state.fuseThresholds,
     };
   }
+
 //endregion Utils
+  CHAINS_IN_ORDER_EXECUTION.forEach(function (chainId) {
+    describe(`chain ${chainId}`, function () {
+      before(async function () {
+        await HardhatUtils.setupBeforeTest(chainId);
+        snapshotBefore = await TimeUtils.snapshot();
+        [signer, signer2] = await ethers.getSigners();
 
-//region Unit tests
-  describe('Increase price N steps, decrease price N steps, default swapAmountRatio (1.01)', function () {
-    interface IStrategyInfo {
-      name: string,
-    }
-    const strategies: IStrategyInfo[] = [
-      { name: PLATFORM_UNIV3,},
-      { name: PLATFORM_ALGEBRA,},
-      // { name: PLATFORM_KYBER,},
-    ];
+        await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
+      })
 
-    strategies.forEach(function (strategyInfo: IStrategyInfo) {
+      after(async function () {
+        await HardhatUtils.restoreBlockFromEnv();
+        await TimeUtils.rollback(snapshotBefore);
+      });
 
-      async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(POLYGON_NETWORK_ID, strategyInfo.name, signer, signer2);
+      describe('Increase price N steps, decrease price N steps, default swapAmountRatio (1.01)', function () {
+        interface IStrategyInfo {
+          name: string,
+          chainId: number;
+        }
 
-        await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
-        return b;
-      }
+        const strategies: IStrategyInfo[] = [
+          {name: PLATFORM_UNIV3, chainId: POLYGON_NETWORK_ID},
+          {name: PLATFORM_ALGEBRA, chainId: POLYGON_NETWORK_ID},
+        ];
 
-      describe(`${strategyInfo.name}`, () => {
-        let snapshot: string;
-        let builderResults: IBuilderResults;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
+        strategies.forEach(function (strategyInfo: IStrategyInfo) {
+          if (strategyInfo.chainId === chainId) {
+            async function prepareStrategy(): Promise<IBuilderResults> {
+              const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(POLYGON_NETWORK_ID, strategyInfo.name, signer, signer2);
 
-          builderResults = await prepareStrategy();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
-
-        describe("Use liquidator", () => {
-          describe('Move tokenB prices up, down', function () {
-            async function makeTest(): Promise<IMovePriceResults> {
-              const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-up-down.csv`;
-              return movePriceUpDown(builderResults,{
-                maxCountRebalances: 25,
-                pathOut,
-                movePricesUpDown: true,
-                swapAmountRatio: DEFAULT_SWAP_AMOUNT_RATIO
-              });
+              await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
+              return b;
             }
-            it("should trigger fuse to FUSE_ON_UPPER_LIMIT_3", async () => {
-              const ret = await loadFixture(makeTest);
-              expect(ret.rebalanceFuseOn?.fuseStatus || 0).eq(FUSE_ON_UPPER_LIMIT_3);
-              expect(ret.rebalanceFuseOn?.price || 0).gte(ret.thresholds[FUSE_IDX_UPPER_LIMIT_ON]);
-            });
-            it("should trigger fuse OFF at the end", async () => {
-              const ret = await loadFixture(makeTest);
-              const status = ret.rebalanceFuseOff?.fuseStatus || 0;
-              expect(status === FUSE_OFF_1 || status === FUSE_ON_LOWER_LIMIT_2).eq(true);
 
-              // todo: following check was disabled for ALGEBRA because of pricePool-changes
-              //       after implementation of pricePool, fuse A and B are triggered here, not only fuse B
-              if (strategyInfo.name !== PLATFORM_ALGEBRA) {
-                expect(ret.rebalanceFuseOff?.price || 0).lte(ret.thresholds[FUSE_IDX_UPPER_LIMIT_OFF]);
-              }
-            });
-          });
-          describe('Move tokenB prices down, up', function () {
-            async function makeTest(): Promise<IMovePriceResults> {
-              const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-down-up.csv`;
-              return movePriceUpDown(builderResults,{
-                maxCountRebalances: 25,
-                pathOut,
-                movePricesUpDown: false,
+            describe(`${strategyInfo.name}`, () => {
+              let snapshot: string;
+              let builderResults: IBuilderResults;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+
+                builderResults = await prepareStrategy();
               });
-            }
-            it("should trigger fuse ON (FUSE_ON_LOWER_LIMIT_2)", async () => {
-              const ret = await loadFixture(makeTest);
-              expect(ret.rebalanceFuseOn?.fuseStatus || 0).eq(FUSE_ON_LOWER_LIMIT_2);
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
 
-              // todo: following check was disabled for Univ3 and Kyber because of pricePool-changes
-              //       after implementation of pricePool, fuse A is triggered here, not fuse B
-              if (strategyInfo.name !== PLATFORM_UNIV3 && strategyInfo.name !== PLATFORM_KYBER) {
-                expect(ret.rebalanceFuseOn?.price || 0).lte(ret.thresholds[FUSE_IDX_LOWER_LIMIT_ON]);
-              }
+              describe("Use liquidator", () => {
+                describe('Move tokenB prices up, down', function () {
+                  async function makeTest(): Promise<IMovePriceResults> {
+                    const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-up-down.csv`;
+                    return movePriceUpDown(builderResults, {
+                      maxCountRebalances: 25,
+                      pathOut,
+                      movePricesUpDown: true,
+                      swapAmountRatio: DEFAULT_SWAP_AMOUNT_RATIO
+                    });
+                  }
+
+                  it("should trigger fuse to FUSE_ON_UPPER_LIMIT_3", async () => {
+                    const ret = await loadFixture(makeTest);
+                    expect(ret.rebalanceFuseOn?.fuseStatus || 0).eq(FUSE_ON_UPPER_LIMIT_3);
+                    expect(ret.rebalanceFuseOn?.price || 0).gte(ret.thresholds[FUSE_IDX_UPPER_LIMIT_ON]);
+                  });
+                  it("should trigger fuse OFF at the end", async () => {
+                    const ret = await loadFixture(makeTest);
+                    const status = ret.rebalanceFuseOff?.fuseStatus || 0;
+                    expect(status === FUSE_OFF_1 || status === FUSE_ON_LOWER_LIMIT_2).eq(true);
+
+                    // todo: following check was disabled for ALGEBRA because of pricePool-changes
+                    //       after implementation of pricePool, fuse A and B are triggered here, not only fuse B
+                    if (strategyInfo.name !== PLATFORM_ALGEBRA) {
+                      expect(ret.rebalanceFuseOff?.price || 0).lte(ret.thresholds[FUSE_IDX_UPPER_LIMIT_OFF]);
+                    }
+                  });
+                });
+                describe('Move tokenB prices down, up', function () {
+                  async function makeTest(): Promise<IMovePriceResults> {
+                    const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-down-up.csv`;
+                    return movePriceUpDown(builderResults, {
+                      maxCountRebalances: 25,
+                      pathOut,
+                      movePricesUpDown: false,
+                    });
+                  }
+
+                  it("should trigger fuse ON (FUSE_ON_LOWER_LIMIT_2)", async () => {
+                    const ret = await loadFixture(makeTest);
+                    expect(ret.rebalanceFuseOn?.fuseStatus || 0).eq(FUSE_ON_LOWER_LIMIT_2);
+
+                    // todo: following check was disabled for Univ3 and Kyber because of pricePool-changes
+                    //       after implementation of pricePool, fuse A is triggered here, not fuse B
+                    if (strategyInfo.name !== PLATFORM_UNIV3 && strategyInfo.name !== PLATFORM_KYBER) {
+                      expect(ret.rebalanceFuseOn?.price || 0).lte(ret.thresholds[FUSE_IDX_LOWER_LIMIT_ON]);
+                    }
+                  });
+                  it("should trigger fuse OFF at the end", async () => {
+                    const ret = await loadFixture(makeTest);
+                    const status = ret.rebalanceFuseOff?.fuseStatus || 0;
+                    expect(status === FUSE_OFF_1 || status === FUSE_ON_UPPER_LIMIT_3).eq(true);
+                    expect(ret.rebalanceFuseOff?.price || 0).gte(ret.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]);
+                  });
+                });
+              });
             });
-            it("should trigger fuse OFF at the end", async () => {
-              const ret = await loadFixture(makeTest);
-              const status = ret.rebalanceFuseOff?.fuseStatus || 0;
-              expect(status === FUSE_OFF_1 || status === FUSE_ON_UPPER_LIMIT_3).eq(true);
-              expect(ret.rebalanceFuseOff?.price || 0).gte(ret.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]);
+          }
+        });
+      });
+
+      /**
+       * This test is excluded from coverage because it doesn't pass for Univ3:
+       * 1) There are some problems with swapping dust-amounts in liquidator
+       * 2) Price moving is too slow because of the dust amounts, it's not able to set fuse ON / OFF
+       *
+       * skipped, it's necessary to study only
+       */
+      describe.skip('Increase price N steps, decrease price N steps, swapAmountRatio = 1 @skip-on-coverage', function () {
+        interface IStrategyInfo {
+          name: string,
+          chainId: number;
+        }
+
+        const strategies: IStrategyInfo[] = [
+          {name: PLATFORM_UNIV3, chainId: POLYGON_NETWORK_ID},
+          {name: PLATFORM_ALGEBRA, chainId: POLYGON_NETWORK_ID},
+
+          // For Kyber we have error NOT_ALLOWED ('TS-23 not allowed') here
+          // It means, that required proportion of one of the assets is too small, almost zero
+          // It was decided, that it's ok to have revert in that case
+          // We can change this behavior by changing BorrowLib.rebalanceRepayBorrow implementation:
+          //      if amount-to-repay passed to _repayDebt is too small to be used,
+          //      we should increase it min amount required to make repay successfully (amount must be > threshold)
+
+          // { name: PLATFORM_KYBER,},
+        ];
+
+        strategies.forEach(function (strategyInfo: IStrategyInfo) {
+          if (strategyInfo.chainId === chainId) {
+            async function prepareStrategy(): Promise<IBuilderResults> {
+              const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(POLYGON_NETWORK_ID, strategyInfo.name, signer, signer2);
+
+              await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
+              return b;
+            }
+
+            describe(`${strategyInfo.name}`, () => {
+              let snapshot: string;
+              let builderResults: IBuilderResults;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+
+                builderResults = await prepareStrategy();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
+              describe("Use liquidator", () => {
+                describe('Move tokenB prices up, down', function () {
+                  async function makeTest(): Promise<IMovePriceResults> {
+                    const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-up-down.csv`;
+                    return movePriceUpDown(builderResults, {
+                      maxCountRebalances: 25,
+                      pathOut,
+                      movePricesUpDown: true,
+                      swapAmountRatio: 1
+                    });
+                  }
+
+                  it("should trigger fuse to FUSE_ON_UPPER_LIMIT_3", async () => {
+                    const ret = await loadFixture(makeTest);
+                    expect(ret.rebalanceFuseOn?.fuseStatus || 0).eq(FUSE_ON_UPPER_LIMIT_3);
+                    expect(ret.rebalanceFuseOn?.price || 0).gte(ret.thresholds[FUSE_IDX_UPPER_LIMIT_ON]);
+                  });
+                  it("should trigger fuse OFF at the end", async () => {
+                    const ret = await loadFixture(makeTest);
+                    const status = ret.rebalanceFuseOff?.fuseStatus || 0;
+                    expect(status === FUSE_OFF_1 || status === FUSE_ON_LOWER_LIMIT_2).eq(true);
+                    expect(ret.rebalanceFuseOff?.price || 0).lte(ret.thresholds[FUSE_IDX_UPPER_LIMIT_OFF]);
+                  });
+                });
+                describe('Move tokenB prices down, up', function () {
+                  async function makeTest(): Promise<IMovePriceResults> {
+                    const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-down-up.csv`;
+                    return movePriceUpDown(builderResults, {
+                      maxCountRebalances: 25,
+                      pathOut,
+                      movePricesUpDown: false,
+                      swapAmountRatio: 1
+                    });
+                  }
+
+                  it("should trigger fuse ON (FUSE_ON_LOWER_LIMIT_2)", async () => {
+                    const ret = await loadFixture(makeTest);
+                    expect(ret.rebalanceFuseOn?.fuseStatus || 0).eq(FUSE_ON_LOWER_LIMIT_2);
+                    expect(ret.rebalanceFuseOn?.price || 0).lte(ret.thresholds[FUSE_IDX_LOWER_LIMIT_ON]);
+                  });
+                  it("should trigger fuse OFF at the end", async () => {
+                    const ret = await loadFixture(makeTest);
+                    const status = ret.rebalanceFuseOff?.fuseStatus || 0;
+                    expect(status === FUSE_OFF_1 || status === FUSE_ON_UPPER_LIMIT_3).eq(true);
+                    expect(ret.rebalanceFuseOff?.price || 0).gte(ret.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]);
+                  });
+                });
+              });
             });
           });
         });
       });
     });
-  });
-
-  /**
-   * This test is excluded from coverage because it doesn't pass for Univ3:
-   * 1) There are some problems with swapping dust-amounts in liquidator
-   * 2) Price moving is too slow because of the dust amounts, it's not able to set fuse ON / OFF
-   *
-   * skipped, it's necessary to study only
-   */
-  describe.skip('Increase price N steps, decrease price N steps, swapAmountRatio = 1 @skip-on-coverage', function () {
-    interface IStrategyInfo {
-      name: string,
-    }
-    const strategies: IStrategyInfo[] = [
-      { name: PLATFORM_UNIV3,},
-      { name: PLATFORM_ALGEBRA,},
-
-      // For Kyber we have error NOT_ALLOWED ('TS-23 not allowed') here
-      // It means, that required proportion of one of the assets is too small, almost zero
-      // It was decided, that it's ok to have revert in that case
-      // We can change this behavior by changing BorrowLib.rebalanceRepayBorrow implementation:
-      //      if amount-to-repay passed to _repayDebt is too small to be used,
-      //      we should increase it min amount required to make repay successfully (amount must be > threshold)
-
-      // { name: PLATFORM_KYBER,},
-    ];
-
-    strategies.forEach(function (strategyInfo: IStrategyInfo) {
-
-      async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(POLYGON_NETWORK_ID, strategyInfo.name, signer, signer2);
-
-        await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
-        return b;
-      }
-
-      describe(`${strategyInfo.name}`, () => {
-        let snapshot: string;
-        let builderResults: IBuilderResults;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-
-          builderResults = await prepareStrategy();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
-
-        describe("Use liquidator", () => {
-          describe('Move tokenB prices up, down', function () {
-            async function makeTest(): Promise<IMovePriceResults> {
-              const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-up-down.csv`;
-              return movePriceUpDown(builderResults,{
-                maxCountRebalances: 25,
-                pathOut,
-                movePricesUpDown: true,
-                swapAmountRatio: 1
-              });
-            }
-            it("should trigger fuse to FUSE_ON_UPPER_LIMIT_3", async () => {
-              const ret = await loadFixture(makeTest);
-              expect(ret.rebalanceFuseOn?.fuseStatus || 0).eq(FUSE_ON_UPPER_LIMIT_3);
-              expect(ret.rebalanceFuseOn?.price || 0).gte(ret.thresholds[FUSE_IDX_UPPER_LIMIT_ON]);
-            });
-            it("should trigger fuse OFF at the end", async () => {
-              const ret = await loadFixture(makeTest);
-              const status = ret.rebalanceFuseOff?.fuseStatus || 0;
-              expect(status === FUSE_OFF_1 || status === FUSE_ON_LOWER_LIMIT_2).eq(true);
-              expect(ret.rebalanceFuseOff?.price || 0).lte(ret.thresholds[FUSE_IDX_UPPER_LIMIT_OFF]);
-            });
-          });
-          describe('Move tokenB prices down, up', function () {
-            async function makeTest(): Promise<IMovePriceResults> {
-              const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-down-up.csv`;
-              return movePriceUpDown(builderResults,{
-                maxCountRebalances: 25,
-                pathOut,
-                movePricesUpDown: false,
-                swapAmountRatio: 1
-              });
-            }
-            it("should trigger fuse ON (FUSE_ON_LOWER_LIMIT_2)", async () => {
-              const ret = await loadFixture(makeTest);
-              expect(ret.rebalanceFuseOn?.fuseStatus || 0).eq(FUSE_ON_LOWER_LIMIT_2);
-              expect(ret.rebalanceFuseOn?.price || 0).lte(ret.thresholds[FUSE_IDX_LOWER_LIMIT_ON]);
-            });
-            it("should trigger fuse OFF at the end", async () => {
-              const ret = await loadFixture(makeTest);
-              const status = ret.rebalanceFuseOff?.fuseStatus || 0;
-              expect(status === FUSE_OFF_1 || status === FUSE_ON_UPPER_LIMIT_3).eq(true);
-              expect(ret.rebalanceFuseOff?.price || 0).gte(ret.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]);
-            });
-          });
-        });
-      });
-    });
-  });
-//endregion Unit tests
 });

@@ -54,7 +54,7 @@ describe('PancakeConverterStrategyLogicLibTest', function () {
       chainId: ZKEVM_NETWORK_ID,
       asset: ZkevmAddresses.USDC,
       pool: ZkevmAddresses.PANCAKE_POOL_USDT_USDC_LP,
-      swapper: ZkevmAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
+      swapper: ZkevmAddresses.TETU_PANCAKE3_SWAPPER,
       chef: ZkevmAddresses.PANCAKE_MASTER_CHEF_V3,
       controller: ZkevmAddresses.TETU_CONTROLLER
     },

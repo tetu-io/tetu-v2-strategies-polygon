@@ -346,7 +346,7 @@ export class PairBasedStrategyBuilder {
 //endregion Polygon
 
 //region Base chain
-  static async buildPancake(p: IBuilderParams): Promise<IBuilderResults> {
+  static async buildPancakeBase(p: IBuilderParams): Promise<IBuilderResults> {
     const signer = p.signer;
     const gov = await Misc.impersonate(p.gov);
     const core = Addresses.getCore() as CoreAddresses;

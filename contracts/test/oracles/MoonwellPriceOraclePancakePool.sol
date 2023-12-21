@@ -41,18 +41,16 @@ contract MoonwellPriceOraclePancakePool {
 
   /// @return dest price of mToken, decimals = [36 - decimals of the underlying of the mToken]
   function getUnderlyingPrice(address mToken) public view returns (uint dest) {
-    console.log("getUnderlyingPrice.mToken", mToken);
-    console.log("getUnderlyingPrice.stableMToken", stableMToken);
-    console.log("getUnderlyingPrice.volatileMToken", volatileMToken);
     if (mToken == stableMToken) {
-      console.log("getUnderlyingPrice.1");
       dest = priceStableToken;
     } else if (mToken == volatileMToken) {
-      console.log("getUnderlyingPrice.2");
       uint price = getPrice(pancakePool, volatileUnderlying);
       dest = price * 10**36 / 10**IERC20Metadata(volatileUnderlying).decimals();
     } else {
-      console.log("getUnderlyingPrice.3");
+      console.log("getUnderlyingPrice.mToken", mToken);
+      console.log("getUnderlyingPrice.stableMToken", stableMToken);
+      console.log("getUnderlyingPrice.volatileMToken", volatileMToken);
+      console.log("MISSED.getUnderlyingPrice, original price is used");
       dest = IMoonwellPriceOracle(moonwellPriceOracle).getUnderlyingPrice(mToken);
     }
     console.log("dest price", dest);

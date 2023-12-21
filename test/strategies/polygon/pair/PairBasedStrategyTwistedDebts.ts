@@ -631,8 +631,9 @@ describe('PairBasedStrategyTwistedDebts', function () {
                       // estimate amount-to-reduce-debt
 
                       await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
-                        await builderResults.strategy.connect(await UniversalTestUtils.getAnOperator(builderResults.strategy.address, signer)),
+                        builderResults.strategy.connect(await UniversalTestUtils.getAnOperator(builderResults.strategy.address, signer)),
                         Misc.ZERO_ADDRESS,
+                        false,
                         lastState => {
                           return (lastState?.lockedPercent ?? 0) < targetLockedPercent
                         },
@@ -1038,8 +1039,9 @@ describe('PairBasedStrategyTwistedDebts', function () {
                     // estimate amount-to-reduce-debt
 
                     await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
-                      await builderResults.strategy.connect(await UniversalTestUtils.getAnOperator(builderResults.strategy.address, signer)),
+                      builderResults.strategy.connect(await UniversalTestUtils.getAnOperator(builderResults.strategy.address, signer)),
                       Misc.ZERO_ADDRESS,
+                      false,
                       lastState => {
                         return (lastState?.lockedPercent ?? 0) < targetLockedPercent
                       },

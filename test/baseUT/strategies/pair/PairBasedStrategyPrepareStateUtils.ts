@@ -1,12 +1,11 @@
 import {IBuilderResults, IStrategyBasicInfo} from "./PairBasedStrategyBuilder";
 import {
   ConverterStrategyBase__factory,
-  IRebalancingV2Strategy, PairBasedStrategyReader, StrategyBaseV2__factory
+  IRebalancingV2Strategy, IRebalancingV2Strategy__factory, PairBasedStrategyReader, StrategyBaseV2__factory
 } from "../../../../typechain";
 import {IDefaultState, PackedData} from "../../utils/PackedData";
 import {BigNumber, BytesLike} from "ethers";
 import {PairStrategyLiquidityUtils} from "./PairStrategyLiquidityUtils";
-import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
 import {IPriceChanges, UniversalUtils} from "../UniversalUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
@@ -55,14 +54,7 @@ export class PairBasedStrategyPrepareStateUtils {
       console.log("lowerTick, upperTick", state.lowerTick, state.upperTick)
 
       console.log("i", i);
-      const swapAmount = await this.getSwapAmount2(
-        signer,
-        b,
-        state.tokenA,
-        state.tokenB,
-        movePriceUp,
-        swapAmountRatio
-      );
+      const swapAmount = await this.getSwapAmount2(signer, b, state.tokenA, state.tokenB, movePriceUp, swapAmountRatio);
       if (movePriceUp) {
         await UniversalUtils.movePoolPriceUp(signer2, state, b.swapper, swapAmount, 40000, b.swapHelper);
       } else {
@@ -98,8 +90,9 @@ export class PairBasedStrategyPrepareStateUtils {
     console.log("activate fuse ON");
     // lib.getPrice gives incorrect value of the price of token A (i.e. 1.001734 instead of 1.0)
     // so, let's use prices from the oracle
+    const state = await PackedData.getDefaultState(b.strategy);
 
-    const pricesAB = await b.facadeLib2.getOracleAssetsPrice(b.converter.address, MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN);
+    const pricesAB = await b.facadeLib2.getOracleAssetsPrice(b.converter.address, state.tokenA, state.tokenB);
     const priceAB = +formatUnits(pricesAB, 18).toString();
     console.log("priceAB", priceAB);
 
@@ -217,9 +210,10 @@ export class PairBasedStrategyPrepareStateUtils {
   static async unfoldBorrowsRepaySwapRepay(
     strategyAsOperator: IRebalancingV2Strategy,
     aggregator: string,
+    aggregatorIsTetuLiquidator: boolean,
     isWithdrawCompleted: (lastState?: IStateNum) => boolean,
     saveState?: (title: string, eventsState: IEventsSet) => Promise<IStateNum>,
-    requiredAmountToReduceDebtCalculator?: () => Promise<BigNumber>
+    requiredAmountToReduceDebtCalculator?: () => Promise<BigNumber>,
   ) {
     const state = await PackedData.getDefaultState(strategyAsOperator);
 
@@ -247,21 +241,22 @@ export class PairBasedStrategyPrepareStateUtils {
       const amountToSwap = quote.amountToSwap.eq(0) ? BigNumber.from(0) : quote.amountToSwap;
 
       if (tokenToSwap !== Misc.ZERO_ADDRESS) {
-        if (aggregator === MaticAddresses.AGG_ONEINCH_V5) {
-          swapData = await AggregatorUtils.buildSwapTransactionData(
-            quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-            quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-            quote.amountToSwap,
-            strategyAsOperator.address,
-          );
-        } else if (aggregator === MaticAddresses.TETU_LIQUIDATOR) {
+        if (aggregatorIsTetuLiquidator) {
           swapData = AggregatorUtils.buildTxForSwapUsingLiquidatorAsAggregator({
             tokenIn: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
             tokenOut: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
             amount: quote.amountToSwap,
             slippage: BigNumber.from(5_000)
           });
-          console.log("swapData for tetu liquidator", swapData);
+          console.log("swapData for real aggregator", swapData);
+        } else {
+          swapData = await AggregatorUtils.buildSwapTransactionData(
+            quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+            quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+            quote.amountToSwap,
+            strategyAsOperator.address,
+          );
+          console.log("swapData for tetu liquidator as aggregator", swapData);
         }
       }
       console.log("unfoldBorrows.withdrawByAggStep.execute --------------------------------");
@@ -403,9 +398,9 @@ export class PairBasedStrategyPrepareStateUtils {
       const swapAmount = totalAmountToSwap.div(countSteps ?? 5);
       let pricesWereChanged: IPriceChanges;
       if (movePricesUpDown) {
-        pricesWereChanged = await UniversalUtils.movePoolPriceUp(signer, state, b.swapper, swapAmount, 40000, b.swapHelper);
+        pricesWereChanged = await UniversalUtils.movePoolPriceUp(signer, state, b.swapper, swapAmount, 80000, b.swapHelper);
       } else {
-        pricesWereChanged = await UniversalUtils.movePoolPriceDown(signer, state, b.swapper, swapAmount, 40000, false, b.swapHelper);
+        pricesWereChanged = await UniversalUtils.movePoolPriceDown(signer, state, b.swapper, swapAmount, 80000, false, b.swapHelper);
       }
 
       console.log("pricesWereChanged", pricesWereChanged);
@@ -423,10 +418,13 @@ export class PairBasedStrategyPrepareStateUtils {
 
   static async prepareLiquidationThresholds(signer: SignerWithAddress, strategy: string, value: string = "0.001") {
     const operator = await UniversalTestUtils.getAnOperator(strategy, signer);
+    const state = await PackedData.getDefaultState(IRebalancingV2Strategy__factory.connect(strategy, signer));
+    const decimalsA = await IERC20Metadata__factory.connect(state.tokenA, signer).decimals();
+    const decimalsB = await IERC20Metadata__factory.connect(state.tokenB, signer).decimals();
+
     const converterStrategyBase = await ConverterStrategyBase__factory.connect(strategy, signer);
-    await converterStrategyBase.connect(operator).setLiquidationThreshold(MaticAddresses.USDT_TOKEN, parseUnits(value, 6));
-    await converterStrategyBase.connect(operator).setLiquidationThreshold(MaticAddresses.USDC_TOKEN, parseUnits(value, 6));
-    await converterStrategyBase.connect(operator).setLiquidationThreshold(MaticAddresses.DAI_TOKEN, parseUnits(value, 18));
+    await converterStrategyBase.connect(operator).setLiquidationThreshold(state.tokenA, parseUnits(value, decimalsA));
+    await converterStrategyBase.connect(operator).setLiquidationThreshold(state.tokenB, parseUnits(value, decimalsB));
   }
 
   static async getAmountToReduceDebtForStrategy(

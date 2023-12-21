@@ -243,7 +243,8 @@ library PancakeConverterStrategyLogicLib {
       if (vars.tokenId != 0) {
         (,,,,uint24 nftFee, int24 nftLowerTick, int24 nftUpperTick,,,,,) = nft.positions(vars.tokenId);
         if (nftLowerTick != vars.lowerTick || nftUpperTick != vars.upperTick || nftFee != fee) {
-          vars.chef.burn(vars.tokenId); // todo
+          // TODO The token must have 0 liquidity and all tokens must be collected first.
+          vars.chef.burn(vars.tokenId); // todo Check in test
           vars.tokenId = 0;
         }
       }
@@ -265,6 +266,10 @@ library PancakeConverterStrategyLogicLib {
         state.tokenId = vars.tokenId;
         nft.safeTransferFrom(address(this), address(vars.chef), vars.tokenId);
       } else {
+        console.log("enter.state.pair.totalLiquidity", state.pair.totalLiquidity);
+        console.log("enter.vars.tokenId", vars.tokenId);
+        console.log("enter.amountsDesired_[0]", amountsDesired_[0]);
+        console.log("enter.amountsDesired_[1]", amountsDesired_[1]);
         (vars.liquidity, amountsConsumed[0], amountsConsumed[1]) = vars.chef.increaseLiquidity(INonfungiblePositionManagerStruct.IncreaseLiquidityParams(
           vars.tokenId,
           amountsDesired_[0],
@@ -299,6 +304,7 @@ library PancakeConverterStrategyLogicLib {
     uint128 liquidityAmountToExit,
     bool emergency
   ) external returns (uint[] memory amountsOut) {
+    console.log("exit.liquidityAmountToExit", liquidityAmountToExit);
     amountsOut = new uint[](2);
 
     ExitLocal memory v;
@@ -307,6 +313,7 @@ library PancakeConverterStrategyLogicLib {
 
     v.liquidity = state.pair.totalLiquidity;
     require(v.liquidity >= liquidityAmountToExit, PancakeStrategyErrors.WRONG_LIQUIDITY);
+    console.log("exit.v.liquidity ", v.liquidity );
 
     v.tokenId = state.tokenId;
 
@@ -340,9 +347,14 @@ library PancakeConverterStrategyLogicLib {
       IERC20(state.pair.tokenB).safeTransfer(v.strategyProfitHolder, fee1);
     }
 
-
     v.liquidity -= liquidityAmountToExit;
     state.pair.totalLiquidity = v.liquidity;
+    console.log("exit.v.liquidity.final", v.liquidity);
+
+    if (v.liquidity == 0) {
+      v.chef.burn(v.tokenId);
+      state.tokenId = 0;
+    }
   }
 
   /// @notice Estimate the exit amounts for a given liquidity amount in a PancakeSwap V3 pool.

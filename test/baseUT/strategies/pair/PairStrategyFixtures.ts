@@ -224,7 +224,7 @@ export class PairStrategyFixtures {
     signer2: SignerWithAddress,
     p?: IStrategyCustomizationParams
   ): Promise<IBuilderResults> {
-    return PairBasedStrategyBuilder.buildPancake({
+    return PairBasedStrategyBuilder.buildPancakeBase({
       signer,
       signer2,
       gov: BaseAddresses.GOV_ADDRESS,
@@ -233,7 +233,7 @@ export class PairStrategyFixtures {
       vaultName: 'TetuV2_Pancake_USDC-USDbC-0.01%',
       converter: BaseAddresses.TETU_CONVERTER,
       profitHolderTokens: [BaseAddresses.USDC_TOKEN, BaseAddresses.USDbC_TOKEN, BaseAddresses.PANCAKE_SWAP_TOKEN],
-      swapper: BaseAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+      swapper: BaseAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
       quoter: BaseAddresses.PANCAKE_QUOTER_V2,
 
       liquidatorPools: [

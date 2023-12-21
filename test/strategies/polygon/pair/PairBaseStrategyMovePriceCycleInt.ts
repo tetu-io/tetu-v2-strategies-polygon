@@ -63,6 +63,7 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
     movePricesUp?: boolean;
     // Use Misc.ZERO_ADDRESS to use liquidator without gap
     aggregator: string;
+    aggregatorIsTetuLiquidator: boolean;
   }
 
   async function makeCycles(b: IBuilderResults, p: ICyclesParams): Promise<ICyclesResults> {
@@ -153,6 +154,7 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
           await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
             strategyAsOperator,
             p.aggregator,
+            p.aggregatorIsTetuLiquidator,
               () => true, // use single iteration
             async (stateTitle, eventsSet): Promise<IStateNum> => {
               states.push(await StateUtilsNum.getState(signer2, signer, converterStrategyBase, b.vault, stateTitle, {eventsSet}));
@@ -258,7 +260,8 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
           return makeCycles(b, {
             pathOut,
             movePricesUp: undefined,
-            aggregator: Misc.ZERO_ADDRESS
+            aggregator: Misc.ZERO_ADDRESS,
+            aggregatorIsTetuLiquidator: false
           });
         }
 
@@ -273,7 +276,8 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
           return makeCycles(b, {
             pathOut,
             movePricesUp: undefined,
-            aggregator: MaticAddresses.AGG_ONEINCH_V5
+            aggregator: MaticAddresses.AGG_ONEINCH_V5,
+            aggregatorIsTetuLiquidator: false
           });
         }
 
@@ -288,7 +292,8 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
           return makeCycles(b, {
             pathOut,
             movePricesUp: undefined,
-            aggregator: MaticAddresses.TETU_LIQUIDATOR
+            aggregator: MaticAddresses.TETU_LIQUIDATOR,
+            aggregatorIsTetuLiquidator: true
           });
         }
 

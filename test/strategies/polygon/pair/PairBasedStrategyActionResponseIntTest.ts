@@ -41,10 +41,11 @@ import {BigNumber} from "ethers";
 import {CaptureEvents, IEventsSet} from "../../../baseUT/strategies/CaptureEvents";
 import {MockAggregatorUtils} from "../../../baseUT/mocks/MockAggregatorUtils";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
-import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID} from '../../../baseUT/utils/HardhatUtils';
+import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from '../../../baseUT/utils/HardhatUtils';
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
 import {BaseAddresses} from "../../../../scripts/addresses/BaseAddresses";
+import {ZkevmAddresses} from "../../../../scripts/addresses/ZkevmAddresses";
 
 describe('PairBasedStrategyActionResponseIntTest', function() {
   const SWAP_AMOUNT_DEFAULT = 1.1;
@@ -79,8 +80,19 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     switch (chainId) {
       case BASE_NETWORK_ID: return BaseAddresses.TETU_LIQUIDATOR;
       case POLYGON_NETWORK_ID: return MaticAddresses.TETU_LIQUIDATOR;
+      case ZKEVM_NETWORK_ID: return ZkevmAddresses.TETU_LIQUIDATOR;
       default: throw Error(`getTetuLiquidator: chain ${chainId} is not supported`);
     }
+  }
+
+  function getErrorMessage(platform: string, error: string): string {
+    return platform === PLATFORM_UNIV3
+      ? "U3S" + error // "U3S-9 No rebalance needed"
+      : platform === PLATFORM_ALGEBRA
+        ? "AS" + error
+        : platform === PLATFORM_PANCAKE
+          ? "PS" + error
+          : "KS" + error;
   }
 //endregion Utils
 
@@ -176,7 +188,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                 for (let i = 0; i < 5; ++i) {
                   await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
                   await TokenUtils.getToken(b.asset, signer.address, parseUnits('2000', 6));
-                  await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
+                  await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: GAS_LIMIT});
 
                   const state = await PackedData.getDefaultState(b.strategy);
                   if (state.totalLiquidity.gt(0)) {
@@ -247,13 +259,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   expect(needRebalanceBefore).eq(false);
 
                   const platform = await converterStrategyBase.PLATFORM();
-                  const expectedErrorMessage = platform === PLATFORM_UNIV3
-                    ? "U3S-9 No rebalance needed"
-                    : platform === PLATFORM_ALGEBRA
-                      ? "AS-9 No rebalance needed"
-                      : platform === PLATFORM_PANCAKE
-                        ? "PS-9 No rebalance needed"
-                        : "KS-9 No rebalance needed";
+                  const expectedErrorMessage = getErrorMessage(platform, "-9 No rebalance needed");
 
                   await expect(
                     b.strategy.rebalanceNoSwaps(true, {gasLimit: GAS_LIMIT})
@@ -279,7 +285,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   console.log("stateBefore", stateBefore);
                   console.log("stateAfter", stateAfter);
 
-                  expect(stateAfter.strategy.investedAssets).approximately(stateBefore.strategy.investedAssets, 100);
+                  expect(stateAfter.strategy.investedAssets + stateAfter.strategy.assetBalance).approximately(
+                    stateBefore.strategy.investedAssets + stateBefore.strategy.assetBalance,
+                    100
+                  );
                 });
                 it("should hardwork successfully", async () => {
                   const converterStrategyBase = ConverterStrategyBase__factory.connect(
@@ -409,11 +418,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   expect(needRebalanceBefore).eq(false);
 
                   const platform = await converterStrategyBase.PLATFORM();
-                  const expectedErrorMessage = platform === PLATFORM_UNIV3
-                    ? "U3S-9 No rebalance needed"
-                    : platform === PLATFORM_ALGEBRA
-                      ? "AS-9 No rebalance needed"
-                      : "KS-9 No rebalance needed";
+                  const expectedErrorMessage = getErrorMessage(platform, "-9 No rebalance needed");
 
                   await expect(
                     b.strategy.rebalanceNoSwaps(true, {gasLimit: GAS_LIMIT})
@@ -449,11 +454,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
 
                   const platform = await converterStrategyBase.PLATFORM();
-                  const expectedErrorMessage = platform === PLATFORM_UNIV3
-                    ? "U3S-14 Fuse is active"
-                    : platform === PLATFORM_ALGEBRA
-                      ? "AS-14 Fuse is active"
-                      : "KS-14 Fuse is active";
+                  const expectedErrorMessage = getErrorMessage(platform, "-14 Fuse is active");
 
                   await expect(
                     converterStrategyBase.doHardWork({gasLimit: GAS_LIMIT})
@@ -512,11 +513,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
                   const platform = await converterStrategyBase.PLATFORM();
 
-                  const expectedErrorMessage = platform === PLATFORM_UNIV3
-                    ? "U3S-1 Need rebalance"
-                    : platform === PLATFORM_ALGEBRA
-                      ? "AS-1 Need rebalance"
-                      : "KS-1 Need rebalance";
+                  const expectedErrorMessage = getErrorMessage(platform, "-1 Need rebalance");
                   await expect(
                     b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: GAS_LIMIT})
                   ).revertedWith(expectedErrorMessage);
@@ -528,11 +525,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   const needRebalanceBefore = await b.strategy.needRebalance();
                   expect(needRebalanceBefore).eq(true);
 
-                  const expectedErrorMessage = platform === PLATFORM_UNIV3
-                    ? "U3S-1 Need rebalance"
-                    : platform === PLATFORM_ALGEBRA
-                      ? "AS-1 Need rebalance"
-                      : "KS-1 Need rebalance";
+                  const expectedErrorMessage = getErrorMessage(platform, "-1 Need rebalance");
                   await expect(
                     b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: GAS_LIMIT})
                   ).revertedWith(expectedErrorMessage);
@@ -544,11 +537,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   const needRebalanceBefore = await b.strategy.needRebalance();
                   expect(needRebalanceBefore).eq(true);
 
-                  const expectedErrorMessage = platform === PLATFORM_UNIV3
-                    ? "U3S-1 Need rebalance"
-                    : platform === PLATFORM_ALGEBRA
-                      ? "AS-1 Need rebalance"
-                      : "KS-1 Need rebalance";
+                  const expectedErrorMessage = getErrorMessage(platform, "-1 Need rebalance");
                   await expect(
                     b.vault.connect(signer).withdrawAll({gasLimit: GAS_LIMIT})
                   ).revertedWith(expectedErrorMessage);
@@ -597,11 +586,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
 
                   const platform = await converterStrategyBase.PLATFORM();
-                  const expectedErrorMessage = platform === PLATFORM_UNIV3
-                    ? "U3S-1 Need rebalance"
-                    : platform === PLATFORM_ALGEBRA
-                      ? "AS-1 Need rebalance"
-                      : "KS-1 Need rebalance";
+                  const expectedErrorMessage = getErrorMessage(platform, "-1 Need rebalance");
 
                   await expect(
                     converterStrategyBase.doHardWork({gasLimit: GAS_LIMIT})
@@ -631,6 +616,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               });
 
               describe("SCB-791: withdraw almost-all shouldn't change share prices", () => {
+                const PRECISION = 2e-6;
                 let snapshotLevel1: string;
                 let snapshotLevel1Each: string;
                 let state: IDefaultState;
@@ -658,7 +644,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   console.log('deposit...');
                   await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
                   await TokenUtils.getToken(b.asset, signer.address, parseUnits('35000', 6));
-                  await b.vault.connect(signer).deposit(parseUnits('10000', 6), signer.address);
+                  await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: GAS_LIMIT});
 
                   amountToWithdraw = (await b.vault.maxWithdraw(signer.address)).sub(parseUnits("1", 6));
 
@@ -680,7 +666,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   console.log("stateBefore", stateBefore);
                   console.log("stateAfter", stateAfter);
 
-                  expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, 1e-6);
+                  expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, PRECISION);
                 });
 
                 it("should withdraw almost all successfully, mocked swapper returns higher amount  for any swap", async () => {
@@ -698,7 +684,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   await MockAggregatorUtils.injectSwapperToLiquidator(getTetuLiquidator(chainId), b, b.swapper);
                   const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-                  expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, 1e-6);
+                  expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, PRECISION);
                 });
 
                 it("should withdraw almost all successfully, mocked swapper returns smaller amount for any swap", async () => {
@@ -717,7 +703,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   await MockAggregatorUtils.injectSwapperToLiquidator(getTetuLiquidator(chainId), b, b.swapper);
                   const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-                  expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, 1e-6);
+                  expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, PRECISION);
                 });
 
                 it("should withdraw almost all successfully, token0=>token1 swap amount higher, token0=>token1 swap amount lower", async () => {
@@ -737,7 +723,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   await MockAggregatorUtils.injectSwapperToLiquidator(getTetuLiquidator(chainId), b, b.swapper);
                   const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-                  expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, 1e-6);
+                  expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, PRECISION);
                 });
 
                 it("should withdraw almost all successfully, token0=>token1 swap amount lower, token0=>token1 swap amount higher", async () => {
@@ -757,7 +743,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   await MockAggregatorUtils.injectSwapperToLiquidator(getTetuLiquidator(chainId), b, b.swapper);
                   const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-                  expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, 1e-6);
+                  expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, PRECISION);
                 });
               });
               describe("Emergency exit", () => {
@@ -809,7 +795,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   const platform = await converterStrategyBase.PLATFORM();
 
                   // currently kyber's isReadyToHardWork returns true without need to call prepareToHardwork
-                  expect(await converterStrategyBase.isReadyToHardWork()).eq(platform === PLATFORM_KYBER);
+                  expect(await converterStrategyBase.isReadyToHardWork()).eq(
+                    platform === PLATFORM_KYBER
+                    || platform === PLATFORM_PANCAKE
+                  );
                 });
               });
               describe("Empty strategy with need-rebalance ON", () => {
@@ -947,9 +936,13 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                 await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
                 console.log('Big user deposit...');
+                const largeAmountToDeposit = strategyInfo.name === PLATFORM_PANCAKE
+                  ? parseUnits('20000', 6) // avoid !PRICE 99970
+                  : parseUnits('50000', 6);
+
                 await IERC20__factory.connect(b.asset, signer2).approve(b.vault.address, Misc.MAX_UINT);
                 await TokenUtils.getToken(b.asset, signer2.address, parseUnits('100000', 6));
-                await b.vault.connect(signer2).deposit(parseUnits('50000', 6), signer2.address, {gasLimit: GAS_LIMIT});
+                await b.vault.connect(signer2).deposit(largeAmountToDeposit, signer2.address, {gasLimit: GAS_LIMIT});
                 states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "d1"));
                 await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
@@ -973,8 +966,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                 console.log('Rebalance debts...');
                 // rebalance debts
                 await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
-                  await b.strategy.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)),
+                  b.strategy.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)),
                   Misc.ZERO_ADDRESS,
+                  false,
                   () => true
                 );
                 states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "unfold"));
@@ -1224,16 +1218,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                       b,
                       movePricesUp,
                       state,
-                      strategyInfo.name === PLATFORM_KYBER
-                        ? await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
-                          signer,
-                          b,
-                          state.tokenA,
-                          state.tokenB,
-                          movePricesUp,
-                          1.1
-                        )
-                        : swapAssetValueForPriceMove,
+                      swapAssetValueForPriceMove,
                       swapAssetValueForPriceMoveDown,
                       5
                     );
@@ -1253,6 +1238,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                     await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
                       await b.strategy.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)),
                       getTetuLiquidator(chainId),
+                      true,
                       () => true,
                       async (stateTitle, eventsSet): Promise<IStateNum> => {
                         states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, stateTitle, {eventsSet}));

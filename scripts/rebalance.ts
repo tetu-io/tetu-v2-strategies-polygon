@@ -189,7 +189,7 @@ async function main() {
                 const gas = await strategy.estimateGas.rebalanceNoSwaps(true, { ...tp, gasLimit: 15_000_000 });
                 console.log('estimated gas', formatUnits(gas, 9));
 
-                await RunHelper.runAndWaitAndSpeedUp(
+                await RunHelper.runAndWait(
                   provider,
                   () => strategy.rebalanceNoSwaps(true, { ...tp, gasLimit: 15_000_000 }),
                   true,

@@ -66,7 +66,7 @@ describe("Scb830 @skip-on-coverage", () => {
     await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
       strategy,
       MaticAddresses.TETU_LIQUIDATOR,
-
+      true,
       function isWithdrawCompleted(lastState?: IStateNum) {
         return !lastState || lastState?.lockedPercent < REQUIRED_LOCKED_PERCENT;
       },

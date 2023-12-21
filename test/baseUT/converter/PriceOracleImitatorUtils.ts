@@ -169,13 +169,13 @@ export class PriceOracleImitatorUtils {
     const stableMToken = stableToken.toLowerCase() === BaseAddresses.USDbC_TOKEN.toLowerCase()
       ? BaseAddresses.MOONWELL_USDBC
       : stableToken.toLowerCase() === BaseAddresses.USDC_TOKEN.toLowerCase()
-        ? BaseAddresses.USDC_TOKEN
+        ? BaseAddresses.MOONWELL_USDC
         : "";
 
     const volatileMToken = volatileToken.toLowerCase() === BaseAddresses.USDbC_TOKEN.toLowerCase()
       ? BaseAddresses.MOONWELL_USDBC
       : volatileToken.toLowerCase() === BaseAddresses.USDC_TOKEN.toLowerCase()
-        ? BaseAddresses.USDC_TOKEN
+        ? BaseAddresses.MOONWELL_USDC
         : "";
 
     if (!stableMToken || !volatileMToken) {

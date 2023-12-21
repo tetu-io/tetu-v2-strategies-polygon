@@ -27,8 +27,8 @@ async function injectStrategy() {
 }
 
 describe("Check actions on base @skip-on-coverage", () => {
-  const BLOCK = 51312800;
-  const STRATEGY = "0xA8105284aA9C9A20A2081EEE1ceeF03d9719A5AD";
+  const BLOCK = 51350575;
+  const STRATEGY = "0xCdc5560AB926Dca3d4989bF814469Af3f989Ab2C";
   const CONTROLLER = "0x33b27e0a2506a4a2fbc213a01c51d0451745343a";
   const SENDER = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
   // const SPLITTER = "";

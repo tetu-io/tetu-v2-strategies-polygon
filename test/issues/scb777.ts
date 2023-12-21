@@ -52,7 +52,8 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
       await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
         strategy,
         MaticAddresses.TETU_LIQUIDATOR,
-          () => true // single iteration
+        true,
+        () => true, // single iteration
       );
     });
   });
