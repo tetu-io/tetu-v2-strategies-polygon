@@ -263,7 +263,12 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   function _makeRequestedAmount(uint amount_, WithdrawUniversalLocal memory v) internal virtual returns ( // it's virtual to simplify unit testing
     uint expectedTotalAssetAmount
   ) {
+    console.log("_withdrawUniversal._makeRequestedAmount", amount_);
+    console.log("_withdrawUniversal.v.tokens[0].balance", IERC20(v.tokens[0]).balanceOf(address(this)));
+    console.log("_withdrawUniversal.v.tokens[1].balance", IERC20(v.tokens[0]).balanceOf(address(this)));
+
     uint depositorLiquidity = _depositorLiquidity();
+    console.log("_withdrawUniversal.depositorLiquidity", depositorLiquidity);
 
     // calculate how much liquidity we need to withdraw for getting at least requested amount of the {v.asset}
     uint[] memory quoteAmounts = _depositorQuoteExit(depositorLiquidity);
@@ -276,6 +281,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       depositorLiquidity,
       v.indexUnderlying
     );
+    console.log("_withdrawUniversal.quoteAmounts", quoteAmounts[0], quoteAmounts[1]);
 
     if (liquidityAmountToWithdraw != 0) {
       uint[] memory withdrawnAmounts = _depositorExit(liquidityAmountToWithdraw, false);
@@ -284,6 +290,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       // assume that liquidity cannot increase in _depositorExit
       liquidityAmountToWithdraw = depositorLiquidity - _depositorLiquidity();
       emit OnDepositorExit(liquidityAmountToWithdraw, withdrawnAmounts);
+      console.log("_withdrawUniversal.withdrawnAmounts", withdrawnAmounts[0], withdrawnAmounts[1]);
     }
 
     // try to receive at least requested amount of the {v.asset} on the balance
@@ -295,6 +302,10 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       (amount_ == type(uint).max ? amount_ : v.balanceBefore + amount_), // current balance + the amount required to be withdrawn on balance
       liquidationThresholds
     );
+    console.log("_withdrawUniversal.expectedBalance", expectedBalance);
+    console.log("_withdrawUniversal.v.tokens[0].balance", IERC20(v.tokens[0]).balanceOf(address(this)));
+    console.log("_withdrawUniversal.v.tokens[1].balance", IERC20(v.tokens[0]).balanceOf(address(this)));
+    console.log("_withdrawUniversal.expectedBalance - v.balanceBefore", expectedBalance - v.balanceBefore);
 
     require(expectedBalance >= v.balanceBefore, AppErrors.BALANCE_DECREASE);
     return expectedBalance - v.balanceBefore;
@@ -349,6 +360,8 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     uint strategyLoss,
     uint amountSentToInsurance
   ) {
+    console.log("_withdrawUniversal.amount_", amount_);
+    console.log("_withdrawUniversal.investedAssets_", investedAssets_);
     // amount to withdraw; we add a little gap to avoid situation "opened debts, no liquidity to pay"
     uint amount = amount_ == type(uint).max
       ? amount_

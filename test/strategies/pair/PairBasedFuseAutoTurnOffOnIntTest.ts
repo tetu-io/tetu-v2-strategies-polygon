@@ -110,6 +110,10 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
           states.push(stateAfterRebalance);
           StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
+          console.log("currentFuse", currentFuse);
+          console.log("stateAfterRebalance.fuseStatus", stateAfterRebalance.fuseStatus);
+          console.log("stateAfterRebalance.converterDirect.borrowAssetsPrices[1]", stateAfterRebalance.converterDirect.borrowAssetsPrices[1]);
+          console.log("stateAfterRebalance.converterDirect.borrowAssetsPrices[0]", stateAfterRebalance.converterDirect.borrowAssetsPrices[0]);
           if (stateAfterRebalance.fuseStatus !== currentFuse) {
             return {
               fuseStatus: stateAfterRebalance.fuseStatus || 0,

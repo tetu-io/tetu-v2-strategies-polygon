@@ -1,16 +1,21 @@
 /* tslint:disable:no-trailing-whitespace */
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ConverterUtils} from "../utils/ConverterUtils";
-import {getAaveTwoPlatformAdapter, getDForcePlatformAdapter, Misc} from "../../../scripts/utils/Misc";
+import {getAaveTwoPlatformAdapter, Misc} from "../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 import {
   AggregatorInterface,
   IAave3PriceOracle,
-  IAave3PriceOracle__factory, IAlgebraPool__factory,
+  IAave3PriceOracle__factory,
+  IAlgebraPool__factory,
   IBVault__factory,
-  IComposableStablePool__factory,
-  ILinearPool__factory, IMoonwellComptroller__factory, IPancakeV3Pool__factory, IPool__factory, IPriceOracle__factory,
-  IUniswapV3Pool__factory, MoonwellPriceOraclePancakePool
+  IComposableStablePool__factory, IERC20Metadata__factory,
+  ILinearPool__factory,
+  IMoonwellComptroller__factory, IMoonwellPriceOracle__factory,
+  IPancakeV3Pool__factory,
+  IPool__factory,
+  IPriceOracle__factory,
+  IUniswapV3Pool__factory,
 } from "../../../typechain";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {BigNumber} from "ethers";
@@ -158,42 +163,25 @@ export class PriceOracleImitatorUtils {
     signer: SignerWithAddress,
     pool: string,
     stableToken: string,
+    stableTokenPrice: string = "1"
   ) {
-    const admin = await IMoonwellComptroller__factory.connect(BaseAddresses.MOONWELL_COMPTROLLER, signer).admin();
+    const comptroller = IMoonwellComptroller__factory.connect(BaseAddresses.MOONWELL_COMPTROLLER, signer);
+    const admin = await Misc.impersonate(await comptroller.admin());
+    const priceOracle = await comptroller.oracle();
 
     const pancakePool = IPancakeV3Pool__factory.connect(pool, signer);
     const token0 = await pancakePool.token0();
     const token1 = await pancakePool.token1();
-    const volatileToken = token0.toLowerCase() === stableToken.toLowerCase() ? token1 : token0;
+    const volatileToken = token0.toLowerCase() === stableToken.toLowerCase() ? token1 : token0
 
-    const stableMToken = stableToken.toLowerCase() === BaseAddresses.USDbC_TOKEN.toLowerCase()
-      ? BaseAddresses.MOONWELL_USDBC
-      : stableToken.toLowerCase() === BaseAddresses.USDC_TOKEN.toLowerCase()
-        ? BaseAddresses.MOONWELL_USDC
-        : "";
+    await IMoonwellPriceOracle__factory.connect(priceOracle, admin).setFeed(
+      await IERC20Metadata__factory.connect(stableToken, signer).symbol(),
+      (await DeployerUtils.deployContract(signer, 'MoonwellAggregatorV3Fixed', parseUnits(stableTokenPrice, 8))).address
+    );
 
-    const volatileMToken = volatileToken.toLowerCase() === BaseAddresses.USDbC_TOKEN.toLowerCase()
-      ? BaseAddresses.MOONWELL_USDBC
-      : volatileToken.toLowerCase() === BaseAddresses.USDC_TOKEN.toLowerCase()
-        ? BaseAddresses.MOONWELL_USDC
-        : "";
-
-    if (!stableMToken || !volatileMToken) {
-      throw Error("pancakeBaseChain is not able to detect mToken");
-    }
-
-    const priceOracle = await DeployerUtils.deployContract(
-      signer,
-      'MoonwellPriceOraclePancakePool',
-      stableMToken,
-      stableToken,
-      parseUnits("1", 18),
-      volatileMToken,
-      volatileToken,
-      pool,
-      BaseAddresses.MOONWELL_PRICE_ORACLE
-    ) as MoonwellPriceOraclePancakePool;
-
-    await IMoonwellComptroller__factory.connect(BaseAddresses.MOONWELL_COMPTROLLER, await Misc.impersonate(admin))._setPriceOracle(priceOracle.address);
+    await IMoonwellPriceOracle__factory.connect(priceOracle, admin).setFeed(
+      await IERC20Metadata__factory.connect(volatileToken, signer).symbol(),
+      (await DeployerUtils.deployContract(signer, 'MoonwellAggregatorV3PancakePool', pool, volatileToken)).address
+    );
   }
 }

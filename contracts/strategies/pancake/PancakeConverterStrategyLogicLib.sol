@@ -361,7 +361,9 @@ library PancakeConverterStrategyLogicLib {
     console.log("exit.v.liquidity.final", v.liquidity);
 
     if (v.liquidity == 0) {
-      v.chef.burn(v.tokenId);
+      if (!emergency) {
+        v.chef.burn(v.tokenId);
+      }
       state.tokenId = 0;
     }
   }

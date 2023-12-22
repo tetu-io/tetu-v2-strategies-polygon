@@ -116,7 +116,6 @@ export class UniversalUtils {
     priceImpactTolerance = 99000, // 99% slippage
     swapHelper?: SwapHelper,
   ): Promise<IPriceChanges> {
-    // console.log("movePoolPriceUp.amountA", amountA, state);
     const swapper = ISwapper__factory.connect(swapperAddress, signer);
     const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, signer).decimals()
     const tokenAName = await TokenUtils.tokenSymbol(state.tokenA);

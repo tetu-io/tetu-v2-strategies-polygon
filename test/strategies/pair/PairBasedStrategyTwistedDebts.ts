@@ -737,7 +737,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
               const p: IPrepareOverCollateralParams = {
                 countRebalances: 2,
                 movePricesUp: false,
-                swapAmountRatio: platform === PLATFORM_UNIV3 ? 1.1 : 0.3,
+                swapAmountRatio: platform === PLATFORM_UNIV3 ? 1.1 : 0.5,
                 amountToDepositBySigner2: "100",
                 amountToDepositBySigner: "10000"
               }

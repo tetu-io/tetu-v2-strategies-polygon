@@ -97,10 +97,10 @@ export class PairBasedStrategyPrepareStateUtils {
     console.log("priceAB", priceAB);
 
     const ttA = [
-      priceAB - 0.0008,
-      priceAB - 0.0006,
-      priceAB + (triggerOn ? -0.0001 : 0.0008),
-      priceAB + (triggerOn ? -0.0002 : 0.0006),
+      priceAB - 0.0004,
+      priceAB - 0.0003,
+      priceAB + (triggerOn ? -0.0001 : 0.0004),
+      priceAB + (triggerOn ? -0.0002 : 0.0003),
     ].map(x => parseUnits(x.toString(), 18));
 
     await b.strategy.setFuseThresholds([ttA[0], ttA[1], ttA[2], ttA[3]]);

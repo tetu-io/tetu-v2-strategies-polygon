@@ -225,10 +225,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
                   const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+                  console.log('stateBefore', stateBefore);
+
                   await b.vault.connect(signer).withdrawAll({gasLimit: GAS_LIMIT});
                   const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-
-                  console.log('stateBefore', stateBefore);
                   console.log('stateAfter', stateAfter);
 
                   expect(stateAfter.user.assetBalance).gt(stateBefore.user.assetBalance);
@@ -1086,7 +1086,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         }
 
         const strategies: IStrategyInfo[] = [
-          {chainId: BASE_NETWORK_ID, name: PLATFORM_PANCAKE, notUnderlyingToken: BaseAddresses.USDbC_TOKEN, compoundRatio: 50_000},
+          {chainId: BASE_NETWORK_ID, name: PLATFORM_PANCAKE, notUnderlyingToken: BaseAddresses.USDbC_TOKEN, compoundRatio: 0},
 
           {chainId: POLYGON_NETWORK_ID, name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
           {chainId: POLYGON_NETWORK_ID, name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
@@ -1203,7 +1203,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                       state,
                       swapAssetValueForPriceMove,
                       swapAssetValueForPriceMoveDown,
-                      5
+                      3
                     );
                     lastDirectionUp = !lastDirectionUp
                     states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `p${i}`));
