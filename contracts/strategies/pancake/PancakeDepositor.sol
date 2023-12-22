@@ -6,7 +6,6 @@ import "./PancakeStrategyErrors.sol";
 import "./PancakeConverterStrategyLogicLib.sol";
 import "../DepositorBase.sol";
 import "../../integrations/pancake/IPancakeV3MintCallback.sol";
-import "hardhat/console.sol";
 
 /// @title PancakeDepositor
 /// @dev Abstract contract that is designed to interact with Uniswap V3 pools and manage liquidity.
@@ -46,7 +45,6 @@ abstract contract PancakeDepositor is IPancakeV3MintCallback, DepositorBase, Ini
   /// @notice Returns the pool assets.
   /// @return poolAssets An array containing the addresses of the pool assets.
   function _depositorPoolAssets() override internal virtual view returns (address[] memory poolAssets) {
-    console.log("_depositorPoolAssets");
     poolAssets = new address[](2);
     poolAssets[0] = state.pair.tokenA;
     poolAssets[1] = state.pair.tokenB;
@@ -55,7 +53,6 @@ abstract contract PancakeDepositor is IPancakeV3MintCallback, DepositorBase, Ini
   /// @notice Returns the pool weights and the total weight.
   /// @return weights An array containing the weights of the pool assets, and totalWeight the sum of the weights.
   function _depositorPoolWeights() override internal virtual view returns (uint[] memory weights, uint totalWeight) {
-    console.log("_depositorPoolWeights");
     weights = new uint[](2);
     weights[0] = 1;
     weights[1] = 1;
@@ -71,14 +68,12 @@ abstract contract PancakeDepositor is IPancakeV3MintCallback, DepositorBase, Ini
   /// @notice Returns the current liquidity of the depositor.
   /// @return The current liquidity of the depositor.
   function _depositorLiquidity() override internal virtual view returns (uint) {
-    console.log("_depositorLiquidity", state.pair.totalLiquidity);
     return uint(state.pair.totalLiquidity);
   }
 
   /// @notice Returns the total supply of the depositor.
   /// @return In UniV3 we can not calculate the total supply of the whole pool. Return only ourself value.
   function _depositorTotalSupply() override internal view virtual returns (uint) {
-    console.log("_depositorTotalSupply", state.pair.totalLiquidity);
     return uint(state.pair.totalLiquidity);
   }
   //endregion ------------------------------------------------ View
@@ -93,7 +88,6 @@ abstract contract PancakeDepositor is IPancakeV3MintCallback, DepositorBase, Ini
     uint amount1Owed,
     bytes calldata /*_data*/
   ) external override {
-    console.log("pancakeV3MintCallback", amount0Owed, amount1Owed);
     require(msg.sender == state.pair.pool, PancakeStrategyErrors.NOT_CALLBACK_CALLER);
     if (amount0Owed != 0) IERC20(state.pair.depositorSwapTokens ? state.pair.tokenB : state.pair.tokenA).safeTransfer(msg.sender, amount0Owed);
     if (amount1Owed != 0) IERC20(state.pair.depositorSwapTokens ? state.pair.tokenA : state.pair.tokenB).safeTransfer(msg.sender, amount1Owed);
@@ -107,10 +101,7 @@ abstract contract PancakeDepositor is IPancakeV3MintCallback, DepositorBase, Ini
     uint[] memory amountsConsumed,
     uint liquidityOut
   ) {
-    console.log("_depositorEnter.amountsDesired_", amountsDesired_[0], amountsDesired_[1]);
     (amountsConsumed, liquidityOut) = PancakeConverterStrategyLogicLib.enter(state, amountsDesired_);
-    console.log("_depositorEnter.amountsConsumed", amountsConsumed[0], amountsConsumed[1]);
-    console.log("_depositorEnter.liquidityOut");
   }
 
   /// @notice Handles the withdrawal operation.
@@ -118,16 +109,13 @@ abstract contract PancakeDepositor is IPancakeV3MintCallback, DepositorBase, Ini
   /// @param emergency Emergency exit (only withdraw, don't claim any rewards or make any other additional actions)
   /// @return amountsOut The amounts of the tokens withdrawn.
   function _depositorExit(uint liquidityAmount, bool emergency) override internal virtual returns (uint[] memory amountsOut) {
-    console.log("_depositorExit", liquidityAmount);
     amountsOut = PancakeConverterStrategyLogicLib.exit(state, uint128(liquidityAmount), emergency);
-    console.log("_depositorExit.amountsOut", amountsOut[0], amountsOut[1]);
   }
 
   /// @notice Returns the amount of tokens that would be withdrawn based on the provided liquidity amount.
   /// @param liquidityAmount The amount of liquidity to quote the withdrawal for.
   /// @return amountsOut The amounts of the tokens that would be withdrawn, underlying is first
   function _depositorQuoteExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
-    console.log("_depositorQuoteExit", liquidityAmount);
     amountsOut = PancakeConverterStrategyLogicLib.quoteExit(state.pair, uint128(liquidityAmount));
   }
   //endregion ------------------------------------------------ Enter, exit
@@ -142,7 +130,6 @@ abstract contract PancakeDepositor is IPancakeV3MintCallback, DepositorBase, Ini
     uint[] memory amountsOut,
     uint[] memory balancesBefore
   ) {
-    console.log("_depositorClaimRewards");
     (tokensOut, amountsOut, balancesBefore) = PancakeConverterStrategyLogicLib.claimRewards(state);
   }
   //endregion ------------------------------------------------ Claim rewards

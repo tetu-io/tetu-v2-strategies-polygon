@@ -13,6 +13,6 @@ module.exports = {
     deduplicate: false,
     cse: false,
     constantOptimizer: false,
-    yul: false,
+    yul: true,
   }
 };

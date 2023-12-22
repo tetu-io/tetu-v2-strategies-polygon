@@ -9,7 +9,6 @@ import "../../libs/AppPlatforms.sol";
 import "../../interfaces/IRebalancingV2Strategy.sol";
 import "../pair/PairBasedStrategyLib.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
-import "hardhat/console.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for Pancake
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
@@ -255,7 +254,6 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
   ) override internal virtual returns (
     uint[] memory tokenAmounts
   ) {
-    console.log("_beforeDeposit.amount_", amount_);
     require(!needRebalance(), PancakeStrategyErrors.NEED_REBALANCE);
     (uint prop0, uint prop1) = PancakeConverterStrategyLogicLib.getEntryDataProportions(
       IPancakeV3Pool(state.pair.pool),
@@ -263,8 +261,6 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
       state.pair.upperTick,
       state.pair.depositorSwapTokens
     );
-    console.log("_beforeDeposit.prop0", prop0);
-    console.log("_beforeDeposit.prop1", prop1);
 
     // get token amounts for token A, token B
     address tokenA = state.pair.tokenA;
@@ -276,13 +272,11 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
       prop0 * 1e18 / (prop0 + prop1),
       liquidationThresholds
     );
-    console.log("_beforeDeposit.tokenAmounts", tokenAmounts[0], tokenAmounts[1]);
 
     // take into account a possibility that tokens_ can contain [B, A]
     if (tokens_[0] != tokenA) {
       (tokenAmounts[0], tokenAmounts[1]) = (tokenAmounts[1], tokenAmounts[0]);
     }
-    console.log("_beforeDeposit.tokenAmounts.2", tokenAmounts[0], tokenAmounts[1]);
   }
 
   /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
@@ -311,7 +305,6 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     uint strategyLoss
   ) {
-    console.log("_depositToPool.amount_", amount_);
     if (_isFuseTriggeredOn()) {
       uint[] memory tokenAmounts = new uint[](2);
       tokenAmounts[0] = amount_;
@@ -323,7 +316,6 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
   }
 
   function _beforeWithdraw(uint /*amount*/) internal view override {
-    console.log("_beforeWithdraw");
     require(!needRebalance(), PancakeStrategyErrors.NEED_REBALANCE);
   }
 

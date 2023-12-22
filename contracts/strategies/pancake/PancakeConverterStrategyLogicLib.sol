@@ -20,7 +20,6 @@ import "../pair/PairBasedStrategyLib.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
 import "../../integrations/pancake/IPancakeNonfungiblePositionManager.sol";
 import "../../integrations/pancake/IPancakeMasterChefV3.sol";
-import "hardhat/console.sol";
 
 library PancakeConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -83,6 +82,11 @@ library PancakeConverterStrategyLogicLib {
     int24 upperTick;
 
     IPancakeMasterChefV3 chef;
+    IPancakeNonfungiblePositionManager nft;
+
+    uint24 fee;
+    int24 nftLowerTick;
+    int24 nftUpperTick;
   }
 
   struct ExitLocal {
@@ -216,16 +220,14 @@ library PancakeConverterStrategyLogicLib {
     uint[] memory amountsConsumed,
     uint liquidityOut
   ) {
-    EnterLocalVariables memory v = EnterLocalVariables({
-      pool: IPancakeV3Pool(state.pair.pool),
-      depositorSwapTokens: state.pair.depositorSwapTokens,
-      liquidity: 0,
-      tokenId: state.tokenId,
-      lowerTick: state.pair.lowerTick,
-      upperTick: state.pair.upperTick,
-      chef: state.chef
-    });
-    IPancakeNonfungiblePositionManager nft = IPancakeNonfungiblePositionManager(payable(v.chef.nonfungiblePositionManager()));
+    EnterLocalVariables memory v;
+    v.pool = IPancakeV3Pool(state.pair.pool);
+    v.depositorSwapTokens = state.pair.depositorSwapTokens;
+    v.tokenId = state.tokenId;
+    v.lowerTick = state.pair.lowerTick;
+    v.upperTick = state.pair.upperTick;
+    v.chef = state.chef;
+    v.nft = IPancakeNonfungiblePositionManager(payable(v.chef.nonfungiblePositionManager()));
 
     amountsConsumed = new uint[](2);
 
@@ -238,11 +240,11 @@ library PancakeConverterStrategyLogicLib {
         (amountsDesired_[0], amountsDesired_[1]) = (amountsDesired_[1], amountsDesired_[0]);
       }
 
-      uint24 fee = v.pool.fee();
+      v.fee = v.pool.fee();
 
       if (v.tokenId != 0) {
-        (,,,,, int24 nftLowerTick, int24 nftUpperTick,,,,,) = nft.positions(v.tokenId);
-        if (nftLowerTick != v.lowerTick || nftUpperTick != v.upperTick) {
+        (,,,,, v.nftLowerTick, v.nftUpperTick,,,,,) = v.nft.positions(v.tokenId);
+        if (v.nftLowerTick != v.lowerTick || v.nftUpperTick != v.upperTick) {
           // Assume that the token have 0 liquidity and all tokens have been collected already
           v.chef.burn(v.tokenId);
           v.tokenId = 0;
@@ -250,10 +252,10 @@ library PancakeConverterStrategyLogicLib {
       }
 
       if (v.tokenId == 0) {
-        (v.tokenId, v.liquidity, amountsConsumed[0], amountsConsumed[1]) = nft.mint(IPancakeNonfungiblePositionManager.MintParams(
+        (v.tokenId, v.liquidity, amountsConsumed[0], amountsConsumed[1]) = v.nft.mint(IPancakeNonfungiblePositionManager.MintParams(
           token0,
           token1,
-          fee,
+          v.fee,
           v.lowerTick,
           v.upperTick,
           amountsDesired_[0],
@@ -264,7 +266,7 @@ library PancakeConverterStrategyLogicLib {
           block.timestamp
         ));
         state.tokenId = v.tokenId;
-        nft.safeTransferFrom(address(this), address(v.chef), v.tokenId);
+        v.nft.safeTransferFrom(address(this), address(v.chef), v.tokenId);
       } else {
         (v.liquidity, amountsConsumed[0], amountsConsumed[1]) = v.chef.increaseLiquidity(INonfungiblePositionManagerStruct.IncreaseLiquidityParams(
           v.tokenId,
@@ -313,7 +315,6 @@ library PancakeConverterStrategyLogicLib {
     uint128 liquidityAmountToExit,
     bool emergency
   ) internal returns (uint[] memory amountsOut) {
-    console.log("exit.liquidityAmountToExit", liquidityAmountToExit);
     amountsOut = new uint[](2);
 
     ExitLocal memory v;
@@ -322,7 +323,6 @@ library PancakeConverterStrategyLogicLib {
 
     v.liquidity = state.pair.totalLiquidity;
     require(v.liquidity >= liquidityAmountToExit, PancakeStrategyErrors.WRONG_LIQUIDITY);
-    console.log("exit.v.liquidity ", v.liquidity );
 
     v.tokenId = state.tokenId;
 
@@ -358,7 +358,6 @@ library PancakeConverterStrategyLogicLib {
 
     v.liquidity -= liquidityAmountToExit;
     state.pair.totalLiquidity = v.liquidity;
-    console.log("exit.v.liquidity.final", v.liquidity);
 
     if (v.liquidity == 0) {
       if (!emergency) {
@@ -472,9 +471,6 @@ library PancakeConverterStrategyLogicLib {
       if (token == asset) {
         earned += amounts[i];
       } else {
-        console.log("calcEarned.rewardTokens[i]", rewardTokens[i]);
-        console.log("calcEarned.asset", asset);
-        console.log("calcEarned.amounts[i]", amounts[i]);
         earned += liquidator.getPrice(rewardTokens[i], asset, amounts[i]);
       }
     }

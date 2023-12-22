@@ -18,15 +18,15 @@ contract MoonwellAggregatorV3PancakePool is IMoonwellAggregatorV3Interface{
     tokenIn = tokenIn_;
   }
 
-  function decimals() external view returns (uint8) {
+  function decimals() external pure returns (uint8) {
     return 8;
   }
 
-  function description() external view returns (string memory) {
+  function description() external pure returns (string memory) {
     return "test";
   }
 
-  function version() external view returns (uint256) {
+  function version() external pure returns (uint256) {
     return 1;
   }
 
