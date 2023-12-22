@@ -23,6 +23,15 @@ export class PlatformUtils {
     }
   }
 
+  static getOneInch(chainId: number): string {
+    switch (chainId) {
+      case BASE_NETWORK_ID: return BaseAddresses.AGG_ONEINCH_V5;
+      case POLYGON_NETWORK_ID: return MaticAddresses.AGG_ONEINCH_V5;
+      case ZKEVM_NETWORK_ID: return ZkevmAddresses.AGG_ONEINCH_V5;
+      default: throw Error(`getOneInch: chain ${chainId} is not supported`);
+    }
+  }
+
   static getErrorMessage(platform: string, error: string): string {
     return platform === PLATFORM_UNIV3
       ? "U3S" + error // "U3S-9 No rebalance needed"

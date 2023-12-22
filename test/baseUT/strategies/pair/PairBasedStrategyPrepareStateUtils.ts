@@ -296,6 +296,7 @@ export class PairBasedStrategyPrepareStateUtils {
       signer: SignerWithAddress,
       signer2: SignerWithAddress
   ) : Promise<IListStates> {
+  console.log("prepareTwistedDebts.start");
   const states: IStateNum[] = [];
 
   const defaultState = await PackedData.getDefaultState(b.strategy);

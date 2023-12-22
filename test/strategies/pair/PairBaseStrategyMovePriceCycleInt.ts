@@ -7,7 +7,6 @@ import {
   StrategyBaseV2__factory,
   PairBasedStrategyReader, ConverterStrategyBase__factory,
 } from '../../../typechain';
-import { MaticAddresses } from '../../../scripts/addresses/MaticAddresses';
 import { TokenUtils } from '../../../scripts/utils/TokenUtils';
 import {formatUnits, parseUnits} from 'ethers/lib/utils';
 import { Misc } from '../../../scripts/utils/Misc';
@@ -16,41 +15,27 @@ import {MockHelper} from "../../baseUT/helpers/MockHelper";
 import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
 import {IStateNum, StateUtilsNum} from "../../baseUT/utils/StateUtilsNum";
 import {PackedData} from "../../baseUT/utils/PackedData";
-import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../baseUT/strategies/AppPlatforms";
-import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../baseUT/strategies/pair/PairBasedStrategyBuilder";
+import {PLATFORM_PANCAKE, PLATFORM_UNIV3} from "../../baseUT/strategies/AppPlatforms";
+import {IBuilderResults} from "../../baseUT/strategies/pair/PairBasedStrategyBuilder";
 import {PairStrategyFixtures} from "../../baseUT/strategies/pair/PairStrategyFixtures";
 import {PairBasedStrategyPrepareStateUtils} from "../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {UniversalUtils} from "../../baseUT/strategies/UniversalUtils";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
+import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID} from '../../baseUT/utils/HardhatUtils';
 import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
+import {PlatformUtils} from "../../baseUT/utils/PlatformUtils";
 
 const { expect } = chai;
 
 describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
+  const CHAINS_IN_ORDER_EXECUTION: number[] = [BASE_NETWORK_ID, POLYGON_NETWORK_ID];
+
 //region Variables
   let snapshotBefore: string;
   let signer: SignerWithAddress;
   let signer2: SignerWithAddress;
   let reader: PairBasedStrategyReader;
 //endregion Variables
-
-  //region before, after
-  before(async function () {
-    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
-    snapshotBefore = await TimeUtils.snapshot();
-    await HardhatUtils.switchToMostCurrentBlock();
-    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
-
-    [signer, signer2] = await ethers.getSigners();
-    reader = await MockHelper.createPairBasedStrategyReader(signer);
-  })
-
-  after(async function () {
-    await HardhatUtils.restoreBlockFromEnv();
-    await TimeUtils.rollback(snapshotBefore);
-  });
-//endregion before, after
 
 //region Utils
   interface ICyclesResults {
@@ -65,8 +50,9 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
     aggregator: string;
     aggregatorIsTetuLiquidator: boolean;
   }
+//endregion Utils
 
-  async function makeCycles(b: IBuilderResults, p: ICyclesParams): Promise<ICyclesResults> {
+  async function makeCycles(chainId: number, b: IBuilderResults, p: ICyclesParams): Promise<ICyclesResults> {
     const cycles = 10;
     const MAX_ALLLOWED_LOCKED_PERCENT = 25;
     const pathOut = p.pathOut;
@@ -117,19 +103,19 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
       console.log(`------------------ MOVE PRICE ${movePriceUp ? "UP" : "DOWN"} `, i, '------------------');
 
       const swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
-          signer,
-          b,
-          defaultState.tokenA,
-          defaultState.tokenB,
-          true,
-           i % 2 === 0
-              ? 0.6
-              : 0.3
+        signer,
+        b,
+        defaultState.tokenA,
+        defaultState.tokenB,
+        true,
+        i % 2 === 0
+          ? 0.6
+          : 0.3
       );
       if (p.movePricesUp) {
-        await UniversalUtils.movePoolPriceUp(signer2, defaultState, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
+        await UniversalUtils.movePoolPriceUp(signer2, defaultState, b.swapper, swapAmount);
       } else {
-        await UniversalUtils.movePoolPriceDown(signer2, defaultState, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
+        await UniversalUtils.movePoolPriceDown(signer2, defaultState, b.swapper, swapAmount);
       }
       states.push(await StateUtilsNum.getState(signer2, signer, converterStrategyBase, b.vault, `p${i}`));
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
@@ -155,7 +141,7 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
             strategyAsOperator,
             p.aggregator,
             p.aggregatorIsTetuLiquidator,
-              () => true, // use single iteration
+            () => true, // use single iteration
             async (stateTitle, eventsSet): Promise<IStateNum> => {
               states.push(await StateUtilsNum.getState(signer2, signer, converterStrategyBase, b.vault, stateTitle, {eventsSet}));
               await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
@@ -198,7 +184,7 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
 
       const sharePriceAfter = await b.vault.sharePrice();
       // zero compound
-      if (p.aggregator === Misc.ZERO_ADDRESS || p.aggregator === MaticAddresses.TETU_LIQUIDATOR) {
+      if (p.aggregator === Misc.ZERO_ADDRESS || p.aggregator === PlatformUtils.getTetuLiquidator(chainId)) {
         expect(sharePriceAfter).approximately(sharePriceBefore, 10);
       } else {
         // the aggregator (not liquidator) uses real price, different from our test...
@@ -215,91 +201,105 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
 
     return {states};
   }
-//endregion Utils
 
-//region Unit tests
-  interface IStrategyInfo {
-    name: string,
-  }
-  const strategies: IStrategyInfo[] = [
-    { name: PLATFORM_UNIV3,},
-    // { name: PLATFORM_ALGEBRA,}, // todo getPrice reverts
-    // { name: PLATFORM_KYBER,}, // todo getPrice reverts
-  ];
+  CHAINS_IN_ORDER_EXECUTION.forEach(function (chainId) {
+    describe(`chain ${chainId}`, function () {
 
-  strategies.forEach(function (strategyInfo: IStrategyInfo) {
-
-    async function prepareStrategy(): Promise<IBuilderResults> {
-      const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
-        POLYGON_NETWORK_ID,
-        strategyInfo.name,
-        signer,
-        signer2,
-        {
-          kyberPid: KYBER_PID_DEFAULT_BLOCK,
-        }
-      );
-
-      await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
-      return b;
-    }
-
-    describe(`${strategyInfo.name}`, () => {
-      let snapshot: string;
       before(async function () {
-        snapshot = await TimeUtils.snapshot();
-      });
+        await HardhatUtils.setupBeforeTest(chainId);
+        snapshotBefore = await TimeUtils.snapshot();
+        await HardhatUtils.switchToMostCurrentBlock();
+        await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
+
+        [signer, signer2] = await ethers.getSigners();
+        reader = await MockHelper.createPairBasedStrategyReader(signer);
+      })
+
       after(async function () {
-        await TimeUtils.rollback(snapshot);
+        await HardhatUtils.restoreBlockFromEnv();
+        await TimeUtils.rollback(snapshotBefore);
       });
 
-      describe("Move prices, liquidator", () => {
-        async function makeTestUp(): Promise<ICyclesResults> {
-          const b = await loadFixture(prepareStrategy);
-          const pathOut = `./tmp/${strategyInfo.name}-cycle-move-prices-liquidator.csv`;
-          return makeCycles(b, {
-            pathOut,
-            movePricesUp: undefined,
-            aggregator: Misc.ZERO_ADDRESS,
-            aggregatorIsTetuLiquidator: false
+      interface IStrategyInfo {
+        name: string,
+        chainId: number;
+      }
+
+      const strategies: IStrategyInfo[] = [
+        {name: PLATFORM_UNIV3, chainId: POLYGON_NETWORK_ID},
+        {name: PLATFORM_PANCAKE, chainId: BASE_NETWORK_ID},
+        // { name: PLATFORM_ALGEBRA,}, // todo getPrice reverts
+        // { name: PLATFORM_KYBER,}, // todo getPrice reverts
+      ];
+
+      strategies.forEach(function (strategyInfo: IStrategyInfo) {
+        if (strategyInfo.chainId === chainId) {
+          async function prepareStrategy(): Promise<IBuilderResults> {
+            const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(chainId, strategyInfo.name, signer, signer2,);
+
+            await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
+            return b;
+          }
+
+          describe(`${strategyInfo.name}`, () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            describe("Move prices, liquidator", () => {
+              async function makeTestUp(): Promise<ICyclesResults> {
+                const b = await loadFixture(prepareStrategy);
+                const pathOut = `./tmp/${strategyInfo.name}-cycle-move-prices-liquidator.csv`;
+                return makeCycles(chainId, b, {
+                  pathOut,
+                  movePricesUp: undefined,
+                  aggregator: Misc.ZERO_ADDRESS,
+                  aggregatorIsTetuLiquidator: false
+                });
+              }
+
+              it('should not revert', async function () {
+                await makeTestUp();
+              });
+            });
+            describe("Move prices, 1inch", () => {
+              async function makeTestUp(): Promise<ICyclesResults> {
+                const b = await loadFixture(prepareStrategy);
+                const pathOut = `./tmp/${strategyInfo.name}-cycle-move-prices-one-inch.csv`;
+                return makeCycles(chainId, b, {
+                  pathOut,
+                  movePricesUp: undefined,
+                  aggregator: PlatformUtils.getOneInch(chainId),
+                  aggregatorIsTetuLiquidator: false
+                });
+              }
+
+              it('should not revert', async function () {
+                await makeTestUp();
+              });
+            });
+            describe("Move prices, liquidator as aggregator", () => {
+              async function makeTestDown(): Promise<ICyclesResults> {
+                const b = await loadFixture(prepareStrategy);
+                const pathOut = `./tmp/${strategyInfo.name}-cycle-move-prices-liquidator-as-agg.csv`;
+                return makeCycles(chainId, b, {
+                  pathOut,
+                  movePricesUp: undefined,
+                  aggregator: PlatformUtils.getTetuLiquidator(chainId),
+                  aggregatorIsTetuLiquidator: true
+                });
+              }
+
+              it('should not revert', async function () {
+                await makeTestDown();
+              });
+            });
           });
         }
-
-        it('should not revert', async function () {
-          await makeTestUp();
-        });
-      });
-      describe("Move prices, 1inch", () => {
-        async function makeTestUp(): Promise<ICyclesResults> {
-          const b = await loadFixture(prepareStrategy);
-          const pathOut = `./tmp/${strategyInfo.name}-cycle-move-prices-one-inch.csv`;
-          return makeCycles(b, {
-            pathOut,
-            movePricesUp: undefined,
-            aggregator: MaticAddresses.AGG_ONEINCH_V5,
-            aggregatorIsTetuLiquidator: false
-          });
-        }
-
-        it('should not revert', async function () {
-          await makeTestUp();
-        });
-      });
-      describe("Move prices, liquidator as aggregator", () => {
-        async function makeTestDown(): Promise<ICyclesResults> {
-          const b = await loadFixture(prepareStrategy);
-          const pathOut = `./tmp/${strategyInfo.name}-cycle-move-prices-liquidator-as-agg.csv`;
-          return makeCycles(b, {
-            pathOut,
-            movePricesUp: undefined,
-            aggregator: MaticAddresses.TETU_LIQUIDATOR,
-            aggregatorIsTetuLiquidator: true
-          });
-        }
-
-        it('should not revert', async function () {
-          await makeTestDown();
-        });
       });
     });
   });

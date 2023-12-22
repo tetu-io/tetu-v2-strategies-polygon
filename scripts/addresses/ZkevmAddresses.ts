@@ -40,4 +40,6 @@ export class ZkevmAddresses {
 
 //endregion ----------------------------------------------------- PancakeSwap
 
+  public static AGG_ONEINCH_V5 = "TODO".toLowerCase();
+
 }
