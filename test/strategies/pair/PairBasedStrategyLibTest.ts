@@ -1,20 +1,20 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ethers} from "hardhat";
 import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
-import {IBorrowParamsNum, ILiquidationParams, IQuoteRepayParams, IRepayParams} from "../../../baseUT/mocks/TestDataTypes";
+import {IBorrowParamsNum, ILiquidationParams, IQuoteRepayParams, IRepayParams} from "../../baseUT/mocks/TestDataTypes";
 import {
   setupMockedQuoteRepay,
   setupMockedBorrowEntryKind1,
   setupMockedRepay
-} from "../../../baseUT/mocks/MockRepayUtils";
-import {Misc} from "../../../../scripts/utils/Misc";
-import {IERC20Metadata__factory, MockTetuConverter, MockTetuLiquidatorSingleCall, MockToken, PriceOracleMock, PairBasedStrategyLibFacade} from "../../../../typechain";
+} from "../../baseUT/mocks/MockRepayUtils";
+import {Misc} from "../../../scripts/utils/Misc";
+import {IERC20Metadata__factory, MockTetuConverter, MockTetuLiquidatorSingleCall, MockToken, PriceOracleMock, PairBasedStrategyLibFacade} from "../../../typechain";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {expect} from "chai";
-import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
-import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
-import {MockHelper} from "../../../baseUT/helpers/MockHelper";
-import {setupIsConversionValid, setupMockedLiquidation} from "../../../baseUT/mocks/MockLiquidationUtils";
+import {TimeUtils} from "../../../scripts/utils/TimeUtils";
+import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
+import {MockHelper} from "../../baseUT/helpers/MockHelper";
+import {setupIsConversionValid, setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
 import {BigNumber} from "ethers";
 import {
   FUSE_DISABLED_0,
@@ -23,9 +23,9 @@ import {
   FUSE_ON_UPPER_LIMIT_3,
   PLAN_REPAY_SWAP_REPAY_1, PLAN_SWAP_ONLY_2,
   PLAN_SWAP_REPAY_0
-} from "../../../baseUT/AppConstants";
-import {HARDHAT_NETWORK_ID, HardhatUtils} from '../../../baseUT/utils/HardhatUtils';
-import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
+} from "../../baseUT/AppConstants";
+import {HARDHAT_NETWORK_ID, HardhatUtils} from '../../baseUT/utils/HardhatUtils';
+import {buildEntryData1} from "../../baseUT/utils/EntryDataUtils";
 
 describe('PairBasedStrategyLibTest', () => {
   /** prop0 + prop1 */

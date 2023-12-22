@@ -1,21 +1,21 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ethers} from "hardhat";
 import {parseUnits} from "ethers/lib/utils";
-import {getConverterAddress, Misc} from "../../../../scripts/utils/Misc";
-import {AlgebraConverterStrategy, AlgebraConverterStrategy__factory, IController__factory, IERC20__factory, IPairBasedDefaultStateProvider, ISetupPairBasedStrategy, IStrategyV2, ISwapper__factory, KyberConverterStrategy, KyberConverterStrategy__factory, PairBasedStrategyLibFacade, UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory, VaultFactory__factory} from "../../../../typechain";
+import {getConverterAddress, Misc} from "../../../scripts/utils/Misc";
+import {AlgebraConverterStrategy, AlgebraConverterStrategy__factory, IController__factory, IERC20__factory, IPairBasedDefaultStateProvider, ISetupPairBasedStrategy, IStrategyV2, ISwapper__factory, KyberConverterStrategy, KyberConverterStrategy__factory, PairBasedStrategyLibFacade, UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory, VaultFactory__factory} from "../../../typechain";
 import {expect} from "chai";
-import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
-import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
+import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
+import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {BigNumber, BytesLike} from "ethers";
-import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
-import {PackedData} from "../../../baseUT/utils/PackedData";
+import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
+import {PackedData} from "../../baseUT/utils/PackedData";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
-import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
+import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
-import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {KYBER_PID} from "../../../baseUT/strategies/pair/PairBasedStrategyBuilder";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
+import {KYBER_PID} from "../../baseUT/strategies/pair/PairBasedStrategyBuilder";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
 
 describe('PairBasedStrategySetupIntTest', () => {
   //region Variables

@@ -1,7 +1,7 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
-import {Misc} from "../../../../scripts/utils/Misc";
+import {Misc} from "../../../scripts/utils/Misc";
 import {
   ConverterController__factory, IBorrowManager__factory,
   IERC20Metadata__factory,
@@ -9,22 +9,22 @@ import {
   ITetuConverter,
   ITetuConverter__factory,
   PairBasedStrategyLibFacade
-} from "../../../../typechain";
+} from "../../../typechain";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {expect} from "chai";
-import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
-import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
-import {MockHelper} from "../../../baseUT/helpers/MockHelper";
+import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
+import {TimeUtils} from "../../../scripts/utils/TimeUtils";
+import {MockHelper} from "../../baseUT/helpers/MockHelper";
 import {BigNumber, BytesLike} from "ethers";
-import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
-import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
-import {BalanceUtils} from "../../../baseUT/utils/BalanceUtils";
-import {MaticHolders} from "../../../../scripts/addresses/MaticHolders";
-import {IterationPlanLib} from "../../../../typechain/contracts/test/facades/PairBasedStrategyLibFacade";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
-import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
-import {PLAN_REPAY_SWAP_REPAY_1, PLATFORM_KIND_AAVE2_2, PLATFORM_KIND_AAVE3_3} from "../../../baseUT/AppConstants";
-import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
+import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
+import {AggregatorUtils} from "../../baseUT/utils/AggregatorUtils";
+import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
+import {MaticHolders} from "../../../scripts/addresses/MaticHolders";
+import {IterationPlanLib} from "../../../typechain/contracts/test/facades/PairBasedStrategyLibFacade";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
+import {TokenUtils} from "../../../scripts/utils/TokenUtils";
+import {PLAN_REPAY_SWAP_REPAY_1, PLATFORM_KIND_AAVE2_2, PLATFORM_KIND_AAVE3_3} from "../../baseUT/AppConstants";
+import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
 
 describe('PairBasedStrategyLibIntTest', () => {
 

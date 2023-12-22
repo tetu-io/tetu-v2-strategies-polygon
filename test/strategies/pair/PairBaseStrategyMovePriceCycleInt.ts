@@ -1,29 +1,29 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import chai from 'chai';
-import { TimeUtils } from '../../../../scripts/utils/TimeUtils';
+import { TimeUtils } from '../../../scripts/utils/TimeUtils';
 import hre, { ethers } from 'hardhat';
 import {
   IERC20Metadata__factory,
   StrategyBaseV2__factory,
   PairBasedStrategyReader, ConverterStrategyBase__factory,
-} from '../../../../typechain';
-import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
-import { TokenUtils } from '../../../../scripts/utils/TokenUtils';
+} from '../../../typechain';
+import { MaticAddresses } from '../../../scripts/addresses/MaticAddresses';
+import { TokenUtils } from '../../../scripts/utils/TokenUtils';
 import {formatUnits, parseUnits} from 'ethers/lib/utils';
-import { Misc } from '../../../../scripts/utils/Misc';
-import {depositToVault, doHardWorkForStrategy, printVaultState, redeemFromVault,} from '../../../baseUT/universalTestUtils/StrategyTestUtils';
-import {MockHelper} from "../../../baseUT/helpers/MockHelper";
-import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
-import {PackedData} from "../../../baseUT/utils/PackedData";
-import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
-import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../../baseUT/strategies/pair/PairBasedStrategyBuilder";
-import {PairStrategyFixtures} from "../../../baseUT/strategies/pair/PairStrategyFixtures";
-import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
+import { Misc } from '../../../scripts/utils/Misc';
+import {depositToVault, doHardWorkForStrategy, printVaultState, redeemFromVault,} from '../../baseUT/universalTestUtils/StrategyTestUtils';
+import {MockHelper} from "../../baseUT/helpers/MockHelper";
+import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
+import {IStateNum, StateUtilsNum} from "../../baseUT/utils/StateUtilsNum";
+import {PackedData} from "../../baseUT/utils/PackedData";
+import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../baseUT/strategies/AppPlatforms";
+import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../baseUT/strategies/pair/PairBasedStrategyBuilder";
+import {PairStrategyFixtures} from "../../baseUT/strategies/pair/PairStrategyFixtures";
+import {PairBasedStrategyPrepareStateUtils} from "../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
-import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
+import {UniversalUtils} from "../../baseUT/strategies/UniversalUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
+import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
 
 const { expect } = chai;
 

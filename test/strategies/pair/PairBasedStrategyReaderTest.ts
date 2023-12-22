@@ -2,21 +2,21 @@
 import {expect} from 'chai';
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
-import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
+import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {
   MockSplitterVault, MockTetuConverter,
   MockToken, PriceOracleMock,
   PairBasedStrategyReaderAccessMock,
   PairBasedStrategyReader,
-} from '../../../../typechain';
+} from '../../../typechain';
 import {formatUnits, parseUnits} from "ethers/lib/utils";
-import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
-import {MockHelper} from "../../../baseUT/helpers/MockHelper";
-import {IRepayParams} from "../../../baseUT/mocks/TestDataTypes";
-import {setupMockedRepay} from "../../../baseUT/mocks/MockRepayUtils";
+import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
+import {MockHelper} from "../../baseUT/helpers/MockHelper";
+import {IRepayParams} from "../../baseUT/mocks/TestDataTypes";
+import {setupMockedRepay} from "../../baseUT/mocks/MockRepayUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {HARDHAT_NETWORK_ID, HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
-import {facades} from "../../../../typechain/contracts/test";
+import {HARDHAT_NETWORK_ID, HardhatUtils} from "../../baseUT/utils/HardhatUtils";
+import {facades} from "../../../typechain/contracts/test";
 
 /**
  * Study noSwap-rebalance.

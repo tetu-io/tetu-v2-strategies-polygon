@@ -2,7 +2,7 @@
 import {expect} from 'chai';
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
-import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
+import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {
   ConverterStrategyBase__factory,
   IController__factory,
@@ -11,25 +11,25 @@ import {
   ISetupPairBasedStrategy__factory,
   ISwapper__factory,
   UniswapV3ConverterStrategy__factory,
-} from '../../../../typechain';
-import {Misc} from "../../../../scripts/utils/Misc";
+} from '../../../typechain';
+import {Misc} from "../../../scripts/utils/Misc";
 import {formatUnits, parseUnits} from 'ethers/lib/utils';
-import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
+import {TokenUtils} from "../../../scripts/utils/TokenUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../../baseUT/strategies/pair/PairBasedStrategyBuilder";
-import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
-import {PairStrategyFixtures} from "../../../baseUT/strategies/pair/PairStrategyFixtures";
-import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
-import {PackedData} from "../../../baseUT/utils/PackedData";
-import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
-import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
-import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
-import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
-import {IGetStateParams, IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
-import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
-import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
-import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
+import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../baseUT/strategies/pair/PairBasedStrategyBuilder";
+import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../baseUT/strategies/AppPlatforms";
+import {PairStrategyFixtures} from "../../baseUT/strategies/pair/PairStrategyFixtures";
+import {UniversalUtils} from "../../baseUT/strategies/UniversalUtils";
+import {PackedData} from "../../baseUT/utils/PackedData";
+import {PairBasedStrategyPrepareStateUtils} from "../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
+import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
+import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
+import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
+import {IGetStateParams, IStateNum, StateUtilsNum} from "../../baseUT/utils/StateUtilsNum";
+import {ConverterUtils} from "../../baseUT/utils/ConverterUtils";
+import {CaptureEvents} from "../../baseUT/strategies/CaptureEvents";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
+import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
 
 /**
  * Try to make several actions one by one

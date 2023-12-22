@@ -2,50 +2,51 @@
 import {expect} from 'chai';
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
-import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
+import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {
   ConverterStrategyBase__factory,
   IController__factory,
   IERC20__factory, IERC20Metadata__factory, ISwapper__factory,
 
-} from '../../../../typechain';
-import {Misc} from "../../../../scripts/utils/Misc";
+} from '../../../typechain';
+import {Misc} from "../../../scripts/utils/Misc";
 import {defaultAbiCoder, formatUnits, parseUnits} from 'ethers/lib/utils';
-import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
-import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
+import {TokenUtils} from "../../../scripts/utils/TokenUtils";
+import {IStateNum, StateUtilsNum} from "../../baseUT/utils/StateUtilsNum";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {IBuilderResults} from "../../../baseUT/strategies/pair/PairBasedStrategyBuilder";
+import {IBuilderResults} from "../../baseUT/strategies/pair/PairBasedStrategyBuilder";
 import {
   PLATFORM_ALGEBRA,
   PLATFORM_KYBER,
   PLATFORM_PANCAKE,
   PLATFORM_UNIV3
-} from "../../../baseUT/strategies/AppPlatforms";
-import {PairStrategyFixtures} from "../../../baseUT/strategies/pair/PairStrategyFixtures";
+} from "../../baseUT/strategies/AppPlatforms";
+import {PairStrategyFixtures} from "../../baseUT/strategies/pair/PairStrategyFixtures";
 import {
   PairBasedStrategyPrepareStateUtils
-} from "../../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
-import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
-import {IDefaultState, PackedData} from "../../../baseUT/utils/PackedData";
-import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
-import {GAS_LIMIT, GAS_LIMIT_PAIR_BASED_WITHDRAW, GAS_REBALANCE_NO_SWAP} from "../../../baseUT/GasLimits";
+} from "../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
+import {UniversalUtils} from "../../baseUT/strategies/UniversalUtils";
+import {IDefaultState, PackedData} from "../../baseUT/utils/PackedData";
+import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
+import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
+import {GAS_LIMIT, GAS_LIMIT_PAIR_BASED_WITHDRAW, GAS_REBALANCE_NO_SWAP} from "../../baseUT/GasLimits";
 import {
   ENTRY_TO_POOL_DISABLED,
   ENTRY_TO_POOL_IS_ALLOWED,
   PLAN_SWAP_REPAY_0
-} from "../../../baseUT/AppConstants";
-import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
-import {controlGasLimitsEx} from "../../../../scripts/utils/GasLimitUtils";
+} from "../../baseUT/AppConstants";
+import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
+import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
 import {BigNumber} from "ethers";
-import {CaptureEvents, IEventsSet} from "../../../baseUT/strategies/CaptureEvents";
-import {MockAggregatorUtils} from "../../../baseUT/mocks/MockAggregatorUtils";
-import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
-import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from '../../../baseUT/utils/HardhatUtils';
-import {MockHelper} from "../../../baseUT/helpers/MockHelper";
-import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
-import {BaseAddresses} from "../../../../scripts/addresses/BaseAddresses";
-import {ZkevmAddresses} from "../../../../scripts/addresses/ZkevmAddresses";
+import {CaptureEvents, IEventsSet} from "../../baseUT/strategies/CaptureEvents";
+import {MockAggregatorUtils} from "../../baseUT/mocks/MockAggregatorUtils";
+import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
+import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from '../../baseUT/utils/HardhatUtils';
+import {MockHelper} from "../../baseUT/helpers/MockHelper";
+import {buildEntryData1} from "../../baseUT/utils/EntryDataUtils";
+import {BaseAddresses} from "../../../scripts/addresses/BaseAddresses";
+import {ZkevmAddresses} from "../../../scripts/addresses/ZkevmAddresses";
+import {PlatformUtils} from "../../baseUT/utils/PlatformUtils";
 
 describe('PairBasedStrategyActionResponseIntTest', function() {
   const SWAP_AMOUNT_DEFAULT = 1.1;
@@ -76,24 +77,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     }
   }
 
-  function getTetuLiquidator(chainId: number): string {
-    switch (chainId) {
-      case BASE_NETWORK_ID: return BaseAddresses.TETU_LIQUIDATOR;
-      case POLYGON_NETWORK_ID: return MaticAddresses.TETU_LIQUIDATOR;
-      case ZKEVM_NETWORK_ID: return ZkevmAddresses.TETU_LIQUIDATOR;
-      default: throw Error(`getTetuLiquidator: chain ${chainId} is not supported`);
-    }
-  }
-
-  function getErrorMessage(platform: string, error: string): string {
-    return platform === PLATFORM_UNIV3
-      ? "U3S" + error // "U3S-9 No rebalance needed"
-      : platform === PLATFORM_ALGEBRA
-        ? "AS" + error
-        : platform === PLATFORM_PANCAKE
-          ? "PS" + error
-          : "KS" + error;
-  }
 //endregion Utils
 
 //region Unit tests
@@ -259,7 +242,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   expect(needRebalanceBefore).eq(false);
 
                   const platform = await converterStrategyBase.PLATFORM();
-                  const expectedErrorMessage = getErrorMessage(platform, "-9 No rebalance needed");
+                  const expectedErrorMessage = PlatformUtils.getErrorMessage(platform, "-9 No rebalance needed");
 
                   await expect(
                     b.strategy.rebalanceNoSwaps(true, {gasLimit: GAS_LIMIT})
@@ -418,7 +401,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   expect(needRebalanceBefore).eq(false);
 
                   const platform = await converterStrategyBase.PLATFORM();
-                  const expectedErrorMessage = getErrorMessage(platform, "-9 No rebalance needed");
+                  const expectedErrorMessage = PlatformUtils.getErrorMessage(platform, "-9 No rebalance needed");
 
                   await expect(
                     b.strategy.rebalanceNoSwaps(true, {gasLimit: GAS_LIMIT})
@@ -454,7 +437,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
 
                   const platform = await converterStrategyBase.PLATFORM();
-                  const expectedErrorMessage = getErrorMessage(platform, "-14 Fuse is active");
+                  const expectedErrorMessage = PlatformUtils.getErrorMessage(platform, "-14 Fuse is active");
 
                   await expect(
                     converterStrategyBase.doHardWork({gasLimit: GAS_LIMIT})
@@ -513,7 +496,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
                   const platform = await converterStrategyBase.PLATFORM();
 
-                  const expectedErrorMessage = getErrorMessage(platform, "-1 Need rebalance");
+                  const expectedErrorMessage = PlatformUtils.getErrorMessage(platform, "-1 Need rebalance");
                   await expect(
                     b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: GAS_LIMIT})
                   ).revertedWith(expectedErrorMessage);
@@ -525,7 +508,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   const needRebalanceBefore = await b.strategy.needRebalance();
                   expect(needRebalanceBefore).eq(true);
 
-                  const expectedErrorMessage = getErrorMessage(platform, "-1 Need rebalance");
+                  const expectedErrorMessage = PlatformUtils.getErrorMessage(platform, "-1 Need rebalance");
                   await expect(
                     b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: GAS_LIMIT})
                   ).revertedWith(expectedErrorMessage);
@@ -537,7 +520,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   const needRebalanceBefore = await b.strategy.needRebalance();
                   expect(needRebalanceBefore).eq(true);
 
-                  const expectedErrorMessage = getErrorMessage(platform, "-1 Need rebalance");
+                  const expectedErrorMessage = PlatformUtils.getErrorMessage(platform, "-1 Need rebalance");
                   await expect(
                     b.vault.connect(signer).withdrawAll({gasLimit: GAS_LIMIT})
                   ).revertedWith(expectedErrorMessage);
@@ -586,7 +569,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
 
                   const platform = await converterStrategyBase.PLATFORM();
-                  const expectedErrorMessage = getErrorMessage(platform, "-1 Need rebalance");
+                  const expectedErrorMessage = PlatformUtils.getErrorMessage(platform, "-1 Need rebalance");
 
                   await expect(
                     converterStrategyBase.doHardWork({gasLimit: GAS_LIMIT})
@@ -679,9 +662,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   });
 
                   const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-                  await MockAggregatorUtils.injectSwapperToLiquidator(getTetuLiquidator(chainId), b, mockedSwapper.address);
+                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b, mockedSwapper.address);
                   await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: GAS_LIMIT});
-                  await MockAggregatorUtils.injectSwapperToLiquidator(getTetuLiquidator(chainId), b, b.swapper);
+                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b, b.swapper);
                   const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
                   expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, PRECISION);
@@ -698,9 +681,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   });
 
                   const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-                  await MockAggregatorUtils.injectSwapperToLiquidator(getTetuLiquidator(chainId), b, mockedSwapper.address);
+                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b, mockedSwapper.address);
                   await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: GAS_LIMIT});
-                  await MockAggregatorUtils.injectSwapperToLiquidator(getTetuLiquidator(chainId), b, b.swapper);
+                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b, b.swapper);
                   const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
                   expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, PRECISION);
@@ -718,9 +701,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   });
 
                   const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-                  await MockAggregatorUtils.injectSwapperToLiquidator(getTetuLiquidator(chainId), b, mockedSwapper.address);
+                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b, mockedSwapper.address);
                   await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: GAS_LIMIT});
-                  await MockAggregatorUtils.injectSwapperToLiquidator(getTetuLiquidator(chainId), b, b.swapper);
+                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b, b.swapper);
                   const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
                   expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, PRECISION);
@@ -738,9 +721,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   });
 
                   const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-                  await MockAggregatorUtils.injectSwapperToLiquidator(getTetuLiquidator(chainId), b, mockedSwapper.address);
+                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b, mockedSwapper.address);
                   await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: GAS_LIMIT});
-                  await MockAggregatorUtils.injectSwapperToLiquidator(getTetuLiquidator(chainId), b, b.swapper);
+                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b, b.swapper);
                   const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
                   expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, PRECISION);
@@ -1237,7 +1220,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   if (i % 4) {
                     await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
                       await b.strategy.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)),
-                      getTetuLiquidator(chainId),
+                      PlatformUtils.getTetuLiquidator(chainId),
                       true,
                       () => true,
                       async (stateTitle, eventsSet): Promise<IStateNum> => {

@@ -1,24 +1,24 @@
 /* tslint:disable:no-trailing-whitespace */
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
-import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
+import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {
   IERC20__factory,
   ConverterStrategyBase__factory,
-} from "../../../../typechain";
-import {Misc} from "../../../../scripts/utils/Misc";
+} from "../../../typechain";
+import {Misc} from "../../../scripts/utils/Misc";
 import {parseUnits} from 'ethers/lib/utils';
-import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
-import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
-import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
+import {TokenUtils} from "../../../scripts/utils/TokenUtils";
+import {IStateNum, StateUtilsNum} from "../../baseUT/utils/StateUtilsNum";
+import {UniversalUtils} from "../../baseUT/strategies/UniversalUtils";
 import {expect} from "chai";
-import {IDefaultState, PackedData} from "../../../baseUT/utils/PackedData";
-import {IBuilderResults} from "../../../baseUT/strategies/pair/PairBasedStrategyBuilder";
-import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
-import {PairStrategyFixtures} from "../../../baseUT/strategies/pair/PairStrategyFixtures";
+import {IDefaultState, PackedData} from "../../baseUT/utils/PackedData";
+import {IBuilderResults} from "../../baseUT/strategies/pair/PairBasedStrategyBuilder";
+import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_PANCAKE, PLATFORM_UNIV3} from "../../baseUT/strategies/AppPlatforms";
+import {PairStrategyFixtures} from "../../baseUT/strategies/pair/PairStrategyFixtures";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
-import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID} from "../../../baseUT/utils/HardhatUtils";
+import {PairBasedStrategyPrepareStateUtils} from "../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
+import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID} from "../../baseUT/utils/HardhatUtils";
 import {
   FUSE_IDX_LOWER_LIMIT_OFF,
   FUSE_IDX_LOWER_LIMIT_ON,
@@ -26,9 +26,9 @@ import {
   FUSE_IDX_UPPER_LIMIT_ON,
   FUSE_OFF_1, FUSE_ON_LOWER_LIMIT_2,
   FUSE_ON_UPPER_LIMIT_3
-} from "../../../baseUT/AppConstants";
-import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
-import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
+} from "../../baseUT/AppConstants";
+import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
+import {ConverterUtils} from "../../baseUT/utils/ConverterUtils";
 
 /**
  * Check how fuse triggered ON/OFF because of price changing.
@@ -199,6 +199,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
         }
 
         const strategies: IStrategyInfo[] = [
+          {name: PLATFORM_PANCAKE, chainId: BASE_NETWORK_ID},
           {name: PLATFORM_UNIV3, chainId: POLYGON_NETWORK_ID},
           {name: PLATFORM_ALGEBRA, chainId: POLYGON_NETWORK_ID},
         ];
@@ -206,7 +207,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
         strategies.forEach(function (strategyInfo: IStrategyInfo) {
           if (strategyInfo.chainId === chainId) {
             async function prepareStrategy(): Promise<IBuilderResults> {
-              const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(POLYGON_NETWORK_ID, strategyInfo.name, signer, signer2);
+              const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(chainId, strategyInfo.name, signer, signer2);
 
               await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
               return b;
@@ -316,7 +317,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
         strategies.forEach(function (strategyInfo: IStrategyInfo) {
           if (strategyInfo.chainId === chainId) {
             async function prepareStrategy(): Promise<IBuilderResults> {
-              const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(POLYGON_NETWORK_ID, strategyInfo.name, signer, signer2);
+              const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(chainId, strategyInfo.name, signer, signer2);
 
               await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
               return b;
@@ -383,8 +384,9 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
                 });
               });
             });
-          });
+          }
         });
       });
     });
+  });
 });

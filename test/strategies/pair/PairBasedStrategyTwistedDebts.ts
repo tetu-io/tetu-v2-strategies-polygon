@@ -2,7 +2,7 @@
 import {expect} from 'chai';
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
-import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
+import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {
   BorrowManager,
   BorrowManager__factory,
@@ -15,40 +15,40 @@ import {
   IPlatformAdapter__factory,
   IPoolAdapter__factory, PairBasedStrategyReader, UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory,
-} from '../../../../typechain';
-import {Misc} from "../../../../scripts/utils/Misc";
+} from '../../../typechain';
+import {Misc} from "../../../scripts/utils/Misc";
 import {formatUnits, parseUnits} from 'ethers/lib/utils';
-import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
-import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
+import {TokenUtils} from "../../../scripts/utils/TokenUtils";
+import {IStateNum, StateUtilsNum} from "../../baseUT/utils/StateUtilsNum";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../../baseUT/strategies/pair/PairBasedStrategyBuilder";
-import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
-import {PairStrategyFixtures} from "../../../baseUT/strategies/pair/PairStrategyFixtures";
+import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../baseUT/strategies/pair/PairBasedStrategyBuilder";
+import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../baseUT/strategies/AppPlatforms";
+import {PairStrategyFixtures} from "../../baseUT/strategies/pair/PairStrategyFixtures";
 import {
   IListStates,
   IPrepareOverCollateralParams,
   PairBasedStrategyPrepareStateUtils
-} from "../../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
-import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
-import {PackedData} from "../../../baseUT/utils/PackedData";
-import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
+} from "../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
+import {UniversalUtils} from "../../baseUT/strategies/UniversalUtils";
+import {PackedData} from "../../baseUT/utils/PackedData";
+import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
 import {
   ENTRY_TO_POOL_DISABLED,
   ENTRY_TO_POOL_IS_ALLOWED,
   FUSE_OFF_1,
   PLAN_SWAP_REPAY_0
-} from "../../../baseUT/AppConstants";
+} from "../../baseUT/AppConstants";
 import {BigNumber} from "ethers";
-import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
-import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
+import {ConverterUtils} from "../../baseUT/utils/ConverterUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
 import {
   PairWithdrawByAggUtils
-} from "../../../baseUT/strategies/pair/PairWithdrawByAggUtils";
-import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
-import {MockHelper} from "../../../baseUT/helpers/MockHelper";
-import {IEventsSet} from "../../../baseUT/strategies/CaptureEvents";
-import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
+} from "../../baseUT/strategies/pair/PairWithdrawByAggUtils";
+import {buildEntryData1} from "../../baseUT/utils/EntryDataUtils";
+import {MockHelper} from "../../baseUT/helpers/MockHelper";
+import {IEventsSet} from "../../baseUT/strategies/CaptureEvents";
+import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 
 describe('PairBasedStrategyTwistedDebts', function () {
   /**

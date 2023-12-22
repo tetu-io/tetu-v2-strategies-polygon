@@ -216,7 +216,7 @@ library PancakeConverterStrategyLogicLib {
     uint[] memory amountsConsumed,
     uint liquidityOut
   ) {
-    EnterLocalVariables memory vars = EnterLocalVariables({
+    EnterLocalVariables memory v = EnterLocalVariables({
       pool: IPancakeV3Pool(state.pair.pool),
       depositorSwapTokens: state.pair.depositorSwapTokens,
       liquidity: 0,
@@ -225,36 +225,37 @@ library PancakeConverterStrategyLogicLib {
       upperTick: state.pair.upperTick,
       chef: state.chef
     });
-    IPancakeNonfungiblePositionManager nft = IPancakeNonfungiblePositionManager(payable(vars.chef.nonfungiblePositionManager()));
+    IPancakeNonfungiblePositionManager nft = IPancakeNonfungiblePositionManager(payable(v.chef.nonfungiblePositionManager()));
 
     amountsConsumed = new uint[](2);
 
     if (amountsDesired_[1] != 0) {
-      (address token0, address token1) = vars.depositorSwapTokens
+      (address token0, address token1) = v.depositorSwapTokens
         ? (state.pair.tokenB, state.pair.tokenA)
         : (state.pair.tokenA, state.pair.tokenB);
 
-      if (vars.depositorSwapTokens) {
+      if (v.depositorSwapTokens) {
         (amountsDesired_[0], amountsDesired_[1]) = (amountsDesired_[1], amountsDesired_[0]);
       }
 
-      if (vars.tokenId != 0) {
-        (,,,,, int24 nftLowerTick, int24 nftUpperTick,,,,,) = nft.positions(vars.tokenId);
-        if (nftLowerTick != vars.lowerTick || nftUpperTick != vars.upperTick) {
-          // It's necessary to burn the nft.
-          // The token must have 0 liquidity and all tokens must be collected before the burning.
-          _exit(state, state.pair.totalLiquidity, false);
-          vars.tokenId = 0;
+      uint24 fee = v.pool.fee();
+
+      if (v.tokenId != 0) {
+        (,,,,, int24 nftLowerTick, int24 nftUpperTick,,,,,) = nft.positions(v.tokenId);
+        if (nftLowerTick != v.lowerTick || nftUpperTick != v.upperTick) {
+          // Assume that the token have 0 liquidity and all tokens have been collected already
+          v.chef.burn(v.tokenId);
+          v.tokenId = 0;
         }
       }
 
-      if (vars.tokenId == 0) {
-        (vars.tokenId, vars.liquidity, amountsConsumed[0], amountsConsumed[1]) = nft.mint(IPancakeNonfungiblePositionManager.MintParams(
+      if (v.tokenId == 0) {
+        (v.tokenId, v.liquidity, amountsConsumed[0], amountsConsumed[1]) = nft.mint(IPancakeNonfungiblePositionManager.MintParams(
           token0,
           token1,
           fee,
-          vars.lowerTick,
-          vars.upperTick,
+          v.lowerTick,
+          v.upperTick,
           amountsDesired_[0],
           amountsDesired_[1],
           0,
@@ -262,11 +263,11 @@ library PancakeConverterStrategyLogicLib {
           address(this),
           block.timestamp
         ));
-        state.tokenId = vars.tokenId;
-        nft.safeTransferFrom(address(this), address(vars.chef), vars.tokenId);
+        state.tokenId = v.tokenId;
+        nft.safeTransferFrom(address(this), address(v.chef), v.tokenId);
       } else {
-        (vars.liquidity, amountsConsumed[0], amountsConsumed[1]) = vars.chef.increaseLiquidity(INonfungiblePositionManagerStruct.IncreaseLiquidityParams(
-          vars.tokenId,
+        (v.liquidity, amountsConsumed[0], amountsConsumed[1]) = v.chef.increaseLiquidity(INonfungiblePositionManagerStruct.IncreaseLiquidityParams(
+          v.tokenId,
           amountsDesired_[0],
           amountsDesired_[1],
           0,
@@ -275,10 +276,10 @@ library PancakeConverterStrategyLogicLib {
         ));
       }
 
-      state.pair.totalLiquidity += vars.liquidity;
-      liquidityOut = uint(vars.liquidity);
+      state.pair.totalLiquidity += v.liquidity;
+      liquidityOut = uint(v.liquidity);
 
-      if (vars.depositorSwapTokens) {
+      if (v.depositorSwapTokens) {
         (amountsConsumed[0], amountsConsumed[1]) = (amountsConsumed[1], amountsConsumed[0]);
       }
     }

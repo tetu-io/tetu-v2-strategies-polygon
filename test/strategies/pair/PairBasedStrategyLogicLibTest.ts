@@ -6,25 +6,25 @@ import {
   MockToken,
   PriceOracleMock,
   PairBasedStrategyLogicLibFacade, MockController, IERC20Metadata__factory, IPairBasedDefaultStateProvider
-} from "../../../../typechain";
+} from "../../../typechain";
 import {expect} from "chai";
-import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
-import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
-import {MockHelper} from "../../../baseUT/helpers/MockHelper";
+import {TimeUtils} from "../../../scripts/utils/TimeUtils";
+import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
+import {MockHelper} from "../../baseUT/helpers/MockHelper";
 import {BigNumber} from "ethers";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {Misc} from "../../../../scripts/utils/Misc";
-import {IBorrowParamsNum, IRepayParams} from "../../../baseUT/mocks/TestDataTypes";
-import {setupMockedBorrowEntryKind1, setupMockedRepay} from "../../../baseUT/mocks/MockRepayUtils";
-import {IDefaultState, PackedData} from "../../../baseUT/utils/PackedData";
+import {Misc} from "../../../scripts/utils/Misc";
+import {IBorrowParamsNum, IRepayParams} from "../../baseUT/mocks/TestDataTypes";
+import {setupMockedBorrowEntryKind1, setupMockedRepay} from "../../baseUT/mocks/MockRepayUtils";
+import {IDefaultState, PackedData} from "../../baseUT/utils/PackedData";
 import {
   FUSE_OFF_1,
   FUSE_ON_LOWER_LIMIT_2,
   PLAN_REPAY_SWAP_REPAY_1,
   PLAN_SWAP_REPAY_0
-} from "../../../baseUT/AppConstants";
-import {HARDHAT_NETWORK_ID, HardhatUtils} from '../../../baseUT/utils/HardhatUtils';
-import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
+} from "../../baseUT/AppConstants";
+import {HARDHAT_NETWORK_ID, HardhatUtils} from '../../baseUT/utils/HardhatUtils';
+import {buildEntryData1} from "../../baseUT/utils/EntryDataUtils";
 
 describe('PairBasedStrategyLogicLibTest', () => {
 //region Constants and variables
