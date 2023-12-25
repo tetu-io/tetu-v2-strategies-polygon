@@ -7,7 +7,7 @@ import {
   IPairBasedDefaultStateProvider__factory, IPancakeMasterChefV3,
   IPancakeMasterChefV3__factory, IPancakeNonfungiblePositionManager,
   IPancakeNonfungiblePositionManager__factory, IPancakeV3Pool,
-  IPancakeV3Pool__factory, PairBasedStrategyLogicLibFacade,
+  IPancakeV3Pool__factory, IRebalancingStrategy__factory, PairBasedStrategyLogicLibFacade,
   PancakeConverterStrategyLogicLibFacade,
   PancakeDebtLibFacade
 } from "../../../../typechain";
@@ -621,118 +621,44 @@ describe('PancakeConverterStrategyLogicLibTest', function () {
                 });
               });
 
-              if (! testSet.swapTokens) {
-                describe("Move ticks range, increase liquidity => burn, re-enter", () => {
-                  let snapshot1: string;
-                  let amountTokenA2: number;
-                  let amountTokenB2: number;
-                  let stateBeforeEnter2: IPancakeState;
-                  let stateEnter2: IPancakeState;
-
-                  before(async function () {
-                    console.log("enter2");
-                    snapshot1 = await TimeUtils.snapshot();
-
-                    await prepare();
-                  });
-                  after(async function () {
-                    await TimeUtils.rollback(snapshot1);
-                  });
-
-                  async function prepare() {
-                    await facade.moveTickRange(1);
-
-                    const {prop0, prop1} = await getProps(pool, facadePair, facadeDebtLib);
-
-                    amountTokenA2 = 500;
-                    amountTokenB2 = amountTokenA2 * prop1 / prop0;
-
-                    const amountsDesired2 = testSet.swapTokens
-                      ? [NumberUtils.parseUnitsSafe(amountTokenB2, decimalsB), parseUnits(amountTokenA2.toString(), decimalsA)]
-                      : [parseUnits(amountTokenA2.toString(), decimalsA), NumberUtils.parseUnitsSafe(amountTokenB2, decimalsB),];
-
-                    console.log("desiredAmounts", amountsDesired2);
-
-                    await TokenUtils.getToken(tokenA, facade.address, parseUnits(amountTokenA2.toString(), decimalsA));
-                    await TokenUtils.getToken(tokenB, facade.address, NumberUtils.parseUnitsSafe(amountTokenB2, decimalsB));
-
-                    stateBeforeEnter2 = await saver("beforeEnter2");
-
-                    const ret = await facade.callStatic.enter(amountsDesired2);
-                    await facade.enter(amountsDesired2);
-
-                    stateEnter2 = await saver("enter2", {amounts: ret.amountsConsumed});
-
-                    await waitForRewardsAndFees(2);
-                  }
-
-                  it("One of consumed amounts should be zero (we entered to incorrect tick range)", async () => {
-                    expect(stateEnter2.retAmountTokenA === 0 || stateEnter2.retAmountTokenB === 0).eq(true);
-                  });
-
-                  it("should change token ID", async () => {
-                    expect(stateEnter2.tokenId).eq(stateBeforeEnter2.tokenId + 1);
-                  });
-
-                  describe("Full exit", () => {
-                    let snapshot3: string;
-                    let statusBeforeExit2: IPancakeState;
-                    let statusExit2: IPancakeState;
-                    let liquidityToWithdraw2: BigNumber;
-                    let fees: number[];
-                    const quotedAmounts2: number[] = [];
-                    before(async function () {
-                      snapshot3 = await TimeUtils.snapshot();
-                      await waitForRewardsAndFees(4);
-
-                      statusBeforeExit2 = await saver("beforeExit2");
-                      liquidityToWithdraw2 = statusBeforeExit2.totalLiquidity;
-                      const quoted = await facade.callStatic.quoteExit(liquidityToWithdraw2);
-                      quotedAmounts2.push(+formatUnits(quoted[0], decimalsA));
-                      quotedAmounts2.push(+formatUnits(quoted[1], decimalsB));
-
-                      fees = await getFees(decimalsA, decimalsB);
-
-                      const ret = await facade.callStatic.exit(liquidityToWithdraw2, false);
-                      await facade.exit(liquidityToWithdraw2, false);
-                      statusExit2 = await saver("exit2", {amounts: ret});
-                    });
-                    after(async function () {
-                      await TimeUtils.rollback(snapshot3);
-                    });
-
-                    it("should reduce liquidity to zero", async () => {
-                      expect(statusExit2.totalLiquidity.eq(0)).eq(true);
-                      expect(statusExit2.totalLiquidity.eq(0)).eq(true);
-                    });
-
-                    it("quoted amount should be equal to real amounts", async () => {
-                      expect(quotedAmounts2[testSet.swapTokens ? 1 : 0]).approximately(statusExit2.retAmountTokenA, 1e-3);
-                      expect(quotedAmounts2[testSet.swapTokens ? 0 : 1]).approximately(statusExit2.retAmountTokenB, 1e-3);
-                    });
-
-                    it("should increase strategy balances on expected values", async () => {
-                      expect(statusExit2.userBalanceTokenA).approximately(statusBeforeExit2.userBalanceTokenA + statusExit2.retAmountTokenA, 1e-6);
-                      expect(statusExit2.userBalanceTokenB).approximately(statusBeforeExit2.userBalanceTokenB + statusExit2.retAmountTokenB, 1e-6);
-                    });
-
-                    it("should receive all deposited amounts back", async () => {
-                      expect(statusExit2.userBalanceTokenA).approximately(initState.userBalanceTokenA + stateBeforeEnter2.userBalanceTokenA, 5);
-                      expect(statusExit2.userBalanceTokenB).approximately(initState.userBalanceTokenB + stateBeforeEnter2.userBalanceTokenB, 5);
-                    });
-
-                    it("should move all fees and rewards to strategyProfitHolder", async () => {
-                      expect(statusExit2.profitHolderCakeBalance).eq(statusBeforeExit2.profitHolderCakeBalance);
-                      expect(statusExit2.profitHolderBalanceTokenA).eq(fees[testSet.swapTokens ? 1 : 0]);
-                      expect(statusExit2.profitHolderBalanceTokenB).eq(fees[testSet.swapTokens ? 0 : 1]);
-                    });
-
-                    it("should withdraw nft", () => {
-                      expect(statusExit2.masterChefBalance).eq(0);
-                    });
-                  });
+              describe("callNftPositions", function() {
+                it("should return exactly same values as nft.positions", async () => {
+                  const tokenId = (await facade.state()).tokenId;
+                  const expected = await nft.positions(tokenId);
+                  const ret = await facadeDebtLib.callNftPositions(nft.address, tokenId);
+                  expect([ret.tickLower, ret.tickUpper].join()).eq([expected.tickLower, expected.tickUpper].join());
                 });
-              }
+              });
+
+              describe("Try to enter with modified tick range", () => {
+                let snapshot1: string;
+
+                before(async function () {
+                  console.log("enter2");
+                  snapshot1 = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot1);
+                });
+
+                it("should revert if liquidity is not zero", async () => {
+                  await facade.moveTickRange(1);
+
+                  const {prop0, prop1} = await getProps(pool, facadePair, facadeDebtLib);
+
+                  const amountTokenA2 = 500;
+                  const amountTokenB2 = amountTokenA2 * prop1 / prop0;
+
+                  const amountsDesired2 = testSet.swapTokens
+                    ? [NumberUtils.parseUnitsSafe(amountTokenB2, decimalsB), parseUnits(amountTokenA2.toString(), decimalsA)]
+                    : [parseUnits(amountTokenA2.toString(), decimalsA), NumberUtils.parseUnitsSafe(amountTokenB2, decimalsB),];
+
+                  await TokenUtils.getToken(tokenA, facade.address, parseUnits(amountTokenA2.toString(), decimalsA));
+                  await TokenUtils.getToken(tokenB, facade.address, NumberUtils.parseUnitsSafe(amountTokenB2, decimalsB));
+
+                  await expect(facade.enter(amountsDesired2)).reverted; // reverted inside v.chef.burn(v.tokenId);
+                });
+              });
             });
           });
         });

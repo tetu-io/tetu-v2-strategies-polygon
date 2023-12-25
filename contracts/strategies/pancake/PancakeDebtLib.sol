@@ -117,4 +117,68 @@ library PancakeDebtLib {
   }
 //endregion  -------------------------------------------- Rebalance
 
+//region  -------------------------------------------- Utils
+  /// @notice Call v.nft.positions(v.tokenId).
+  ///         npm-run-coverage produces stack-too-deep error on direct call of nft.positions, so we use workaround
+  /// @dev The function cannot return all params because of stack-too-deep, uncomment only values that you need.
+  /// @param nft address of IPancakeNonfungiblePositionManager
+  /// @param tokenId nft token
+  function callNftPositions(address nft, uint256 tokenId) internal view returns (
+//    uint96 nonce,
+//    address operator,
+//    address token0,
+//    address token1,
+//    uint24 fee,
+    int24 tickLower,
+    int24 tickUpper
+//    uint128 liquidity,
+//    uint256 feeGrowthInside0LastX128,
+//    uint256 feeGrowthInside1LastX128,
+//    uint128 tokensOwed0,
+//    uint128 tokensOwed1
+  ) {
+    bytes4 selector = bytes4(keccak256("positions(uint256)"));
+    uint256[12] memory data;
+
+    assembly {
+    // Allocate memory for data to call the function
+      let ptr := mload(0x40)
+      mstore(ptr, selector)          // Store function selector
+      mstore(add(ptr, 0x04), tokenId)   // Store the argument
+
+    // Make the external call
+      let success := staticcall(
+        gas(),                   // gas remaining
+        nft,       // address of the external contract
+        ptr,                     // pointer to input data
+        0x24,                    // size of input data
+        ptr,                     // pointer for output data
+        0x180                    // size of output data (12 * 32 bytes)
+      )
+
+    // Check if the call was successful
+      if eq(success, 0) { revert(0, 0) }
+
+    // Copy return data
+      for { let i := 0 } lt(i, 12) { i := add(i, 1) } {
+        mstore(add(data, mul(i, 0x20)), mload(add(ptr, mul(i, 0x20))))
+      }
+    }
+
+//    nonce = uint96(data[0]);
+//    operator = address(uint160(data[1]));
+//    token0 = address(uint160(data[2]));
+//    token1 = address(uint160(data[3]));
+//    fee = uint24(data[4]);
+    tickLower = int24(int(data[5]));
+    tickUpper = int24(int(data[6]));
+//    liquidity = uint128(data[7]);
+//    feeGrowthInside0LastX128 = data[8];
+//    feeGrowthInside1LastX128 = data[9];
+//    tokensOwed0 = uint128(data[10]);
+//    tokensOwed1 = uint128(data[11]);
+  }
+
+//endregion  -------------------------------------------- Utils
+
 }

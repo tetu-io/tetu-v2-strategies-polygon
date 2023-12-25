@@ -22,7 +22,7 @@ import {ethers} from "hardhat";
 import {Misc} from "../../scripts/utils/Misc";
 
 describe("Check actions on base @skip-on-coverage", () => {
-  const BLOCK = 8103672;
+  const BLOCK = 8276138;
   const STRATEGY = "0xAA43e2cc199DC946b3D528c6E00ebb3F4CC2fC0e";
   const CONTROLLER = "0x255707B70BF90aa112006E1b07B9AeA6De021424";
   const SENDER = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";

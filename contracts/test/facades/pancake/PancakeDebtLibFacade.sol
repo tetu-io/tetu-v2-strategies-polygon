@@ -14,4 +14,12 @@ contract PancakeDebtLibFacade {
   ) external view returns (uint prop0, uint prop1) {
     return PancakeDebtLib.getEntryDataProportions(pool, lowerTick, upperTick, depositorSwapTokens);
   }
+
+  function callNftPositions(address nft, uint256 tokenId) external view returns (
+    int24 tickLower,
+    int24 tickUpper
+  ) {
+    return PancakeDebtLib.callNftPositions(nft, tokenId);
+  }
+
 }

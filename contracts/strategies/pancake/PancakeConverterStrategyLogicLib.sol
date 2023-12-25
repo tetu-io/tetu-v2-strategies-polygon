@@ -243,7 +243,7 @@ library PancakeConverterStrategyLogicLib {
       v.fee = v.pool.fee();
 
       if (v.tokenId != 0) {
-        (,,,,, v.nftLowerTick, v.nftUpperTick,,,,,) = v.nft.positions(v.tokenId);
+        (v.nftLowerTick, v.nftUpperTick) = PancakeDebtLib.callNftPositions(address(v.nft), v.tokenId);
         if (v.nftLowerTick != v.lowerTick || v.nftUpperTick != v.upperTick) {
           // Assume that the token have 0 liquidity and all tokens have been collected already
           v.chef.burn(v.tokenId);
