@@ -7,4 +7,4 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
 };
 export default func;
 func.tags = ['PancakeLib'];
-func.skip = async hre => (await hre.getChainId()) !== '8453'
+func.skip = async hre => (await hre.getChainId()) !== '1101'

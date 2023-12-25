@@ -727,7 +727,7 @@ library PairBasedStrategyLib {
   }
 
   function _checkSwapRouter(address router) internal pure {
-    require(router == ONEINCH || router == OPENOCEAN || roter == OPENOCEAN_ZKEVM, UNKNOWN_SWAP_ROUTER);
+    require(router == ONEINCH || router == OPENOCEAN || router == OPENOCEAN_ZKEVM, UNKNOWN_SWAP_ROUTER);
   }
 
   /// @notice Extract propNotUnderlying18 from {planEntryData} of the given {planKind}

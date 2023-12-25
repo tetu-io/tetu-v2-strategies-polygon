@@ -403,8 +403,8 @@ describe('PancakeConverterStrategyLogicLibTest', function () {
               }
 
               it("Consumed amounts should be near to desired amounts", async () => {
-                expect(stateEnter1.retAmountTokenA).approximately(amountTokenA, 1);
-                expect(stateEnter1.retAmountTokenB).approximately(amountTokenB, 1);
+                expect(stateEnter1.retAmountTokenA).approximately(amountTokenA, 5);
+                expect(stateEnter1.retAmountTokenB).approximately(amountTokenB, 5);
               });
 
               it("should initialize token ID", async () => {

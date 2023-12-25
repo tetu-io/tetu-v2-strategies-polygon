@@ -1,6 +1,5 @@
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
 import { DeployFunction } from 'hardhat-deploy/types';
-import { PancakeConverterStrategy } from '../../typechain';
 import { hardhatDeploy } from '../../deploy_constants/deploy-helpers';
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
@@ -24,4 +23,4 @@ func.dependencies = [
   'PairBasedStrategyLib',
   'PairBasedStrategyLogicLib',
 ];
-func.skip = async hre => (await hre.getChainId()) !== '8453'
+func.skip = async hre => (await hre.getChainId()) !== '1101'

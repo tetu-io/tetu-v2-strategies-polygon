@@ -1,5 +1,6 @@
 import { MaticAddresses } from './MaticAddresses';
 import { BaseAddresses } from "./BaseAddresses";
+import {ZkevmAddresses} from "./ZkevmAddresses";
 
 export const deployAddresses = {
   deployer: 0,
@@ -63,6 +64,7 @@ export const deployAddresses = {
     "hardhat": MaticAddresses.TETU_CONVERTER,
     "matic": MaticAddresses.TETU_CONVERTER,
     "base": BaseAddresses.TETU_CONVERTER,
+    "zkevm": ZkevmAddresses.TETU_CONVERTER,
   },
   UNISWAPV3_USDC_USDT_100: {
     "hardhat": MaticAddresses.UNISWAPV3_USDC_USDT_100,
@@ -94,7 +96,8 @@ export const deployAddresses = {
   },
   SPLITTER_USDC_ADDRESS: {
     "hardhat": "0xA31cE671A0069020F7c87ce23F9cAAA7274C794c",
-    "matic": "0xA31cE671A0069020F7c87ce23F9cAAA7274C794c"
+    "matic": "0xA31cE671A0069020F7c87ce23F9cAAA7274C794c",
+    "zkevm": "0xA31cE671A0069020F7c87ce23F9cAAA7274C794c", // todo
   },
   SPLITTER_USDbC_ADDRESS: {
     "hardhat": "0xA01ac87f8Fc03FA2c497beFB24C74D538958DAbA",
@@ -140,4 +143,16 @@ export const deployAddresses = {
     "hardhat": MaticAddresses.KNC_TOKEN,
     "matic": MaticAddresses.KNC_TOKEN
   },
+  PANCAKE_USDC_USDT_ZKEVM: {
+    "hardhat": ZkevmAddresses.PANCAKE_POOL_USDT_USDC_LP,
+    "zkevm": ZkevmAddresses.PANCAKE_POOL_USDT_USDC_LP
+  },
+  PANCAKE_SWAP_TOKEN: {
+    "hardhat": ZkevmAddresses.PANCAKE_SWAP_TOKEN,
+    "zkevm": ZkevmAddresses.PANCAKE_SWAP_TOKEN
+  },
+  PANCAKE_MASTERCHEF: {
+    "hardhat": ZkevmAddresses.PANCAKE_MASTER_CHEF_V3,
+    "zkevm": ZkevmAddresses.PANCAKE_MASTER_CHEF_V3
+  }
 }

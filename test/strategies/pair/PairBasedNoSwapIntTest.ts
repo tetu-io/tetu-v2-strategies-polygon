@@ -89,8 +89,8 @@ describe('PairBasedNoSwapIntTest', function() {
         if (platformInfo.chainId === chainId) {
           async function createStrategy(): Promise<IBuilderResults> {
             const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
-              POLYGON_NETWORK_ID,
-              platformType,
+              chainId,
+              platformInfo.platformType,
               signer,
               signer2,
               {kyberPid: KYBER_PID_DEFAULT_BLOCK}

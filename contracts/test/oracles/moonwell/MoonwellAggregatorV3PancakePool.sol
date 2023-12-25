@@ -94,7 +94,7 @@ contract MoonwellAggregatorV3PancakePool is IMoonwellAggregatorV3Interface{
     } else if (tokenOutDecimals < 8) {
       price = price * 10 ** (8 - tokenOutDecimals);
     }
-    console.log("getPrice.price", price);
+    // console.log("getPrice.price", price);
     return price;
   }
 
