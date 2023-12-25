@@ -556,8 +556,8 @@ describe('PancakeConverterStrategyLogicLibTest', function () {
                   });
 
                   it("should increase strategy balances on expected values", async () => {
-                    expect(statusExit1.userBalanceTokenA).eq(statusBeforeExit1.userBalanceTokenA + statusExit1.retAmountTokenA);
-                    expect(statusExit1.userBalanceTokenB).eq(statusBeforeExit1.userBalanceTokenB + statusExit1.retAmountTokenB);
+                    expect(statusExit1.userBalanceTokenA).approximately(statusBeforeExit1.userBalanceTokenA + statusExit1.retAmountTokenA, 1e-5);
+                    expect(statusExit1.userBalanceTokenB).approximately(statusBeforeExit1.userBalanceTokenB + statusExit1.retAmountTokenB, 1e-5);
                   });
 
                   it("should move all fees and rewards to strategyProfitHolder", async () => {

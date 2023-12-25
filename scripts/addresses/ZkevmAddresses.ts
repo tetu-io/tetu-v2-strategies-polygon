@@ -1,7 +1,7 @@
 export class ZkevmAddresses {
   public static TETU_LIQUIDATOR = "0xBcda73B7184D5974F77721db79ff8BA190b342ce";
   public static TETU_CONTROLLER = "0x35B0329118790B8c8FC36262812D92a4923C6795";
-  public static TETU_CONVERTER = "";
+  public static TETU_CONVERTER = "0x60E684643d546b657bfeE9c01Cb40E62EC1fe1e2";
 
 //region ----------------------------------------------------- Assets
   public static MATIC = "0xa2036f0538221a77A3937F1379699f44945018d0".toLowerCase();
@@ -41,5 +41,7 @@ export class ZkevmAddresses {
 //endregion ----------------------------------------------------- PancakeSwap
 
   public static AGG_ONEINCH_V5 = "TODO".toLowerCase();
+  /** https://docs.openocean.finance/dev/contracts-of-chains */
+  public static OPENOCEAN_ROUTER = "0x6dd434082EAB5Cd134B33719ec1FF05fE985B97b".toLowerCase();
 
 }

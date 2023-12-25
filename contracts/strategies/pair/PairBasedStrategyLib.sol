@@ -71,10 +71,14 @@ library PairBasedStrategyLib {
   uint public constant IDX_BOOL_VALUES_DEFAULT_STATE_IS_STABLE_POOL = 0;
   uint public constant IDX_BOOL_VALUES_DEFAULT_STATE_DEPOSITOR_SWAP_TOKENS = 1;
 
-  /// @notice 1inch router V5
+  /// @notice 1inch router V5 (Polygon, Base)
   address internal constant ONEINCH = 0x1111111254EEB25477B68fb85Ed929f73A960582;
-  /// @notice OpenOceanExchangeProxy
+  /// @notice OpenOceanExchangeProxy (Polygon and many other chains)
+  /// @dev See https://docs.openocean.finance/dev/contracts-of-chains
   address internal constant OPENOCEAN = 0x6352a56caadC4F1E25CD6c75970Fa768A3304e64;
+  /// @notice OpenOceanExchangeProxy (zkEVM)
+  /// @dev See https://docs.openocean.finance/dev/contracts-of-chains
+  address internal constant OPENOCEAN_ZKEVM = 0x6dd434082EAB5Cd134B33719ec1FF05fE985B97b;
 
   string public constant UNKNOWN_SWAP_ROUTER = "PBS-1 Unknown router";
   string public constant INCORRECT_TICK_RANGE = "PBS-3 Incorrect tickRange";
@@ -723,7 +727,7 @@ library PairBasedStrategyLib {
   }
 
   function _checkSwapRouter(address router) internal pure {
-    require(router == ONEINCH || router == OPENOCEAN, UNKNOWN_SWAP_ROUTER);
+    require(router == ONEINCH || router == OPENOCEAN || roter == OPENOCEAN_ZKEVM, UNKNOWN_SWAP_ROUTER);
   }
 
   /// @notice Extract propNotUnderlying18 from {planEntryData} of the given {planKind}
