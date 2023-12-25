@@ -111,6 +111,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           tag?: string; // to be able to distinct tests
         }
         const strategies: IStrategyInfo[] = [
+          {chainId: ZKEVM_NETWORK_ID, name: PLATFORM_PANCAKE, notUnderlyingToken: ZkevmAddresses.USDT_TOKEN},
           {chainId: BASE_NETWORK_ID, name: PLATFORM_PANCAKE, notUnderlyingToken: BaseAddresses.USDbC_TOKEN},
           {chainId: POLYGON_NETWORK_ID, name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
           {chainId: POLYGON_NETWORK_ID, name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},

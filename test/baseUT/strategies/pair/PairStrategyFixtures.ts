@@ -4,8 +4,9 @@ import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {IBuilderResults, IStrategyCustomizationParams, PairBasedStrategyBuilder} from "./PairBasedStrategyBuilder";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_PANCAKE, PLATFORM_UNIV3} from "../AppPlatforms";
 import {MockSwapper} from "../../../../typechain";
-import {BASE_NETWORK_ID, POLYGON_NETWORK_ID} from "../../utils/HardhatUtils";
+import {BASE_NETWORK_ID, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from "../../utils/HardhatUtils";
 import {BaseAddresses} from "../../../../scripts/addresses/BaseAddresses";
+import {ZkevmAddresses} from "../../../../scripts/addresses/ZkevmAddresses";
 
 interface IBuildPairStrategyParams {
   notUnderlying?: string; // default is MaticAddresses.USDT_TOKEN
@@ -27,7 +28,7 @@ export class PairStrategyFixtures {
         case PLATFORM_UNIV3:
           switch (notUnderlying) {
             case MaticAddresses.USDT_TOKEN:
-              return this.buildUniv3UsdtUsdc(signer, signer2, p?.customParams,);
+              return this.buildUniv3UsdtUsdc(signer, signer2, chainId, p?.customParams,);
             case MaticAddresses.WETH_TOKEN:
               return this.buildUniv3UsdcWeth(signer, signer2, p?.customParams,);
             case MaticAddresses.WMATIC_TOKEN:
@@ -49,6 +50,13 @@ export class PairStrategyFixtures {
         default:
           throw Error(`buildStrategy doesn't support ${strategyName}`);
       }
+    } else if (chainId === ZKEVM_NETWORK_ID) {
+      switch (strategyName) {
+        case PLATFORM_PANCAKE:
+          return this.buildPancakeUsdtUsdcZkEvm(signer, signer2, p?.customParams,);
+        default:
+          throw Error(`buildStrategy doesn't support ${strategyName}`);
+      }
     } else {
       throw Error(`buildPairStrategyUsdcXXX doesn't support chain ${chainId}`);
     }
@@ -58,29 +66,33 @@ export class PairStrategyFixtures {
   static async buildUniv3UsdtUsdc(
     signer: SignerWithAddress,
     signer2: SignerWithAddress,
+    chainId: number,
     p?: IStrategyCustomizationParams
   ): Promise<IBuilderResults> {
-    return PairBasedStrategyBuilder.buildUniv3({
-      signer,
-      signer2,
-      gov: MaticAddresses.GOV_ADDRESS,
-      pool: MaticAddresses.UNISWAPV3_USDC_USDT_100,
-      asset: MaticAddresses.USDC_TOKEN,
-      vaultName: 'TetuV2_UniswapV3_USDC-USDT-0.01%',
-      converter: MaticAddresses.TETU_CONVERTER,
-      profitHolderTokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN],
-      swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-      quoter: MaticAddresses.UNISWAPV3_QUOTER,
-
-      liquidatorPools: [{
+    return PairBasedStrategyBuilder.buildUniv3(
+      {
+        signer,
+        signer2,
+        gov: MaticAddresses.GOV_ADDRESS,
         pool: MaticAddresses.UNISWAPV3_USDC_USDT_100,
+        asset: MaticAddresses.USDC_TOKEN,
+        vaultName: 'TetuV2_UniswapV3_USDC-USDT-0.01%',
+        converter: MaticAddresses.TETU_CONVERTER,
+        profitHolderTokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN],
         swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-        tokenIn: MaticAddresses.USDC_TOKEN,
-        tokenOut: MaticAddresses.USDT_TOKEN,
-      },],
+        quoter: MaticAddresses.UNISWAPV3_QUOTER,
 
-      ...p
-    });
+        liquidatorPools: [{
+          pool: MaticAddresses.UNISWAPV3_USDC_USDT_100,
+          swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+          tokenIn: MaticAddresses.USDC_TOKEN,
+          tokenOut: MaticAddresses.USDT_TOKEN,
+        },],
+
+        ...p
+      },
+      chainId
+    );
   }
 
   static async buildUniv3WmaticUsdc(
@@ -88,27 +100,30 @@ export class PairStrategyFixtures {
     signer2: SignerWithAddress,
     p?: IStrategyCustomizationParams
   ): Promise<IBuilderResults> {
-    return PairBasedStrategyBuilder.buildUniv3({
-      signer,
-      signer2,
-      gov: MaticAddresses.GOV_ADDRESS,
-      pool: MaticAddresses.UNISWAPV3_WMATIC_USDC_500,
-      asset: MaticAddresses.USDC_TOKEN,
-      vaultName: 'TetuV2_UniswapV3_WMATIC_USDC-0.05%',
-      converter: MaticAddresses.TETU_CONVERTER,
-      profitHolderTokens: [MaticAddresses.WMATIC_TOKEN, MaticAddresses.USDC_TOKEN],
-      swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-      quoter: MaticAddresses.UNISWAPV3_QUOTER,
-
-      liquidatorPools: [{
+    return PairBasedStrategyBuilder.buildUniv3(
+      {
+        signer,
+        signer2,
+        gov: MaticAddresses.GOV_ADDRESS,
         pool: MaticAddresses.UNISWAPV3_WMATIC_USDC_500,
+        asset: MaticAddresses.USDC_TOKEN,
+        vaultName: 'TetuV2_UniswapV3_WMATIC_USDC-0.05%',
+        converter: MaticAddresses.TETU_CONVERTER,
+        profitHolderTokens: [MaticAddresses.WMATIC_TOKEN, MaticAddresses.USDC_TOKEN],
         swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-        tokenIn: MaticAddresses.WMATIC_TOKEN,
-        tokenOut: MaticAddresses.USDC_TOKEN,
-      },],
+        quoter: MaticAddresses.UNISWAPV3_QUOTER,
 
-      ...p
-    });
+        liquidatorPools: [{
+          pool: MaticAddresses.UNISWAPV3_WMATIC_USDC_500,
+          swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+          tokenIn: MaticAddresses.WMATIC_TOKEN,
+          tokenOut: MaticAddresses.USDC_TOKEN,
+        },],
+
+        ...p
+      },
+      POLYGON_NETWORK_ID
+    );
   }
 
   static async buildUniv3UsdcWeth(
@@ -116,27 +131,30 @@ export class PairStrategyFixtures {
     signer2: SignerWithAddress,
     p?: IStrategyCustomizationParams
   ): Promise<IBuilderResults> {
-    return PairBasedStrategyBuilder.buildUniv3({
-      signer,
-      signer2,
-      gov: MaticAddresses.GOV_ADDRESS,
-      pool: MaticAddresses.UNISWAPV3_USDC_WETH_500,
-      asset: MaticAddresses.USDC_TOKEN,
-      vaultName: 'TetuV2_UniswapV3_USDC-WETH-0.05%',
-      converter: MaticAddresses.TETU_CONVERTER,
-      profitHolderTokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.WETH_TOKEN],
-      swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-      quoter: MaticAddresses.UNISWAPV3_QUOTER,
-
-      liquidatorPools: [{
+    return PairBasedStrategyBuilder.buildUniv3(
+      {
+        signer,
+        signer2,
+        gov: MaticAddresses.GOV_ADDRESS,
         pool: MaticAddresses.UNISWAPV3_USDC_WETH_500,
+        asset: MaticAddresses.USDC_TOKEN,
+        vaultName: 'TetuV2_UniswapV3_USDC-WETH-0.05%',
+        converter: MaticAddresses.TETU_CONVERTER,
+        profitHolderTokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.WETH_TOKEN],
         swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-        tokenIn: MaticAddresses.USDC_TOKEN,
-        tokenOut: MaticAddresses.WETH_TOKEN,
-      },],
+        quoter: MaticAddresses.UNISWAPV3_QUOTER,
 
-      ...p
-    });
+        liquidatorPools: [{
+          pool: MaticAddresses.UNISWAPV3_USDC_WETH_500,
+          swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+          tokenIn: MaticAddresses.USDC_TOKEN,
+          tokenOut: MaticAddresses.WETH_TOKEN,
+        },],
+
+        ...p
+      },
+      POLYGON_NETWORK_ID
+    );
   }
 
   static async buildAlgebraUsdtUsdc(
@@ -224,39 +242,89 @@ export class PairStrategyFixtures {
     signer2: SignerWithAddress,
     p?: IStrategyCustomizationParams
   ): Promise<IBuilderResults> {
-    return PairBasedStrategyBuilder.buildPancakeBase({
-      signer,
-      signer2,
-      gov: BaseAddresses.GOV_ADDRESS,
-      pool: BaseAddresses.PANCAKE_POOL_USDC_USDbC_LP_100,
-      asset: BaseAddresses.USDbC_TOKEN,
-      vaultName: 'TetuV2_Pancake_USDC-USDbC-0.01%',
-      converter: BaseAddresses.TETU_CONVERTER,
-      profitHolderTokens: [BaseAddresses.USDC_TOKEN, BaseAddresses.USDbC_TOKEN, BaseAddresses.PANCAKE_SWAP_TOKEN],
-      swapper: BaseAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
-      quoter: BaseAddresses.PANCAKE_QUOTER_V2,
+    return PairBasedStrategyBuilder.buildPancake(
+      {
+        signer,
+        signer2,
+        gov: BaseAddresses.GOV_ADDRESS,
+        pool: BaseAddresses.PANCAKE_POOL_USDC_USDbC_LP_100,
+        asset: BaseAddresses.USDbC_TOKEN,
+        vaultName: 'TetuV2_Pancake_USDC-USDbC-0.01%',
+        converter: BaseAddresses.TETU_CONVERTER,
+        profitHolderTokens: [BaseAddresses.USDC_TOKEN, BaseAddresses.USDbC_TOKEN, BaseAddresses.PANCAKE_SWAP_TOKEN],
+        swapper: BaseAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
+        quoter: BaseAddresses.PANCAKE_QUOTER_V2,
 
-      liquidatorPools: [
-        {
-          pool: BaseAddresses.PANCAKE_POOL_USDC_USDbC_LP_100,
-          swapper: BaseAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
-          tokenIn: BaseAddresses.USDC_TOKEN,
-          tokenOut: BaseAddresses.USDbC_TOKEN,
-        }, {
-          pool: BaseAddresses.PANCAKE_POOL_CAKE_WETH_10000,
-          swapper: BaseAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
-          tokenIn: BaseAddresses.PANCAKE_SWAP_TOKEN,
-          tokenOut: BaseAddresses.WETH_TOKEN,
-        }, {
-          pool: BaseAddresses.PANCAKE_POOL_USDbC_ETH_LP_100,
-          swapper: BaseAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
-          tokenIn: BaseAddresses.USDbC_TOKEN,
-          tokenOut: BaseAddresses.WETH_TOKEN,
-        },
-      ],
+        liquidatorPools: [
+          {
+            pool: BaseAddresses.PANCAKE_POOL_USDC_USDbC_LP_100,
+            swapper: BaseAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
+            tokenIn: BaseAddresses.USDC_TOKEN,
+            tokenOut: BaseAddresses.USDbC_TOKEN,
+          }, {
+            pool: BaseAddresses.PANCAKE_POOL_CAKE_WETH_10000,
+            swapper: BaseAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
+            tokenIn: BaseAddresses.PANCAKE_SWAP_TOKEN,
+            tokenOut: BaseAddresses.WETH_TOKEN,
+          }, {
+            pool: BaseAddresses.PANCAKE_POOL_USDbC_ETH_LP_100,
+            swapper: BaseAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
+            tokenIn: BaseAddresses.USDbC_TOKEN,
+            tokenOut: BaseAddresses.WETH_TOKEN,
+          },
+        ],
 
-      ...p
-    });
+        ...p
+      },
+      BASE_NETWORK_ID,
+      BaseAddresses.PANCAKE_MASTER_CHEF_V3,
+    );
   }
 //endregion Base
+
+//region zkEvm
+  static async buildPancakeUsdtUsdcZkEvm(
+    signer: SignerWithAddress,
+    signer2: SignerWithAddress,
+    p?: IStrategyCustomizationParams
+  ): Promise<IBuilderResults> {
+    return PairBasedStrategyBuilder.buildPancake(
+      {
+        signer,
+        signer2,
+        gov: ZkevmAddresses.GOV_ADDRESS,
+        pool: ZkevmAddresses.PANCAKE_POOL_USDT_USDC_LP,
+        asset: ZkevmAddresses.USDC_TOKEN,
+        vaultName: 'TetuV2_Pancake_USDC-USDT-0.01%',
+        converter: ZkevmAddresses.TETU_CONVERTER,
+        profitHolderTokens: [ZkevmAddresses.USDC_TOKEN, ZkevmAddresses.USDT_TOKEN, ZkevmAddresses.PANCAKE_SWAP_TOKEN],
+        swapper: ZkevmAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
+        quoter: ZkevmAddresses.PANCAKE_QUOTER_V2,
+
+        liquidatorPools: [
+          {
+            pool: ZkevmAddresses.PANCAKE_POOL_USDT_USDC_LP,
+            swapper: ZkevmAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
+            tokenIn: ZkevmAddresses.USDC_TOKEN,
+            tokenOut: ZkevmAddresses.USDT_TOKEN,
+          }, {
+            pool: ZkevmAddresses.PANCAKE_POOL_CAKE_WETH_10000,
+            swapper: ZkevmAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
+            tokenIn: ZkevmAddresses.PANCAKE_SWAP_TOKEN,
+            tokenOut: ZkevmAddresses.WETH_TOKEN,
+          }, {
+            pool: ZkevmAddresses.PANCAKE_POOL_USDC_ETH_LP_500,
+            swapper: ZkevmAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
+            tokenIn: ZkevmAddresses.USDC_TOKEN,
+            tokenOut: ZkevmAddresses.WETH_TOKEN,
+          },
+        ],
+
+        ...p
+      },
+      ZKEVM_NETWORK_ID,
+      ZkevmAddresses.PANCAKE_MASTER_CHEF_V3
+    );
+  }
+//endregion zkEvm
 }

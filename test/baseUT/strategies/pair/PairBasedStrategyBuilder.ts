@@ -44,6 +44,7 @@ import {parseUnits} from "ethers/lib/utils";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_PANCAKE, PLATFORM_UNIV3} from "../AppPlatforms";
 import {MockHelper} from "../../helpers/MockHelper";
 import {BaseAddresses} from "../../../../scripts/addresses/BaseAddresses";
+import {POLYGON_NETWORK_ID} from "../../utils/HardhatUtils";
 
 /**
  * Kyber PID for most current block
@@ -120,7 +121,8 @@ export class PairBasedStrategyBuilder {
   private static async setPriceImitator(
       signer: SignerWithAddress,
       state: IDefaultState,
-      strategy: IRebalancingV2Strategy
+      strategy: IRebalancingV2Strategy,
+      chainId: number
   ){
     const platform = await ConverterStrategyBase__factory.connect(strategy.address, signer).PLATFORM();
     if (platform === PLATFORM_UNIV3) {
@@ -135,11 +137,12 @@ export class PairBasedStrategyBuilder {
   }
 
   private static async build(
-      p: IBuilderParams,
-      controllerAsGov: ControllerV2,
-      core: CoreAddresses,
-      data: IVaultStrategyInfo,
-      lib: UniswapV3Lib | AlgebraLib | KyberLib | PancakeLib
+    chainId: number,
+    p: IBuilderParams,
+    controllerAsGov: ControllerV2,
+    core: CoreAddresses,
+    data: IVaultStrategyInfo,
+    lib: UniswapV3Lib | AlgebraLib | KyberLib | PancakeLib
   ): Promise<IBuilderResults> {
     const signer = p.signer;
     const gov = await Misc.impersonate(p.gov);
@@ -152,7 +155,7 @@ export class PairBasedStrategyBuilder {
     const state = await PackedData.getDefaultState(strategy);
 
     // prices should be the same in the pool and in the oracle
-    await this.setPriceImitator(signer, state, strategy);
+    await this.setPriceImitator(signer, state, strategy, chainId);
 
     // prices should be the same in the pool and in the liquidator
     const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
@@ -210,7 +213,7 @@ export class PairBasedStrategyBuilder {
   }
 
 //region Polygon
-  static async buildUniv3(p: IBuilderParams): Promise<IBuilderResults> {
+  static async buildUniv3(p: IBuilderParams, chainId: number): Promise<IBuilderResults> {
     const signer = p.signer;
     const gov = await Misc.impersonate(p.gov);
     const core = Addresses.getCore() as CoreAddresses;
@@ -246,7 +249,7 @@ export class PairBasedStrategyBuilder {
     );
 
     const lib = await DeployerUtils.deployContract(signer, 'UniswapV3Lib') as UniswapV3Lib;
-    return this.build(p, controller, core, data, lib);
+    return this.build(chainId, p, controller, core, data, lib);
   }
 
   static async buildAlgebra(p: IBuilderParams): Promise<IBuilderResults> {
@@ -292,7 +295,7 @@ export class PairBasedStrategyBuilder {
         false,
     );
     const lib = await DeployerUtils.deployContract(signer, 'AlgebraLib') as AlgebraLib;
-    return this.build(p, controller, core, data, lib);
+    return this.build(POLYGON_NETWORK_ID, p, controller, core, data, lib);
   }
 
   static async buildKyber(p: IBuilderParams, pid?: number): Promise<IBuilderResults> {
@@ -341,12 +344,12 @@ export class PairBasedStrategyBuilder {
         false,
     );
     const lib = await DeployerUtils.deployContract(signer, 'KyberLib') as KyberLib;
-    return this.build(p, controllerAsGov, core, data, lib);
+    return this.build(POLYGON_NETWORK_ID, p, controllerAsGov, core, data, lib);
   }
 //endregion Polygon
 
 //region Base chain
-  static async buildPancakeBase(p: IBuilderParams): Promise<IBuilderResults> {
+  static async buildPancake(p: IBuilderParams, chainId: number, chef: string): Promise<IBuilderResults> {
     const signer = p.signer;
     const gov = await Misc.impersonate(p.gov);
     const core = Addresses.getCore() as CoreAddresses;
@@ -369,7 +372,7 @@ export class PairBasedStrategyBuilder {
           0,
           0,
           [0, 0, Misc.MAX_UINT, 0],
-          BaseAddresses.PANCAKE_MASTER_CHEF_V3
+          chef
         );
 
         return _strategy as unknown as IStrategyV2;
@@ -383,7 +386,7 @@ export class PairBasedStrategyBuilder {
     );
 
     const lib = await DeployerUtils.deployContract(signer, 'PancakeLib') as PancakeLib;
-    return this.build(p, controller, core, data, lib);
+    return this.build(chainId, p, controller, core, data, lib);
   }
 //endregion Base chain
 }
