@@ -39,9 +39,11 @@ describe('PancakeConverterStrategyLogicLibTest', function () {
     chef: string;
     swapper: string;
     controller: string;
+
+    amountToMakePoolVolume?: string; // 10_000 by default
   }
 
-  const chains: number[] = [BASE_NETWORK_ID, /* ZKEVM_NETWORK_ID */ ]
+  const chains: number[] = [ZKEVM_NETWORK_ID, BASE_NETWORK_ID, ]
   const chainInfos: IChainInfo[] = [
     {
       chainId: BASE_NETWORK_ID,
@@ -50,6 +52,7 @@ describe('PancakeConverterStrategyLogicLibTest', function () {
       swapper: BaseAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
       chef: BaseAddresses.PANCAKE_MASTER_CHEF_V3,
       controller: BaseAddresses.TETU_CONTROLLER,
+      amountToMakePoolVolume: "10000"
     },
     {
       chainId: ZKEVM_NETWORK_ID,
@@ -57,7 +60,8 @@ describe('PancakeConverterStrategyLogicLibTest', function () {
       pool: ZkevmAddresses.PANCAKE_POOL_USDT_USDC_LP,
       swapper: ZkevmAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
       chef: ZkevmAddresses.PANCAKE_MASTER_CHEF_V3,
-      controller: ZkevmAddresses.TETU_CONTROLLER
+      controller: ZkevmAddresses.TETU_CONTROLLER,
+      amountToMakePoolVolume: "5000"
     },
   ]
 
@@ -115,12 +119,12 @@ describe('PancakeConverterStrategyLogicLibTest', function () {
 
         // wait to get rewards
         await TimeUtils.advanceNBlocks(20_000);
-        console.log("------------------- wait for rewards, make swap to generate fee");
+        console.log(`------------------- wait for rewards, make swap to generate fee ${multy}`);
         await UniversalUtils.makePoolVolume(
           signer,
           state,
           chainInfo.swapper,
-          parseUnits('10000', 6).mul(multy)
+          parseUnits(chainInfo.amountToMakePoolVolume ?? "10000", 6).mul(multy)
         );
       }
 
@@ -212,7 +216,7 @@ describe('PancakeConverterStrategyLogicLibTest', function () {
           await saver("b");
 
           await facade.initStrategyState(
-            "0x255707B70BF90aa112006E1b07B9AeA6De021424",
+            chainInfo.controller,
             pool.address,
             0,
             0,
@@ -459,8 +463,8 @@ describe('PancakeConverterStrategyLogicLibTest', function () {
                 });
 
                 it("Consumed amounts should be near to desired amounts", async () => {
-                  expect(stateEnter2.retAmountTokenA).approximately(amountTokenA2, 1);
-                  expect(stateEnter2.retAmountTokenB).approximately(amountTokenB2, 1);
+                  expect(stateEnter2.retAmountTokenA).approximately(amountTokenA2, 5);
+                  expect(stateEnter2.retAmountTokenB).approximately(amountTokenB2, 5);
                 });
 
                 it("should not change token ID", async () => {

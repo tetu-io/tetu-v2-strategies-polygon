@@ -3,6 +3,7 @@ export class ZkevmAddresses {
   public static TETU_LIQUIDATOR = "0xBcda73B7184D5974F77721db79ff8BA190b342ce".toLowerCase();
   public static TETU_CONTROLLER = "0x35B0329118790B8c8FC36262812D92a4923C6795".toLowerCase();
   public static TETU_CONVERTER = "0x60E684643d546b657bfeE9c01Cb40E62EC1fe1e2".toLowerCase();
+  public static TETU_CONVERTER_PRICE_ORACLE = "0xE1394fFE5e84f54DFd530C9Ea046d0A596b4ea14".toLowerCase();
 
 //region ----------------------------------------------------- Assets
   public static MATIC_TOKEN = "0xa2036f0538221a77A3937F1379699f44945018d0".toLowerCase();
@@ -44,8 +45,15 @@ export class ZkevmAddresses {
 
 //endregion ----------------------------------------------------- PancakeSwap
 
+//region ----------------------------------------------------- Aggregators
   public static AGG_ONEINCH_V5 = "TODO".toLowerCase();
   /** https://docs.openocean.finance/dev/contracts-of-chains */
   public static OPENOCEAN_ROUTER = "0x6dd434082EAB5Cd134B33719ec1FF05fE985B97b".toLowerCase();
+//endregion ----------------------------------------------------- Aggregators
+
+//region ----------------------------------------------------- Keom
+  public static KEOM_COMPTROLLER = "0x6ea32f626e3a5c41547235ebbdf861526e11f482";
+  public static KEOM_PRICE_ORACLE = "0x19194261d8f0599bd079c52623c80c5150f010cf";
+//endregion ----------------------------------------------------- Keom
 
 }

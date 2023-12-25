@@ -19,9 +19,10 @@ import {
 } from "../../../typechain";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {BigNumber} from "ethers";
-import {BASE_NETWORK_ID, POLYGON_NETWORK_ID} from "../utils/HardhatUtils";
+import {BASE_NETWORK_ID, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from "../utils/HardhatUtils";
 import {BaseAddresses} from "../../../scripts/addresses/BaseAddresses";
 import {parseUnits} from "ethers/lib/utils";
+import {ZkevmAddresses} from "../../../scripts/addresses/ZkevmAddresses";
 
 export class PriceOracleImitatorUtils {
   public static async getPrice(signer: SignerWithAddress, token: string): Promise<BigNumber> {
@@ -31,6 +32,9 @@ export class PriceOracleImitatorUtils {
       return aave3Oracle.getAssetPrice(token)
     } else if (chainId === BASE_NETWORK_ID) {
       const priceOracle = IPriceOracle__factory.connect(BaseAddresses.TETU_CONVERTER_PRICE_ORACLE, signer)
+      return (await priceOracle.getAssetPrice(token)).div(parseUnits('1', 10))
+    } else if (chainId === ZKEVM_NETWORK_ID) {
+      const priceOracle = IPriceOracle__factory.connect(ZkevmAddresses.TETU_CONVERTER_PRICE_ORACLE, signer)
       return (await priceOracle.getAssetPrice(token)).div(parseUnits('1', 10))
     } else {
       throw new Error(`PriceOracleImitatorUtils.getPrice: unsupported chainId ${chainId}`)
@@ -165,6 +169,33 @@ export class PriceOracleImitatorUtils {
     stableToken: string,
     stableTokenPrice: string = "1"
   ) {
+    const comptroller = IMoonwellComptroller__factory.connect(BaseAddresses.MOONWELL_COMPTROLLER, signer);
+    const admin = await Misc.impersonate(await comptroller.admin());
+    const priceOracle = await comptroller.oracle();
+
+    const pancakePool = IPancakeV3Pool__factory.connect(pool, signer);
+    const token0 = await pancakePool.token0();
+    const token1 = await pancakePool.token1();
+    const volatileToken = token0.toLowerCase() === stableToken.toLowerCase() ? token1 : token0
+
+    await IMoonwellPriceOracle__factory.connect(priceOracle, admin).setFeed(
+      await IERC20Metadata__factory.connect(stableToken, signer).symbol(),
+      (await DeployerUtils.deployContract(signer, 'MoonwellAggregatorV3Fixed', parseUnits(stableTokenPrice, 8))).address
+    );
+
+    await IMoonwellPriceOracle__factory.connect(priceOracle, admin).setFeed(
+      await IERC20Metadata__factory.connect(volatileToken, signer).symbol(),
+      (await DeployerUtils.deployContract(signer, 'MoonwellAggregatorV3PancakePool', pool, volatileToken)).address
+    );
+  }
+
+  public static async pancakeZkEvm(
+    signer: SignerWithAddress,
+    pool: string,
+    stableToken: string,
+    stableTokenPrice: string = "1"
+  ) {
+    throw Error("TODO")
     const comptroller = IMoonwellComptroller__factory.connect(BaseAddresses.MOONWELL_COMPTROLLER, signer);
     const admin = await Misc.impersonate(await comptroller.admin());
     const priceOracle = await comptroller.oracle();

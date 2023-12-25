@@ -63,7 +63,7 @@ export class EnvSetup {
 
         zkevmForkBlock: {
           type: 'number',
-          default: 8587141,
+          default: 8762027, // 8587141,
         },
 
         /////// NETWORK EXPLORERS

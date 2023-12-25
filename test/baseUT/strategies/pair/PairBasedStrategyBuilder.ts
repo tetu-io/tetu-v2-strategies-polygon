@@ -44,7 +44,7 @@ import {parseUnits} from "ethers/lib/utils";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_PANCAKE, PLATFORM_UNIV3} from "../AppPlatforms";
 import {MockHelper} from "../../helpers/MockHelper";
 import {BaseAddresses} from "../../../../scripts/addresses/BaseAddresses";
-import {POLYGON_NETWORK_ID} from "../../utils/HardhatUtils";
+import {BASE_NETWORK_ID, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from "../../utils/HardhatUtils";
 
 /**
  * Kyber PID for most current block
@@ -132,7 +132,13 @@ export class PairBasedStrategyBuilder {
     } else if (platform === PLATFORM_KYBER) {
       await PriceOracleImitatorUtils.kyber(signer, state.pool, state.tokenA);
     } else if (platform === PLATFORM_PANCAKE) {
-      await PriceOracleImitatorUtils.pancakeBaseChain(signer, state.pool, state.tokenA);
+      if (chainId === BASE_NETWORK_ID) {
+        await PriceOracleImitatorUtils.pancakeBaseChain(signer, state.pool, state.tokenA);
+      } else if (chainId === ZKEVM_NETWORK_ID) {
+        await PriceOracleImitatorUtils.pancakeZkEvm(signer, state.pool, state.tokenA);
+      } else {
+        throw Error("PairBasedStrategyBuilder: chain not supported");
+      }
     } else throw Error(`setPriceImitator: unknown platform ${platform}`);
   }
 
