@@ -20,6 +20,8 @@ import { Misc } from './utils/Misc';
 import { NSRUtils } from './utils/NSRUtils';
 import { formatUnits } from 'ethers/lib/utils';
 import cron from 'node-cron';
+import { Simulate } from 'react-dom/test-utils';
+import error = Simulate.error;
 
 // test rebalance debt
 // NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtW3F.ts
@@ -80,7 +82,47 @@ enum EventType {
   ErrorFetching = 'Error fetch from url'
 }
 
+interface EthersError extends Error {
+  reason?: string;
+  method?: string;
+  transaction?: {
+    from?: string;
+    to?: string;
+  };
+}
+
 const eventLogs = new Map<EventType, string[][]>();
+const excludeErrorLogs: EventType[] = [
+  EventType.ErrorNSR
+];
+
+async function logErrorEvent(eventType: EventType, params: string[], error: Error) {
+  if (excludeErrorLogs.includes(eventType)) {
+    await logEvent(eventType, params);
+  } else {
+    if (eventType === EventType.ErrorFetching) {
+      await sendMessageToTelegram(`error fetch ${params[0]}`);
+    } else {
+      const ethersError = error as EthersError;
+      let errorMessage = `${eventType}`
+      if ('reason' in ethersError) {
+        errorMessage += `\nReason: ${ethersError.reason}`;
+      }
+      if ('method' in ethersError) {
+        errorMessage += `\nMethod: ${ethersError.method}`;
+      }
+      if (ethersError.transaction) {
+        if ('from' in ethersError.transaction) {
+          errorMessage += `\nFrom: ${ethersError.transaction.from}`;
+        }
+        if ('to' in ethersError.transaction) {
+          errorMessage += `\nTo: ${ethersError.transaction.to}`;
+        }
+      }
+      await sendMessageToTelegram(`${errorMessage}`);
+    }
+  }
+}
 
 async function logEvent(eventType: EventType, params: string[]) {
   if (!eventLogs.has(eventType)) {
@@ -230,7 +272,7 @@ async function main() {
                 await sleep(DELAY_AFTER_NSR * 1000);
               } catch (e) {
                 console.log('Error NSR', strategyName, strategyAddress, e);
-                await logEvent(EventType.ErrorNSR, [strategyName, strategyAddress]);
+                await logErrorEvent(EventType.ErrorNSR,[strategyName, strategyAddress], e as Error);
               }
             } else {
               if (needNSRTimestamp[strategyAddress] !== 0) {
@@ -287,7 +329,7 @@ async function main() {
                   }
                 } catch (e) {
                   console.log('Error EXECUTE', strategyName, strategyAddress, e);
-                  await logEvent(EventType.ErrorExecute, [strategyName, strategyAddress]);
+                  await logErrorEvent(EventType.ErrorExecute,[strategyName, strategyAddress], e as Error);
                 }
               } else {
                 console.log('Result can not be executed:', strategyName, result.message);
@@ -298,13 +340,13 @@ async function main() {
             }
           } catch (e) {
             console.log('Error inside strategy processing', strategyAddress, e);
-            await logEvent(EventType.ErrorProcessing, [strategyAddress]);
+            await logErrorEvent(EventType.ErrorProcessing,[strategyAddress], e as Error);
           }
         }
       }
     } catch (e) {
       console.log('error in debt rebalance loop', e);
-      await logEvent(EventType.ErrorRebalance, []);
+      await logErrorEvent(EventType.ErrorRebalance,[], e as Error);
     }
 
     await sleep(argv.rebalanceDebtLoopDelay);
@@ -322,7 +364,7 @@ const fetchFuncAxios = async(url: string) => {
     }
   } catch (e) {
     console.log(`error fetch ${url}`, e);
-    await logEvent(EventType.ErrorFetching, []);
+    await logErrorEvent(EventType.ErrorFetching,[url], e as Error);
     throw e;
   }
 };
