@@ -40,7 +40,7 @@ import {
 } from "../../baseUT/AppConstants";
 import {BigNumber} from "ethers";
 import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
-import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID} from '../../baseUT/utils/HardhatUtils';
+import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from '../../baseUT/utils/HardhatUtils';
 import {
   PairWithdrawByAggUtils
 } from "../../baseUT/strategies/pair/PairWithdrawByAggUtils";
@@ -50,7 +50,7 @@ import {IEventsSet} from "../../baseUT/strategies/CaptureEvents";
 import {PlatformUtils} from "../../baseUT/utils/PlatformUtils";
 
 describe('PairBasedStrategyTwistedDebts', function () {
-  const CHAINS_IN_ORDER_EXECUTION: number[] = [BASE_NETWORK_ID, POLYGON_NETWORK_ID];
+  const CHAINS_IN_ORDER_EXECUTION: number[] = [ZKEVM_NETWORK_ID, BASE_NETWORK_ID, POLYGON_NETWORK_ID];
   /**
    * Max allowed count of steps required to reduce locked percent to the given value.
    * Without calculation of requiredAmountToReduceDebt this value can be very high
@@ -216,6 +216,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
         {name: PLATFORM_ALGEBRA, chainId: POLYGON_NETWORK_ID},
         {name: PLATFORM_UNIV3, chainId: POLYGON_NETWORK_ID, amountDepositBySigner: "25000"},
         {name: PLATFORM_PANCAKE, chainId: BASE_NETWORK_ID},
+        {name: PLATFORM_PANCAKE, chainId: ZKEVM_NETWORK_ID},
       ];
 
       describe("Prices up", () => {

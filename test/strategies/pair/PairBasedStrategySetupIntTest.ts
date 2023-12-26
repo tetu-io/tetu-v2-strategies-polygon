@@ -9,19 +9,20 @@ import {BigNumber} from "ethers";
 import {PackedData} from "../../baseUT/utils/PackedData";
 import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
 import {IBuilderResults} from "../../baseUT/strategies/pair/PairBasedStrategyBuilder";
-import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID} from '../../baseUT/utils/HardhatUtils';
+import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from '../../baseUT/utils/HardhatUtils';
 import {PLATFORM_ALGEBRA, PLATFORM_PANCAKE, PLATFORM_UNIV3} from "../../baseUT/strategies/AppPlatforms";
 import {PairStrategyFixtures} from "../../baseUT/strategies/pair/PairStrategyFixtures";
 import {PairBasedStrategyPrepareStateUtils} from "../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
 
 describe('PairBasedStrategySetupIntTest', () => {
-  const CHAINS_IN_ORDER_EXECUTION: number[] = [BASE_NETWORK_ID, POLYGON_NETWORK_ID];
+  const CHAINS_IN_ORDER_EXECUTION: number[] = [ZKEVM_NETWORK_ID, BASE_NETWORK_ID, POLYGON_NETWORK_ID];
   interface IStrategyInfo {
     name: string,
     chainId: number;
   }
 
   const strategies: IStrategyInfo[] = [
+    {name: PLATFORM_PANCAKE, chainId: ZKEVM_NETWORK_ID},
     {name: PLATFORM_PANCAKE, chainId: BASE_NETWORK_ID},
     {name: PLATFORM_UNIV3, chainId: POLYGON_NETWORK_ID},
     {name: PLATFORM_ALGEBRA, chainId: POLYGON_NETWORK_ID},

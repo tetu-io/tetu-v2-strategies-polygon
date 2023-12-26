@@ -4,18 +4,18 @@ import {ConverterUtils} from "../utils/ConverterUtils";
 import {getAaveTwoPlatformAdapter, Misc} from "../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 import {
-  AggregatorInterface,
+  AggregatorInterface, ConverterController__factory,
   IAave3PriceOracle,
   IAave3PriceOracle__factory,
   IAlgebraPool__factory,
   IBVault__factory,
-  IComposableStablePool__factory, IERC20Metadata__factory,
+  IComposableStablePool__factory, IERC20Metadata__factory, IKeomPriceOracle__factory,
   ILinearPool__factory,
   IMoonwellComptroller__factory, IMoonwellPriceOracle__factory,
   IPancakeV3Pool__factory,
   IPool__factory,
   IPriceOracle__factory,
-  IUniswapV3Pool__factory,
+  IUniswapV3Pool__factory, PriceOracleKeomZkevm, TetuConverter__factory,
 } from "../../../typechain";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {BigNumber} from "ethers";
@@ -23,6 +23,8 @@ import {BASE_NETWORK_ID, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from "../utils/Ha
 import {BaseAddresses} from "../../../scripts/addresses/BaseAddresses";
 import {parseUnits} from "ethers/lib/utils";
 import {ZkevmAddresses} from "../../../scripts/addresses/ZkevmAddresses";
+import {KeomUtils} from "../utils/protocols/KeomUtils";
+import {InjectUtils} from "../strategies/InjectUtils";
 
 export class PriceOracleImitatorUtils {
   public static async getPrice(signer: SignerWithAddress, token: string): Promise<BigNumber> {
@@ -192,27 +194,49 @@ export class PriceOracleImitatorUtils {
   public static async pancakeZkEvm(
     signer: SignerWithAddress,
     pool: string,
-    stableToken: string,
-    stableTokenPrice: string = "1"
+    stableAsset: string,
+    converter: string
   ) {
-    throw Error("TODO")
-    const comptroller = IMoonwellComptroller__factory.connect(BaseAddresses.MOONWELL_COMPTROLLER, signer);
+    console.log("pancakeZkEvm.pool", pool);
+    console.log("pancakeZkEvm.stableToken", stableAsset);
+    console.log("pancakeZkEvm.converter", converter);
+    // 1) replace whole price oracle by mocked version
+    // 2) replace price oracle in TetuConverter
+
+    const comptroller = IMoonwellComptroller__factory.connect(ZkevmAddresses.KEOM_COMPTROLLER, signer);
     const admin = await Misc.impersonate(await comptroller.admin());
-    const priceOracle = await comptroller.oracle();
+    console.log("pancakeZkEvm.admin", admin.address);
 
     const pancakePool = IPancakeV3Pool__factory.connect(pool, signer);
     const token0 = await pancakePool.token0();
     const token1 = await pancakePool.token1();
-    const volatileToken = token0.toLowerCase() === stableToken.toLowerCase() ? token1 : token0
+    const volatileAsset = token0.toLowerCase() === stableAsset.toLowerCase() ? token1 : token0;
+    console.log("pancakeZkEvm.volatileAsset", volatileAsset);
 
-    await IMoonwellPriceOracle__factory.connect(priceOracle, admin).setFeed(
-      await IERC20Metadata__factory.connect(stableToken, signer).symbol(),
-      (await DeployerUtils.deployContract(signer, 'MoonwellAggregatorV3Fixed', parseUnits(stableTokenPrice, 8))).address
-    );
+    const stableKToken = KeomUtils.getKToken(stableAsset);
+    const volatileToken = KeomUtils.getKToken(volatileAsset);
 
-    await IMoonwellPriceOracle__factory.connect(priceOracle, admin).setFeed(
-      await IERC20Metadata__factory.connect(volatileToken, signer).symbol(),
-      (await DeployerUtils.deployContract(signer, 'MoonwellAggregatorV3PancakePool', pool, volatileToken)).address
+    const newPriceOracle = await DeployerUtils.deployContract(
+      signer,
+      'KeomPriceOraclePancake',
+      await comptroller.oracle(),
+      stableAsset,
+      stableKToken,
+      volatileAsset,
+      volatileToken,
+      pool,
     );
+    await comptroller.connect(admin)._setPriceOracle(newPriceOracle.address);
+    console.log("pancakeZkEvm.newPriceOracle", newPriceOracle.address);
+
+    const tetuConverterPriceOracle = await DeployerUtils.deployContract(signer, "PriceOracleKeomZkevm", newPriceOracle.address) as PriceOracleKeomZkevm;
+    console.log("pancakeZkEvm.tetuConverterPriceOracle", tetuConverterPriceOracle.address);
+
+    const converterControllerAddress = await TetuConverter__factory.connect(converter, signer).controller();
+    const converterGovernance = await Misc.impersonate(
+      await ConverterController__factory.connect(converterControllerAddress, signer).governance()
+    );
+    const converterController = ConverterController__factory.connect(converterControllerAddress, converterGovernance);
+    await converterController.setPriceOracle(tetuConverterPriceOracle.address);
   }
 }

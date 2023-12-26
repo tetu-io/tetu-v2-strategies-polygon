@@ -10,6 +10,7 @@ import "@tetu_io/tetu-converter/contracts/core/Keeper.sol";
 import "@tetu_io/tetu-converter/contracts/core/SwapManager.sol";
 import "@tetu_io/tetu-converter/contracts/core/TetuConverter.sol";
 import "@tetu_io/tetu-converter/contracts/oracles/PriceOracle.sol";
+import "@tetu_io/tetu-converter/contracts/oracles/PriceOracleKeomZkevm.sol";
 import "@tetu_io/tetu-converter/contracts/core/Bookkeeper.sol";
 import "@tetu_io/tetu-converter/contracts/tests/keeper/KeeperCaller.sol";
 import "@tetu_io/tetu-converter/contracts/protocols/hundred-finance/HfPoolAdapter.sol";

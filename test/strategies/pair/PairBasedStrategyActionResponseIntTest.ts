@@ -6,7 +6,7 @@ import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {
   ConverterStrategyBase__factory,
   IController__factory,
-  IERC20__factory, IERC20Metadata__factory, ISwapper__factory,
+  IERC20__factory, IERC20Metadata__factory, ISwapper__factory, TetuLiquidator__factory,
 
 } from '../../../typechain';
 import {Misc} from "../../../scripts/utils/Misc";
@@ -51,7 +51,7 @@ import {PlatformUtils} from "../../baseUT/utils/PlatformUtils";
 describe('PairBasedStrategyActionResponseIntTest', function() {
   const SWAP_AMOUNT_DEFAULT = 1.1;
   const SWAP_AMOUNT_ALGEBRA = 0.25;
-  const CHAINS_IN_ORDER_EXECUTION: number[] = [BASE_NETWORK_ID, POLYGON_NETWORK_ID];
+  const CHAINS_IN_ORDER_EXECUTION: number[] = [ZKEVM_NETWORK_ID, BASE_NETWORK_ID, POLYGON_NETWORK_ID];
 
 //region Variables
   let snapshotBefore: string;
@@ -286,6 +286,13 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
                   const operator = await UniversalTestUtils.getAnOperator(b.strategy.address, signer);
                   const eventsSet = await CaptureEvents.makeHardworkInSplitter(converterStrategyBase, operator);
+
+                  const liquidator = await IController__factory.connect(
+                    await ConverterStrategyBase__factory.connect(b.strategy.address, signer).controller(),
+                    signer
+                  ).liquidator();
+                  console.log("Largest pool", await TetuLiquidator__factory.connect(liquidator, signer).largestPools("0x0d1e753a25ebda689453309112904807625befbe"));
+
                   await converterStrategyBase.doHardWork({gasLimit: GAS_LIMIT});
                   const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "a", {eventsSet});
 

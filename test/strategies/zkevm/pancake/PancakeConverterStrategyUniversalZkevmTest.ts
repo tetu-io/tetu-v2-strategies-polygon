@@ -75,10 +75,20 @@ describe('PancakeConverterStrategyUniversalZkevmTest', async () => {
 
     const pools = [
       {
+        pool: ZkevmAddresses.ALGEBRA_POOL_USDT_USDC,
+        swapper: ZkevmAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
+        tokenIn: ZkevmAddresses.USDT_TOKEN,
+        tokenOut: ZkevmAddresses.USDC_TOKEN,
+      }, {
         pool: ZkevmAddresses.PANCAKE_POOL_CAKE_WETH_10000,
         swapper: ZkevmAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
         tokenIn: ZkevmAddresses.PANCAKE_SWAP_TOKEN,
-        tokenOut: ZkevmAddresses.WETH_TOKEN
+        tokenOut: ZkevmAddresses.WETH_TOKEN,
+      }, {
+        pool: ZkevmAddresses.ALGEBRA_POOL_WETH_USDC,
+        swapper: ZkevmAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
+        tokenIn: ZkevmAddresses.WETH_TOKEN,
+        tokenOut: ZkevmAddresses.USDC_TOKEN,
       },
     ]
     const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);

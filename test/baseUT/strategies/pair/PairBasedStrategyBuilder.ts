@@ -25,7 +25,7 @@ import {
   KyberLib, PancakeConverterStrategy__factory,
   PancakeLib,
   StrategySplitterV2,
-  SwapHelper,
+  SwapHelper, TetuLiquidator__factory,
   TetuVaultV2,
   UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory,
@@ -122,7 +122,8 @@ export class PairBasedStrategyBuilder {
       signer: SignerWithAddress,
       state: IDefaultState,
       strategy: IRebalancingV2Strategy,
-      chainId: number
+      chainId: number,
+      converter: string
   ){
     const platform = await ConverterStrategyBase__factory.connect(strategy.address, signer).PLATFORM();
     if (platform === PLATFORM_UNIV3) {
@@ -135,7 +136,7 @@ export class PairBasedStrategyBuilder {
       if (chainId === BASE_NETWORK_ID) {
         await PriceOracleImitatorUtils.pancakeBaseChain(signer, state.pool, state.tokenA);
       } else if (chainId === ZKEVM_NETWORK_ID) {
-        await PriceOracleImitatorUtils.pancakeZkEvm(signer, state.pool, state.tokenA);
+        await PriceOracleImitatorUtils.pancakeZkEvm(signer, state.pool, state.tokenA, converter);
       } else {
         throw Error("PairBasedStrategyBuilder: chain not supported");
       }
@@ -161,7 +162,7 @@ export class PairBasedStrategyBuilder {
     const state = await PackedData.getDefaultState(strategy);
 
     // prices should be the same in the pool and in the oracle
-    await this.setPriceImitator(signer, state, strategy, chainId);
+    await this.setPriceImitator(signer, state, strategy, chainId, p.converter);
 
     // prices should be the same in the pool and in the liquidator
     const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);

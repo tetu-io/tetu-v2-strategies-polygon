@@ -21,14 +21,14 @@ import {PairStrategyFixtures} from "../../baseUT/strategies/pair/PairStrategyFix
 import {PairBasedStrategyPrepareStateUtils} from "../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {UniversalUtils} from "../../baseUT/strategies/UniversalUtils";
-import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID} from '../../baseUT/utils/HardhatUtils';
+import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from '../../baseUT/utils/HardhatUtils';
 import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
 import {PlatformUtils} from "../../baseUT/utils/PlatformUtils";
 
 const { expect } = chai;
 
 describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
-  const CHAINS_IN_ORDER_EXECUTION: number[] = [BASE_NETWORK_ID, POLYGON_NETWORK_ID];
+  const CHAINS_IN_ORDER_EXECUTION: number[] = [ZKEVM_NETWORK_ID, BASE_NETWORK_ID, POLYGON_NETWORK_ID];
 
 //region Variables
   let snapshotBefore: string;
@@ -228,6 +228,7 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
       const strategies: IStrategyInfo[] = [
         {name: PLATFORM_UNIV3, chainId: POLYGON_NETWORK_ID},
         {name: PLATFORM_PANCAKE, chainId: BASE_NETWORK_ID},
+        {name: PLATFORM_PANCAKE, chainId: ZKEVM_NETWORK_ID},
         // { name: PLATFORM_ALGEBRA,}, // todo getPrice reverts
         // { name: PLATFORM_KYBER,}, // todo getPrice reverts
       ];

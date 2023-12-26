@@ -25,7 +25,7 @@ import {
   IListStates,
   PairBasedStrategyPrepareStateUtils
 } from "../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
-import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID} from '../../baseUT/utils/HardhatUtils';
+import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from '../../baseUT/utils/HardhatUtils';
 import {
   ENTRY_TO_POOL_DISABLED,
   ENTRY_TO_POOL_IS_ALLOWED,
@@ -50,7 +50,7 @@ import {PlatformUtils} from "../../baseUT/utils/PlatformUtils";
  * Liquidator has modified price, but aggregator has unchanged current price different from the price in our test.
  */
 describe('PairBasedNoSwapIntTest', function() {
-  const CHAINS_IN_ORDER_EXECUTION: number[] = [BASE_NETWORK_ID, POLYGON_NETWORK_ID];
+  const CHAINS_IN_ORDER_EXECUTION: number[] = [ZKEVM_NETWORK_ID, BASE_NETWORK_ID, POLYGON_NETWORK_ID];
 //region Variables
   let snapshotBefore: string;
 
@@ -81,6 +81,7 @@ describe('PairBasedNoSwapIntTest', function() {
       }
 
       const platforms: IPlatformInfo[] = [
+        {platformType: PLATFORM_PANCAKE, chainId: ZKEVM_NETWORK_ID},
         {platformType: PLATFORM_PANCAKE, chainId: BASE_NETWORK_ID},
         {platformType: PLATFORM_ALGEBRA, chainId: POLYGON_NETWORK_ID},
         {platformType: PLATFORM_UNIV3, chainId: POLYGON_NETWORK_ID},

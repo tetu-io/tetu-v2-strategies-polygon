@@ -4,6 +4,8 @@ export class ZkevmAddresses {
   public static TETU_CONTROLLER = "0x35B0329118790B8c8FC36262812D92a4923C6795".toLowerCase();
   public static TETU_CONVERTER = "0x60E684643d546b657bfeE9c01Cb40E62EC1fe1e2".toLowerCase();
   public static TETU_CONVERTER_PRICE_ORACLE = "0xE1394fFE5e84f54DFd530C9Ea046d0A596b4ea14".toLowerCase();
+  public static TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER = "0xa075F8FF74941Fae5bf9Fd48736E4422474A5A66".toLowerCase();
+  public static TETU_LIQUIDATOR_ALGEBRA_SWAPPER = "0x4C1EEeF74862ed6524B416809636821FBFff208C".toLowerCase();
 
 //region ----------------------------------------------------- Assets
   public static MATIC_TOKEN = "0xa2036f0538221a77A3937F1379699f44945018d0".toLowerCase();
@@ -13,6 +15,19 @@ export class ZkevmAddresses {
   public static WBTC_TOKEN = "0xEA034fb02eB1808C2cc3adbC15f447B93CbE08e1".toLowerCase();
   public static DAI_TOKEN = "0xC5015b9d9161Dca7e18e32f6f25C4aD850731Fd4".toLowerCase();
 //endregion ----------------------------------------------------- Assets
+
+//region ----------------------------------------------------- Pools
+  public static ALGEBRA_POOL_WETH_USDC = "0xc44AD482f24fd750cAeBa387d2726d8653F8c4bB".toLowerCase();
+  public static ALGEBRA_POOL_USDT_USDC = "0x9591b8A30c3a52256ea93E98dA49EE43Afa136A8".toLowerCase();
+  public static ALGEBRA_POOL_USDT_WETH = "0x4412c7152c658967a3360F0A1472E701bDBeca9E".toLowerCase();
+
+  public static PANCAKE_POOL_USDT_USDC_LP = "0xca06375be938a2d6eF311dfaFab7E326d55D23Cc".toLowerCase();
+  public static PANCAKE_POOL_CAKE_WETH_10000 = "0x3Fa1c450f3842C1252e4cB443e3F435b41D6f472".toLowerCase();
+  public static PANCAKE_POOL_CAKE_WETH_2500 = "0x58684788c718D0CfeC837ff65ADDA6C8721FE1e9".toLowerCase();
+  public static PANCAKE_POOL_USDC_ETH_LP_500 = "0xD43b9dCbB61e6ccFbCFef9f21e1BB5064F1CB33f".toLowerCase();
+
+//endregion ----------------------------------------------------- Pools
+
 
 //region ----------------------------------------------------- 0vix
   /** https://docs.0vix.com/developers/contract-addresses/mainnet-1 */
@@ -36,13 +51,6 @@ export class ZkevmAddresses {
   // /** From list of transactions: https://basescan.org/address/0x3af75af6f056d4d72c1675da919aebf908a109d6 (creator of Quoter2) */
   // public static PANCAKE_SWAP_ROUTER = "".toLowerCase();
 
-  public static PANCAKE_POOL_USDT_USDC_LP = "0xca06375be938a2d6eF311dfaFab7E326d55D23Cc".toLowerCase();
-  public static PANCAKE_POOL_CAKE_WETH_10000 = "0x3Fa1c450f3842C1252e4cB443e3F435b41D6f472".toLowerCase();
-  public static PANCAKE_POOL_CAKE_WETH_2500 = "0x58684788c718D0CfeC837ff65ADDA6C8721FE1e9".toLowerCase();
-  public static PANCAKE_POOL_USDC_ETH_LP_500 = "0xD43b9dCbB61e6ccFbCFef9f21e1BB5064F1CB33f".toLowerCase();
-
-  public static TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER = "0xa075F8FF74941Fae5bf9Fd48736E4422474A5A66".toLowerCase();
-
 //endregion ----------------------------------------------------- PancakeSwap
 
 //region ----------------------------------------------------- Aggregators
@@ -52,8 +60,15 @@ export class ZkevmAddresses {
 //endregion ----------------------------------------------------- Aggregators
 
 //region ----------------------------------------------------- Keom
-  public static KEOM_COMPTROLLER = "0x6ea32f626e3a5c41547235ebbdf861526e11f482";
-  public static KEOM_PRICE_ORACLE = "0x19194261d8f0599bd079c52623c80c5150f010cf";
+  public static KEOM_COMPTROLLER = "0x6ea32f626e3a5c41547235ebbdf861526e11f482".toLowerCase();
+  public static KEOM_PRICE_ORACLE = "0x19194261d8f0599bd079c52623c80c5150f010cf".toLowerCase();
+
+  public static KEOM_NATIVE = "0xee1727f5074E747716637e1776B7F7C7133f16b1".toLowerCase();
+  public static KEOM_MATIC = "0x8903Dc1f4736D2FcB90C1497AebBABA133DaAC76".toLowerCase();
+  public static KEOM_USDC = "0x68d9baA40394dA2e2c1ca05d30BF33F52823ee7B".toLowerCase();
+  public static KEOM_USDT = "0xad41C77d99E282267C1492cdEFe528D7d5044253".toLowerCase();
+  public static KEOM_WBTC = "0x503deabad9641c5B4015041eEb0F1263E415715D".toLowerCase();
+  public static KEOM_WETH = "0xbC59506A5Ce024B892776d4F7dd450B0FB3584A2".toLowerCase();
 //endregion ----------------------------------------------------- Keom
 
 }
