@@ -38,6 +38,7 @@ import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/pai
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 import {ZkevmAddresses} from "../../../../scripts/addresses/ZkevmAddresses";
 import {KeomUtils} from "../../../baseUT/utils/protocols/KeomUtils";
+import {ZkevmCoreTokensUtils} from "../../../baseUT/cores/ZkevmCoreTokens";
 
 // const {expect} = chai;
 chai.use(chaiAsPromised);
@@ -73,34 +74,7 @@ describe('PancakeConverterStrategyUniversalZkevmTest', async () => {
 
     await KeomUtils.disableHeartbeatZkEvm(signer, ZkevmAddresses.KEOM_COMPTROLLER);
 
-    const pools = [
-      {
-        pool: ZkevmAddresses.ALGEBRA_POOL_USDT_USDC,
-        swapper: ZkevmAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
-        tokenIn: ZkevmAddresses.USDT_TOKEN,
-        tokenOut: ZkevmAddresses.USDC_TOKEN,
-      }, {
-        pool: ZkevmAddresses.ALGEBRA_POOL_WETH_USDC,
-        swapper: ZkevmAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
-        tokenIn: ZkevmAddresses.WETH_TOKEN,
-        tokenOut: ZkevmAddresses.USDC_TOKEN,
-      }, {
-        pool: ZkevmAddresses.ALGEBRA_POOL_USDT_WETH,
-        swapper: ZkevmAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
-        tokenIn: ZkevmAddresses.USDT_TOKEN,
-        tokenOut: ZkevmAddresses.WETH_TOKEN,
-      }, {
-        pool: ZkevmAddresses.PANCAKE_POOL_CAKE_WETH_10000,
-        swapper: ZkevmAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
-        tokenIn: ZkevmAddresses.PANCAKE_SWAP_TOKEN,
-        tokenOut: ZkevmAddresses.WETH_TOKEN,
-      }, {
-        pool: ZkevmAddresses.PANCAKE_POOL_TETU_USDC_100,
-        swapper: ZkevmAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
-        tokenIn: ZkevmAddresses.TETU_TOKEN,
-        tokenOut: ZkevmAddresses.USDC_TOKEN,
-      },
-    ]
+    const pools = ZkevmCoreTokensUtils.getLiquidatorPools();
     const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
     const operator = await Misc.impersonate('0xbbbbb8C4364eC2ce52c59D2Ed3E56F307E529a94')
     await tools.liquidator.connect(operator).addLargestPools(pools, true);

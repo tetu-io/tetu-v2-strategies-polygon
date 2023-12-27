@@ -37,7 +37,7 @@ const openOceanChains = new Map<number, string>([
   [42161, 'arbitrum'],
   [10, 'optimism'],
   [8453, 'base'],
-  [1101, 'zkevm']
+  [1101, 'polygon_zkevm']
 ]);
 
 export type IOpenOceanResponse = {
@@ -120,21 +120,28 @@ export class AggregatorUtils {
     const chainName = openOceanChains.get(chainId) ?? 'unknown chain';
     const params = {
       chain: chainName,
-      tokenIn,
-      tokenOut,
+      inTokenAddress: tokenIn,
+      outTokenAddress: tokenOut,
       amount: +formatUnits(amount, await IERC20Metadata__factory.connect(tokenIn, signer).decimals()),
-      from,
+      account: from,
       slippage: '0.5',
       gasPrice: 30,
     };
 
     const url = `https://open-api.openocean.finance/v3/${chainName}/swap_quote?${(new URLSearchParams(JSON.parse(JSON.stringify(params)))).toString()}`;
     console.log('OpenOcean API request', url);
-    const quote: IOpenOceanResponse = (await fetch(url, {})) as unknown as IOpenOceanResponse;
-    if (quote && quote.data && quote.data.to && quote.data.data && quote.data.outAmount) {
-      return quote.data.data;
+    const r = await fetch(url, {});
+    if (r && r.status === 200) {
+      const json = await r.json();
+      console.log("JSON", json);
+      const quote: IOpenOceanResponse = json as unknown as IOpenOceanResponse;
+      if (quote && quote.data && quote.data.to && quote.data.data && quote.data.outAmount) {
+        return quote.data.data;
+      } else {
+        throw Error(`open ocean can not fetch url=${url}, qoute=${quote}`);
+      }
     } else {
-      throw Error(`open ocean can not fetch url=${url}, qoute=${quote}`);
+      throw Error(`open ocean error url=${url}, status=${r.status}`);
     }
   }
 

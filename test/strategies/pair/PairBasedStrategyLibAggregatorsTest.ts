@@ -7,7 +7,7 @@ import {
   IERC20Metadata__factory,
   IPlatformAdapter, IPlatformAdapter__factory,
   ITetuConverter,
-  ITetuConverter__factory,
+  ITetuConverter__factory, ITetuLiquidator,
   PairBasedStrategyLibFacade
 } from "../../../typechain";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
@@ -30,6 +30,7 @@ import {PLAN_REPAY_SWAP_REPAY_1, PLATFORM_KIND_AAVE2_2, PLATFORM_KIND_AAVE3_3} f
 import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
 import {BaseAddresses} from "../../../scripts/addresses/BaseAddresses";
 import {ZkevmAddresses} from "../../../scripts/addresses/ZkevmAddresses";
+import {ZkevmCoreTokensUtils} from "../../baseUT/cores/ZkevmCoreTokens";
 
 describe('PairBasedStrategyLibAggregatorsTest', () => {
   const CHAINS_IN_ORDER_EXECUTION: number[] = [ZKEVM_NETWORK_ID, BASE_NETWORK_ID, POLYGON_NETWORK_ID];
@@ -42,6 +43,7 @@ describe('PairBasedStrategyLibAggregatorsTest', () => {
     aggregatorType: AggregatorType;
     tokenIn: string;
     tokenOut: string;
+    liquidatorPools?: ITetuLiquidator.PoolDataStruct[];
   }
 
   const CHAINS: ITestSet[] = [
@@ -70,7 +72,9 @@ describe('PairBasedStrategyLibAggregatorsTest', () => {
       aggregator: ZkevmAddresses.AGG_OPENOCEAN_ROUTER,
       aggregatorType: AGGREGATOR_OPEN_OCEAN,
       tokenIn: ZkevmAddresses.USDC_TOKEN,
-      tokenOut: ZkevmAddresses.USDT_TOKEN
+      tokenOut: ZkevmAddresses.USDT_TOKEN,
+
+      liquidatorPools: ZkevmCoreTokensUtils.getLiquidatorPools(),
     },
   ];
 
@@ -87,7 +91,7 @@ describe('PairBasedStrategyLibAggregatorsTest', () => {
           before(async function () {
             await HardhatUtils.setupBeforeTest(chainId);
             snapshotBefore = await TimeUtils.snapshot();
-            await HardhatUtils.switchToMostCurrentBlock(); // 1inch works on current block only
+            await HardhatUtils.switchToMostCurrentBlock(chainId); // 1inch works on current block only
 
             [signer] = await ethers.getSigners();
             await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
@@ -98,6 +102,13 @@ describe('PairBasedStrategyLibAggregatorsTest', () => {
 
             converterGovernance = await Misc.impersonate(await converterController.governance());
             await converterController.connect(converterGovernance).setWhitelistValues([facade.address], true);
+
+            if (testSet.liquidatorPools) {
+              const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
+              const liquidatorOperator = await Misc.impersonate('0xbbbbb8C4364eC2ce52c59D2Ed3E56F307E529a94')
+              await tools.liquidator.connect(liquidatorOperator).addLargestPools(testSet.liquidatorPools, true);
+              await tools.liquidator.connect(liquidatorOperator).addBlueChipsPools(testSet.liquidatorPools, true);
+            }
           });
           after(async function () {
             await HardhatUtils.restoreBlockFromEnv();
@@ -494,9 +505,9 @@ describe('PairBasedStrategyLibAggregatorsTest', () => {
   });
 
   /** Skipped, because currently we have only single pool adapter (AAVE3) that is able to borrow USDT under USDC */
-  CHAINS.forEach(function (testSet: ITestSet) {
-    if (POLYGON_NETWORK_ID === testSet.chainId) {
-      describe.skip("withdrawStep", () => {
+  describe.skip("withdrawStep", () => {
+    CHAINS.forEach(function (testSet: ITestSet) {
+      if (POLYGON_NETWORK_ID === testSet.chainId) {
         let snapshotBefore: string;
         let signer: SignerWithAddress;
         let facade: PairBasedStrategyLibFacade;
@@ -704,7 +715,7 @@ describe('PairBasedStrategyLibAggregatorsTest', () => {
             // expect([ret.balanceX, ret.balanceY].join()).eq([3004, 0].join());
           });
         });
-      });
-    }
+      }
+    });
   });
 });

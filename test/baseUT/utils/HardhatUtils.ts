@@ -15,8 +15,13 @@ interface IEnvData {
 
 export class HardhatUtils {
 
-  static async switchToMostCurrentBlock() {
-    await reset(EnvSetup.getEnv().maticRpcUrl);
+  static async switchToMostCurrentBlock(chain: number = POLYGON_NETWORK_ID) {
+    const envData = this.getEnvData(chain);
+    if (envData) {
+      await reset(envData.rpcUrl);
+    } else {
+      await reset();
+    }
   }
 
   static async switchToBlock(block: number, chain: number = POLYGON_NETWORK_ID) {

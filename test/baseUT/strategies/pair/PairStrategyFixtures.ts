@@ -7,6 +7,7 @@ import {MockSwapper} from "../../../../typechain";
 import {BASE_NETWORK_ID, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from "../../utils/HardhatUtils";
 import {BaseAddresses} from "../../../../scripts/addresses/BaseAddresses";
 import {ZkevmAddresses} from "../../../../scripts/addresses/ZkevmAddresses";
+import {ZkevmCoreTokensUtils} from "../../cores/ZkevmCoreTokens";
 
 interface IBuildPairStrategyParams {
   notUnderlying?: string; // default is MaticAddresses.USDT_TOKEN
@@ -301,35 +302,7 @@ export class PairStrategyFixtures {
         swapper: ZkevmAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
         quoter: ZkevmAddresses.PANCAKE_QUOTER_V2,
 
-        liquidatorPools: [
-          {
-            pool: ZkevmAddresses.ALGEBRA_POOL_USDT_USDC,
-            swapper: ZkevmAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
-            tokenIn: ZkevmAddresses.USDT_TOKEN,
-            tokenOut: ZkevmAddresses.USDC_TOKEN,
-          }, {
-            pool: ZkevmAddresses.ALGEBRA_POOL_WETH_USDC,
-            swapper: ZkevmAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
-            tokenIn: ZkevmAddresses.WETH_TOKEN,
-            tokenOut: ZkevmAddresses.USDC_TOKEN,
-          }, {
-            pool: ZkevmAddresses.ALGEBRA_POOL_USDT_WETH,
-            swapper: ZkevmAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
-            tokenIn: ZkevmAddresses.USDT_TOKEN,
-            tokenOut: ZkevmAddresses.WETH_TOKEN,
-          }, {
-            pool: ZkevmAddresses.PANCAKE_POOL_CAKE_WETH_10000,
-            swapper: ZkevmAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
-            tokenIn: ZkevmAddresses.PANCAKE_SWAP_TOKEN,
-            tokenOut: ZkevmAddresses.WETH_TOKEN,
-          }, {
-            pool: ZkevmAddresses.PANCAKE_POOL_TETU_USDC_100,
-            swapper: ZkevmAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
-            tokenIn: ZkevmAddresses.TETU_TOKEN,
-            tokenOut: ZkevmAddresses.USDC_TOKEN,
-          },
-        ],
-
+        liquidatorPools: ZkevmCoreTokensUtils.getLiquidatorPools(),
         ...p
       },
       ZKEVM_NETWORK_ID,

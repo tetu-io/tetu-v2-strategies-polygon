@@ -6,7 +6,12 @@ import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {
   ConverterStrategyBase__factory,
   IController__factory,
-  IERC20__factory, IERC20Metadata__factory, ISwapper__factory, TetuLiquidator__factory,
+  IERC20__factory,
+  IERC20Metadata__factory,
+  IStrategyV2,
+  IStrategyV2__factory,
+  ISwapper__factory,
+  TetuLiquidator__factory,
 
 } from '../../../typechain';
 import {Misc} from "../../../scripts/utils/Misc";
@@ -281,6 +286,12 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   );
                 });
                 it("should hardwork successfully", async () => {
+                  // zkevm: tetu pool has low liquidity, so we need to set high compound ratio to avoid price impact error
+                  const platformVoter = await DeployerUtilsLocal.impersonate(
+                    await IController__factory.connect(await b.vault.controller(), signer).platformVoter()
+                  );
+                  await IStrategyV2__factory.connect(b.strategy.address, platformVoter).setCompoundRatio(100000);
+
                   const converterStrategyBase = ConverterStrategyBase__factory.connect(
                     b.strategy.address,
                     await Misc.impersonate(b.splitter.address)
