@@ -73,6 +73,12 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       case BaseAddresses.USDbC_TOKEN: return "USDbC";
       case BaseAddresses.WETH_TOKEN: return "WETH";
       case BaseAddresses.DAI_TOKEN: return "DAI";
+
+      case ZkevmAddresses.USDC_TOKEN: return "USDC";
+      case ZkevmAddresses.USDT_TOKEN: return "USDT";
+      case ZkevmAddresses.WETH_TOKEN: return "WETH";
+      case ZkevmAddresses.DAI_TOKEN: return "DAI";
+
       default: return token;
     }
   }

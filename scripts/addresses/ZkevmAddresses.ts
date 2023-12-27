@@ -8,6 +8,7 @@ export class ZkevmAddresses {
   public static TETU_LIQUIDATOR_ALGEBRA_SWAPPER = "0x4C1EEeF74862ed6524B416809636821FBFff208C".toLowerCase();
 
 //region ----------------------------------------------------- Assets
+  public static TETU_TOKEN = "0x7C1B24c139a3EdA18Ab77C8Fa04A0F816C23e6D4".toLowerCase();
   public static MATIC_TOKEN = "0xa2036f0538221a77A3937F1379699f44945018d0".toLowerCase();
   public static USDC_TOKEN = "0xA8CE8aee21bC2A48a5EF670afCc9274C7bbbC035".toLowerCase();
   public static USDT_TOKEN = "0x1E4a5963aBFD975d8c9021ce480b42188849D41d".toLowerCase();
@@ -25,6 +26,7 @@ export class ZkevmAddresses {
   public static PANCAKE_POOL_CAKE_WETH_10000 = "0x3Fa1c450f3842C1252e4cB443e3F435b41D6f472".toLowerCase();
   public static PANCAKE_POOL_CAKE_WETH_2500 = "0x58684788c718D0CfeC837ff65ADDA6C8721FE1e9".toLowerCase();
   public static PANCAKE_POOL_USDC_ETH_LP_500 = "0xD43b9dCbB61e6ccFbCFef9f21e1BB5064F1CB33f".toLowerCase();
+  public static PANCAKE_POOL_TETU_USDC_100 = "0x7bB24BDF5f16c71FA67b0734416D6730C5a694bf".toLowerCase();
 
 //endregion ----------------------------------------------------- Pools
 

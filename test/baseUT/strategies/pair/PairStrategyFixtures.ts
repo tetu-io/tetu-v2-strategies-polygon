@@ -322,7 +322,12 @@ export class PairStrategyFixtures {
             swapper: ZkevmAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
             tokenIn: ZkevmAddresses.PANCAKE_SWAP_TOKEN,
             tokenOut: ZkevmAddresses.WETH_TOKEN,
-          }
+          }, {
+            pool: ZkevmAddresses.PANCAKE_POOL_TETU_USDC_100,
+            swapper: ZkevmAddresses.TETU_LIQUIDATOR_PANCAKE_V3_SWAPPER,
+            tokenIn: ZkevmAddresses.TETU_TOKEN,
+            tokenOut: ZkevmAddresses.USDC_TOKEN,
+          },
         ],
 
         ...p
