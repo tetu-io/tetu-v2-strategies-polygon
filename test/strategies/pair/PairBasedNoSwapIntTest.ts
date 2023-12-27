@@ -42,6 +42,7 @@ import {
   PairWithdrawByAggUtils
 } from "../../baseUT/strategies/pair/PairWithdrawByAggUtils";
 import {PlatformUtils} from "../../baseUT/utils/PlatformUtils";
+import {AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR} from "../../baseUT/utils/AggregatorUtils";
 
 /**
  * There are two kind of tests here:
@@ -162,6 +163,7 @@ describe('PairBasedNoSwapIntTest', function() {
 
                         async function callWithdrawSingleIteration(): Promise<IListStates> {
                           return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
+                            chainId,
                             singleIteration: true,
                             entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
                             planKind: PLAN_REPAY_SWAP_REPAY_1,
@@ -235,6 +237,7 @@ describe('PairBasedNoSwapIntTest', function() {
 
                         async function callWithdrawSingleIteration(): Promise<IListStates> {
                           return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
+                            chainId,
                             singleIteration: true,
                             entryToPool: ENTRY_TO_POOL_DISABLED,
                             planKind: PLAN_REPAY_SWAP_REPAY_1,
@@ -304,7 +307,9 @@ describe('PairBasedNoSwapIntTest', function() {
 
                         async function callWithdrawSingleIteration(): Promise<IListStates> {
                           return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
+                            chainId,
                             aggregator: PlatformUtils.getTetuLiquidator(chainId),
+                            aggregatorType: AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR,
                             singleIteration: true,
                             entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
                             planKind: PLAN_REPAY_SWAP_REPAY_1,
@@ -377,7 +382,9 @@ describe('PairBasedNoSwapIntTest', function() {
 
                         async function callWithdrawSingleIteration(): Promise<IListStates> {
                           return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
+                            chainId,
                             aggregator: PlatformUtils.getTetuLiquidator(chainId),
+                            aggregatorType: AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR,
                             singleIteration: true,
                             entryToPool: ENTRY_TO_POOL_DISABLED,
                             planKind: PLAN_REPAY_SWAP_REPAY_1,
@@ -448,6 +455,7 @@ describe('PairBasedNoSwapIntTest', function() {
 
                         async function makeWithdrawAll(): Promise<IListStates> {
                           return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
+                            chainId,
                             singleIteration: false,
                             entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
                             planKind: PLAN_SWAP_REPAY_0,
@@ -502,6 +510,7 @@ describe('PairBasedNoSwapIntTest', function() {
 
                         async function makeWithdrawAll(): Promise<IListStates> {
                           return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
+                            chainId,
                             singleIteration: false,
                             entryToPool: ENTRY_TO_POOL_DISABLED,
                             planKind: PLAN_SWAP_REPAY_0,
@@ -565,8 +574,10 @@ describe('PairBasedNoSwapIntTest', function() {
 
                         async function makeWithdrawAll(): Promise<IListStates> {
                           return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
+                            chainId,
                             singleIteration: false,
                             aggregator: PlatformUtils.getTetuLiquidator(chainId),
+                            aggregatorType: AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR,
                             entryToPool: ENTRY_TO_POOL_DISABLED,
                             planKind: PLAN_SWAP_REPAY_0,
                             propNotUnderlying: "0",
@@ -647,6 +658,7 @@ describe('PairBasedNoSwapIntTest', function() {
 
                         async function callWithdrawSingleIteration(): Promise<IListStates> {
                           return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
+                            chainId,
                             singleIteration: true,
                             entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
                             planKind: PLAN_REPAY_SWAP_REPAY_1,
@@ -720,6 +732,9 @@ describe('PairBasedNoSwapIntTest', function() {
 
                         async function callWithdrawSingleIteration(): Promise<IListStates> {
                           return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
+                            chainId,
+                            aggregator: PlatformUtils.getTetuLiquidator(chainId),
+                            aggregatorType: AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR,
                             singleIteration: true,
                             entryToPool: ENTRY_TO_POOL_DISABLED,
                             planKind: PLAN_REPAY_SWAP_REPAY_1,
@@ -790,6 +805,7 @@ describe('PairBasedNoSwapIntTest', function() {
 
                         async function makeWithdrawAll(): Promise<IListStates> {
                           return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
+                            chainId,
                             singleIteration: false,
                             entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
                             planKind: PLAN_SWAP_REPAY_0,
@@ -832,6 +848,7 @@ describe('PairBasedNoSwapIntTest', function() {
 
                         async function makeWithdrawAll(): Promise<IListStates> {
                           return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
+                            chainId,
                             singleIteration: false,
                             entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
                             planKind: PLAN_SWAP_REPAY_0,
@@ -895,7 +912,9 @@ describe('PairBasedNoSwapIntTest', function() {
 
                         async function makeWithdrawAll(): Promise<IListStates> {
                           return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
+                            chainId,
                             aggregator: PlatformUtils.getTetuLiquidator(chainId),
+                            aggregatorType: AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR,
                             singleIteration: false,
                             entryToPool: ENTRY_TO_POOL_DISABLED,
                             planKind: PLAN_SWAP_REPAY_0,
@@ -1030,6 +1049,7 @@ describe('PairBasedNoSwapIntTest', function() {
                       const r1 = await PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2,
                         builderResults,
                         {
+                          chainId,
                           singleIteration: true,
                           entryToPool: ENTRY_TO_POOL_DISABLED,
                           planKind: PLAN_REPAY_SWAP_REPAY_1,
@@ -1054,6 +1074,7 @@ describe('PairBasedNoSwapIntTest', function() {
                       const r2 = await PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2,
                         builderResults,
                         {
+                          chainId,
                           singleIteration: true,
                           entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
                           planKind: PLAN_REPAY_SWAP_REPAY_1,

@@ -48,6 +48,7 @@ import {buildEntryData1} from "../../baseUT/utils/EntryDataUtils";
 import {MockHelper} from "../../baseUT/helpers/MockHelper";
 import {IEventsSet} from "../../baseUT/strategies/CaptureEvents";
 import {PlatformUtils} from "../../baseUT/utils/PlatformUtils";
+import {AGGREGATOR_TETU_LIQUIDATOR, AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR} from "../../baseUT/utils/AggregatorUtils";
 
 describe('PairBasedStrategyTwistedDebts', function () {
   const CHAINS_IN_ORDER_EXECUTION: number[] = [ZKEVM_NETWORK_ID, BASE_NETWORK_ID, POLYGON_NETWORK_ID];
@@ -539,6 +540,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
                   });
 
                   return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
+                    chainId,
                     singleIteration: false,
                     entryToPool: ENTRY_TO_POOL_DISABLED,
                     planKind: PLAN_SWAP_REPAY_0,
@@ -624,9 +626,10 @@ describe('PairBasedStrategyTwistedDebts', function () {
                             // estimate amount-to-reduce-debt
 
                             await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
+                              chainId,
                               builderResults.strategy.connect(await UniversalTestUtils.getAnOperator(builderResults.strategy.address, signer)),
                               Misc.ZERO_ADDRESS,
-                              false,
+                              AGGREGATOR_TETU_LIQUIDATOR,
                               lastState => {
                                 return (lastState?.lockedPercent ?? 0) < targetLockedPercent
                               },
@@ -1023,9 +1026,10 @@ describe('PairBasedStrategyTwistedDebts', function () {
                           // estimate amount-to-reduce-debt
 
                           await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
+                            chainId,
                             builderResults.strategy.connect(await UniversalTestUtils.getAnOperator(builderResults.strategy.address, signer)),
                             Misc.ZERO_ADDRESS,
-                            false,
+                            AGGREGATOR_TETU_LIQUIDATOR,
                             lastState => {
                               return (lastState?.lockedPercent ?? 0) < targetLockedPercent
                             },

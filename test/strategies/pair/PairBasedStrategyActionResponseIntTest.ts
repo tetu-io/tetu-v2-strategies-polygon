@@ -47,6 +47,7 @@ import {buildEntryData1} from "../../baseUT/utils/EntryDataUtils";
 import {BaseAddresses} from "../../../scripts/addresses/BaseAddresses";
 import {ZkevmAddresses} from "../../../scripts/addresses/ZkevmAddresses";
 import {PlatformUtils} from "../../baseUT/utils/PlatformUtils";
+import {AGGREGATOR_TETU_LIQUIDATOR, AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR} from "../../baseUT/utils/AggregatorUtils";
 
 describe('PairBasedStrategyActionResponseIntTest', function() {
   const SWAP_AMOUNT_DEFAULT = 1.1;
@@ -85,7 +86,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
 //endregion Utils
 
-//region Unit tests
   CHAINS_IN_ORDER_EXECUTION.forEach(function (chainId) {
     describe(`chain ${chainId}`, function () {
 //region before, after
@@ -963,9 +963,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                 console.log('Rebalance debts...');
                 // rebalance debts
                 await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
+                  chainId,
                   b.strategy.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)),
                   Misc.ZERO_ADDRESS,
-                  false,
+                  AGGREGATOR_TETU_LIQUIDATOR,
                   () => true
                 );
                 states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "unfold"));
@@ -1233,9 +1234,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
                   if (i % 4) {
                     await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
+                      chainId,
                       await b.strategy.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)),
                       PlatformUtils.getTetuLiquidator(chainId),
-                      true,
+                      AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR,
                       () => true,
                       async (stateTitle, eventsSet): Promise<IStateNum> => {
                         states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, stateTitle, {eventsSet}));
@@ -1765,5 +1767,4 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       });
     });
   });
-//endregion Unit tests
 });

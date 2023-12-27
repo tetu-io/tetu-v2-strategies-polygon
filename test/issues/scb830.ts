@@ -9,7 +9,7 @@ import {TimeUtils} from "../../scripts/utils/TimeUtils";
 import {HardhatUtils, POLYGON_NETWORK_ID} from '../baseUT/utils/HardhatUtils';
 import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
 import {PackedData} from "../baseUT/utils/PackedData";
-import {AggregatorUtils} from "../baseUT/utils/AggregatorUtils";
+import {AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR, AggregatorUtils} from "../baseUT/utils/AggregatorUtils";
 import {ENTRY_TO_POOL_DISABLED, ENTRY_TO_POOL_IS_ALLOWED, PLAN_SWAP_REPAY_0} from "../baseUT/AppConstants";
 import {IStateNum, StateUtilsNum} from "../baseUT/utils/StateUtilsNum";
 import hre, {ethers} from "hardhat";
@@ -64,9 +64,10 @@ describe("Scb830 @skip-on-coverage", () => {
     await InjectUtils.injectTetuConverter(signer);
 
     await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
+      POLYGON_NETWORK_ID,
       strategy,
       MaticAddresses.TETU_LIQUIDATOR,
-      true,
+      AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR,
       function isWithdrawCompleted(lastState?: IStateNum) {
         return !lastState || lastState?.lockedPercent < REQUIRED_LOCKED_PERCENT;
       },

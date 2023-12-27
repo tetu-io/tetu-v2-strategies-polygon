@@ -300,7 +300,8 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
         // for real aggregator we should prepare swap-transaction
         if (AGGREGATOR === MaticAddresses.AGG_ONEINCH_V5) {
           if (tokenToSwap !== Misc.ZERO_ADDRESS) {
-            swapData = await AggregatorUtils.buildSwapTransactionData(
+            swapData = await AggregatorUtils.buildSwapTransactionDataForOneInch(
+              POLYGON_NETWORK_ID,
               quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
               quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
               quote.amountToSwap,

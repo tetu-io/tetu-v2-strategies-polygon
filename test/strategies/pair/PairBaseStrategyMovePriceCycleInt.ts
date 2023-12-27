@@ -24,6 +24,7 @@ import {UniversalUtils} from "../../baseUT/strategies/UniversalUtils";
 import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from '../../baseUT/utils/HardhatUtils';
 import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
 import {PlatformUtils} from "../../baseUT/utils/PlatformUtils";
+import {AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR} from "../../baseUT/utils/AggregatorUtils";
 
 const { expect } = chai;
 
@@ -138,9 +139,10 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
         console.log("Locked percent", percent);
         if (percent > MAX_ALLLOWED_LOCKED_PERCENT) {
           await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
+            chainId,
             strategyAsOperator,
             p.aggregator,
-            p.aggregatorIsTetuLiquidator,
+            AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR,
             () => true, // use single iteration
             async (stateTitle, eventsSet): Promise<IStateNum> => {
               states.push(await StateUtilsNum.getState(signer2, signer, converterStrategyBase, b.vault, stateTitle, {eventsSet}));

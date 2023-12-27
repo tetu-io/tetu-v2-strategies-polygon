@@ -64,6 +64,7 @@ export class BaseAddresses {
 //region ----------------------------------------------------- Aggregators
 
     public static AGG_ONEINCH_V5 = '0x1111111254EEB25477B68fb85Ed929f73A960582'.toLowerCase()
+    public static AGG_OPENOCEAN = '0x6352a56caadC4F1E25CD6c75970Fa768A3304e64'.toLowerCase()
 
 //endregion ----------------------------------------------------- Aggregators
 

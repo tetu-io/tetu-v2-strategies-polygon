@@ -27,7 +27,6 @@ export class PlatformUtils {
     switch (chainId) {
       case BASE_NETWORK_ID: return BaseAddresses.AGG_ONEINCH_V5;
       case POLYGON_NETWORK_ID: return MaticAddresses.AGG_ONEINCH_V5;
-      case ZKEVM_NETWORK_ID: return ZkevmAddresses.AGG_ONEINCH_V5;
       default: throw Error(`getOneInch: chain ${chainId} is not supported`);
     }
   }

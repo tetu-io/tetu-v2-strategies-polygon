@@ -56,9 +56,8 @@ export class ZkevmAddresses {
 //endregion ----------------------------------------------------- PancakeSwap
 
 //region ----------------------------------------------------- Aggregators
-  public static AGG_ONEINCH_V5 = "TODO".toLowerCase();
   /** https://docs.openocean.finance/dev/contracts-of-chains */
-  public static OPENOCEAN_ROUTER = "0x6dd434082EAB5Cd134B33719ec1FF05fE985B97b".toLowerCase();
+  public static AGG_OPENOCEAN_ROUTER = "0x6dd434082EAB5Cd134B33719ec1FF05fE985B97b".toLowerCase();
 //endregion ----------------------------------------------------- Aggregators
 
 //region ----------------------------------------------------- Keom

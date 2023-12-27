@@ -12,7 +12,7 @@ import {Misc} from "../../../../scripts/utils/Misc";
 import {PackedData} from "../../utils/PackedData";
 import {BigNumber, BytesLike} from "ethers";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
-import {AggregatorUtils} from "../../utils/AggregatorUtils";
+import {AGGREGATOR_TETU_LIQUIDATOR, AggregatorType, AggregatorUtils} from "../../utils/AggregatorUtils";
 import {MockAggregatorUtils} from "../../mocks/MockAggregatorUtils";
 import {CaptureEvents} from "../CaptureEvents";
 
@@ -20,7 +20,9 @@ export const SWAP_AMOUNT_DEFAULT = 0.3;
 export const SWAP_AMOUNT_ALGEBRA = 0.2;
 
 export interface IWithdrawParams {
+  chainId: number;
   aggregator: string;
+  aggregatorType: AggregatorType;
   planEntryData: string;
   entryToPool: number;
   singleIteration: boolean;
@@ -48,6 +50,7 @@ export interface IPrepareWithdrawTestResults {
 }
 
 export interface ICompleteWithdrawTestParams {
+  chainId: number;
   entryToPool: number;
   planKind: number;
   singleIteration: boolean;
@@ -55,8 +58,8 @@ export interface ICompleteWithdrawTestParams {
   pathOut: string;
   states0: IStateNum[];
 
-  /** ZERO by default */
-  aggregator?: string;
+  aggregator?: string; // zero by default
+  aggregatorType?: AggregatorType; // AGGREGATOR_TETU_LIQUIDATOR by default
   mockSwapper?: MockSwapper;
 }
 
@@ -84,22 +87,15 @@ export class PairWithdrawByAggUtils {
       const amountToSwap = quote.amountToSwap.eq(0) ? 0 : quote.amountToSwap;
 
       if (tokenToSwap !== Misc.ZERO_ADDRESS) {
-        if (p.aggregator === MaticAddresses.AGG_ONEINCH_V5) {
-          swapData = await AggregatorUtils.buildSwapTransactionData(
-            quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-            quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-            quote.amountToSwap,
-            strategyAsOperator.address,
-          );
-        } else if (p.aggregator === MaticAddresses.TETU_LIQUIDATOR) {
-          swapData = AggregatorUtils.buildTxForSwapUsingLiquidatorAsAggregator({
-            tokenIn: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-            tokenOut: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-            amount: quote.amountToSwap,
-            slippage: BigNumber.from(5_000)
-          });
-          console.log("swapData for tetu liquidator", swapData);
-        }
+        swapData = await AggregatorUtils.buildSwapData(
+          signer,
+          p.chainId,
+          p.aggregatorType,
+          quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+          quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+          quote.amountToSwap,
+          strategyAsOperator.address,
+        );
       }
       console.log("makeFullWithdraw.withdrawByAggStep.execute --------------------------------");
       // console.log("tokenToSwap", tokenToSwap);
@@ -192,8 +188,10 @@ export class PairWithdrawByAggUtils {
       signer2,
       b,
       {
+        chainId: p.chainId,
         singleIteration: p.singleIteration,
         aggregator: p.aggregator ?? Misc.ZERO_ADDRESS,
+        aggregatorType: p.aggregatorType ?? AGGREGATOR_TETU_LIQUIDATOR,
         entryToPool: p.entryToPool,
         planEntryData: p.planKind === PLAN_REPAY_SWAP_REPAY_1
           ? buildEntryData1(BigNumber.from(0), p.propNotUnderlying)

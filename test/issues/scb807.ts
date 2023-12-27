@@ -57,7 +57,8 @@ describe("Scb807-899 @skip-on-coverage", () => {
       console.log("quote", quote);
       console.log("unfoldBorrows.quoteWithdrawByAgg.FINISH --------------------------------", quote);
 
-      const swapData = await AggregatorUtils.buildSwapTransactionData(
+      const swapData = await AggregatorUtils.buildSwapTransactionDataForOneInch(
+        POLYGON_NETWORK_ID,
         quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
         quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
         quote.amountToSwap,
