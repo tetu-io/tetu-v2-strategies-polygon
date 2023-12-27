@@ -16,7 +16,6 @@ import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../libs/IterationPlanLib.sol";
 import "../interfaces/IConverterStrategyBase.sol";
-import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -644,9 +643,6 @@ library ConverterStrategyBaseLib {
     }
 
     (ITetuLiquidator.PoolData[] memory route,) = liquidator_.buildRoute(tokenIn_, tokenOut_);
-    console.log("_liquidate.tokenIn_", tokenIn_);
-    console.log("_liquidate.tokenOut_", tokenOut_);
-    console.log("_liquidate.amountIn_", amountIn_);
 
     require(route.length != 0, AppErrors.NO_LIQUIDATION_ROUTE);
 
@@ -750,11 +746,7 @@ library ConverterStrategyBaseLib {
     );
 
     // override rewardTokens_, v.amountsToForward by the values actually sent to the forwarder
-    if (rewardTokens_.length != 0) console.log("_sendTokensToForwarder0", rewardTokens_[0], v.amountsToForward[0]);
-    if (rewardTokens_.length > 1) console.log("_sendTokensToForwarder1", rewardTokens_[1], v.amountsToForward[1]);
-    if (rewardTokens_.length > 2) console.log("_sendTokensToForwarder2", rewardTokens_[2], v.amountsToForward[2]);
     (rewardTokens_, v.amountsToForward) = _sendTokensToForwarder(controller, v.splitter, rewardTokens_, v.amountsToForward, v.thresholds);
-    console.log("_sendTokensToForwarder.2");
 
     emit Recycle(rewardTokens_, v.amountsToForward, v.toPerf, v.toInsurance);
     return paidDebtToInsurance;

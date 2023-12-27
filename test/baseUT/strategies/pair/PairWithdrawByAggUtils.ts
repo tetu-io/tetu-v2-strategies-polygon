@@ -11,10 +11,10 @@ import {buildEntryData0, buildEntryData1, buildEntryData2} from "../../utils/Ent
 import {Misc} from "../../../../scripts/utils/Misc";
 import {PackedData} from "../../utils/PackedData";
 import {BigNumber, BytesLike} from "ethers";
-import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {AGGREGATOR_TETU_LIQUIDATOR, AggregatorType, AggregatorUtils} from "../../utils/AggregatorUtils";
 import {MockAggregatorUtils} from "../../mocks/MockAggregatorUtils";
 import {CaptureEvents} from "../CaptureEvents";
+import {PlatformUtils} from "../../utils/PlatformUtils";
 
 export const SWAP_AMOUNT_DEFAULT = 0.3;
 export const SWAP_AMOUNT_ALGEBRA = 0.2;
@@ -26,6 +26,7 @@ export interface IWithdrawParams {
   planEntryData: string;
   entryToPool: number;
   singleIteration: boolean;
+  tetuLiquidator: string;
 
   pathOut?: string;
   states0?: IStateNum[];
@@ -98,17 +99,10 @@ export class PairWithdrawByAggUtils {
         );
       }
       console.log("makeFullWithdraw.withdrawByAggStep.execute --------------------------------");
-      // console.log("tokenToSwap", tokenToSwap);
-      // console.log("AGGREGATOR", p.aggregator);
-      // console.log("amountToSwap", amountToSwap);
-      // console.log("swapData", swapData);
-      // console.log("swapData.length", swapData.length);
-      // console.log("planEntryData", p.planEntryData);
-      // console.log("ENTRY_TO_POOL_IS_ALLOWED", p.entryToPool);
 
       if (p.mockSwapper) {
-        // temporary replace swapper by mocked one
-        await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, p.mockSwapper.address);
+        console.log("------------------ temporary replace swapper by mocked one");
+        await MockAggregatorUtils.injectSwapperToLiquidator(p.tetuLiquidator, b, p.mockSwapper.address);
       }
 
       const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
@@ -137,8 +131,8 @@ export class PairWithdrawByAggUtils {
       }
 
       if (p.mockSwapper) {
-        // restore original swapper
-        await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, b.swapper);
+        console.log("------------------ restore original swapper");
+        await MockAggregatorUtils.injectSwapperToLiquidator(p.tetuLiquidator, b, b.swapper);
       }
 
 
@@ -190,7 +184,7 @@ export class PairWithdrawByAggUtils {
       {
         chainId: p.chainId,
         singleIteration: p.singleIteration,
-        aggregator: p.aggregator ?? Misc.ZERO_ADDRESS,
+        aggregator: p.aggregator || Misc.ZERO_ADDRESS,
         aggregatorType: p.aggregatorType ?? AGGREGATOR_TETU_LIQUIDATOR,
         entryToPool: p.entryToPool,
         planEntryData: p.planKind === PLAN_REPAY_SWAP_REPAY_1
@@ -202,7 +196,8 @@ export class PairWithdrawByAggUtils {
               : "0x",
         pathOut: p.pathOut,
         states0: p.states0,
-        mockSwapper: p.mockSwapper
+        mockSwapper: p.mockSwapper,
+        tetuLiquidator: PlatformUtils.getTetuLiquidator(p.chainId)
       },
     );
 

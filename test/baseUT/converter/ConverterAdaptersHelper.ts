@@ -1,6 +1,5 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
-import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 import {IPlatformAdapter__factory} from "../../../typechain";
 import {LendingPlatformKinds} from "./ConverterConstants";
 

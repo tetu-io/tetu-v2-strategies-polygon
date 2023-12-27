@@ -21,6 +21,7 @@ import {CaptureEvents, IEventsSet} from "../CaptureEvents";
 import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY_1} from "../../AppConstants";
 import {UniversalTestUtils} from "../../utils/UniversalTestUtils";
 import {trimDecimals} from "../../utils/MathUtils";
+import {ZKEVM_NETWORK_ID} from "../../utils/HardhatUtils";
 
 export interface IPrepareOverCollateralParams {
   countRebalances: number;
@@ -107,12 +108,12 @@ export class PairBasedStrategyPrepareStateUtils {
   }
 
   /** Put addition amounts of tokenA and tokenB to balance of the profit holder */
-  static async prepareToHardwork(signer: SignerWithAddress, strategy: IRebalancingV2Strategy) {
+  static async prepareToHardwork(signer: SignerWithAddress, strategy: IRebalancingV2Strategy, compoundRatio?: number) {
     const state = await PackedData.getDefaultState(strategy);
     const converterStrategyBase = ConverterStrategyBase__factory.connect(strategy.address, signer);
     const platformVoter = await IController__factory.connect(await converterStrategyBase.controller(), signer).platformVoter();
 
-    await converterStrategyBase.connect(await Misc.impersonate(platformVoter)).setCompoundRatio(90_000);
+    await converterStrategyBase.connect(await Misc.impersonate(platformVoter)).setCompoundRatio(compoundRatio ?? 90_000);
 
     await TokenUtils.getToken(
       state.tokenA,
@@ -473,5 +474,10 @@ export class PairBasedStrategyPrepareStateUtils {
         console.log("requiredAmountToReduceDebt (reverse debt)", requiredAmountToReduceDebt);
         return requiredAmountToReduceDebt;
     }
+  }
+
+  static getCompoundRatio(chainId: number) {
+    // zkevm: tetu pool has low liquidity, so we need to set high compound ratio to avoid price impact error
+    return chainId === ZKEVM_NETWORK_ID ? 100_000 : undefined;
   }
 }

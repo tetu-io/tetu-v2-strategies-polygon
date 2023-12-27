@@ -1,10 +1,7 @@
 import hre, {ethers} from "hardhat";
 import {BigNumber, BytesLike, Contract} from "ethers";
 import { EnvSetup } from '../../../scripts/utils/EnvSetup';
-import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
-import {StaticJsonRpcProvider} from "@ethersproject/providers/src.ts/url-json-rpc-provider";
 import {formatUnits} from "ethers/lib/utils";
-import {OPEN_OCEAN_RESPONSE} from "../../../web3-functions/w3f-utils";
 import {IERC20Metadata__factory} from "../../../typechain";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
@@ -63,6 +60,7 @@ export class AggregatorUtils {
   ): Promise<BytesLike>{
     switch (aggregatorType) {
       case AGGREGATOR_ONE_INCH:
+        console.log("Swap data: AGGREGATOR_ONE_INCH");
         return AggregatorUtils.buildSwapTransactionDataForOneInch(
           chainId,
           tokenIn,
@@ -71,6 +69,7 @@ export class AggregatorUtils {
           from,
         );
       case AGGREGATOR_OPEN_OCEAN:
+        console.log("Swap data: AGGREGATOR_OPEN_OCEAN");
         return AggregatorUtils.buildSwapTransactionDataForOpenOcean(
           signer,
           chainId,
@@ -80,8 +79,10 @@ export class AggregatorUtils {
           from,
         );
       case AGGREGATOR_TETU_LIQUIDATOR:
+        console.log("Swap data: 0x");
         return "0x";
       case AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR:
+        console.log("Swap data: AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR");
         return AggregatorUtils.buildTxForSwapUsingLiquidatorAsAggregator({
           tokenIn,
           tokenOut,

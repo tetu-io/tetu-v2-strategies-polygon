@@ -370,7 +370,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
                   );
 
                   // put additional fee to profit holder bo make isReadyToHardwork returns true
-                  await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, builderResults.strategy);
+                  await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, builderResults.strategy, PairBasedStrategyPrepareStateUtils.getCompoundRatio(chainId));
 
                   const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
                   await converterStrategyBase.doHardWork({gasLimit: 19_000_000});
@@ -844,7 +844,7 @@ describe('PairBasedStrategyTwistedDebts', function () {
                   );
 
                   // put additional fee to profit holder bo make isReadyToHardwork returns true
-                  await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, builderResults.strategy);
+                  await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, builderResults.strategy, PairBasedStrategyPrepareStateUtils.getCompoundRatio(chainId));
 
                   const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, builderResults.vault);
                   await converterStrategyBase.doHardWork({gasLimit: 19_000_000});

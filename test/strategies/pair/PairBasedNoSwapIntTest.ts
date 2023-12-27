@@ -5,7 +5,6 @@ import hre, {ethers} from "hardhat";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {ConverterStrategyBase__factory, IController__factory, IERC20__factory, MockSwapper,} from "../../../typechain";
 import {Misc} from "../../../scripts/utils/Misc";
-import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {TokenUtils} from "../../../scripts/utils/TokenUtils";
 import {IStateNum, StateUtilsNum} from "../../baseUT/utils/StateUtilsNum";
@@ -35,7 +34,6 @@ import {
 } from "../../baseUT/AppConstants";
 import {CaptureEvents} from "../../baseUT/strategies/CaptureEvents";
 import {MockAggregatorUtils} from "../../baseUT/mocks/MockAggregatorUtils";
-import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
 import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
 import {
   IPrepareWithdrawTestResults,
@@ -51,7 +49,7 @@ import {AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR} from "../../baseUT/utils/Aggre
  * Liquidator has modified price, but aggregator has unchanged current price different from the price in our test.
  */
 describe('PairBasedNoSwapIntTest', function() {
-  const CHAINS_IN_ORDER_EXECUTION: number[] = [ZKEVM_NETWORK_ID, BASE_NETWORK_ID, POLYGON_NETWORK_ID];
+  const CHAINS_IN_ORDER_EXECUTION: number[] = [BASE_NETWORK_ID, ZKEVM_NETWORK_ID, POLYGON_NETWORK_ID];
 //region Variables
   let snapshotBefore: string;
 
@@ -84,8 +82,8 @@ describe('PairBasedNoSwapIntTest', function() {
       const platforms: IPlatformInfo[] = [
         {platformType: PLATFORM_PANCAKE, chainId: ZKEVM_NETWORK_ID},
         {platformType: PLATFORM_PANCAKE, chainId: BASE_NETWORK_ID},
-        {platformType: PLATFORM_ALGEBRA, chainId: POLYGON_NETWORK_ID},
         {platformType: PLATFORM_UNIV3, chainId: POLYGON_NETWORK_ID},
+        {platformType: PLATFORM_ALGEBRA, chainId: POLYGON_NETWORK_ID},
       ];
       platforms.forEach(function (platformInfo: IPlatformInfo) {
         if (platformInfo.chainId === chainId) {
@@ -314,7 +312,7 @@ describe('PairBasedNoSwapIntTest', function() {
                             entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
                             planKind: PLAN_REPAY_SWAP_REPAY_1,
                             pathOut: ptr.pathOut + ".single.enter-to-pool.liquidator.csv",
-                            states0: ptr.states
+                            states0: ptr.states,
                           });
                         }
 
@@ -1016,7 +1014,7 @@ describe('PairBasedNoSwapIntTest', function() {
                   );
                 })
 
-                describe(`${platformInfo.platformType}-${testSetup.increaseOutput ? "amountOutUpper" : "amountOutLower"}`, () => {
+                describe(`${testSetup.increaseOutput ? "amountOut is higher then expected" : "amountOut is lower then expected"}`, () => {
                   describe("Liquidator, entry to pool at the end", () => {
                     let snapshot: string;
                     before(async function () {
@@ -1053,6 +1051,7 @@ describe('PairBasedNoSwapIntTest', function() {
                           singleIteration: true,
                           entryToPool: ENTRY_TO_POOL_DISABLED,
                           planKind: PLAN_REPAY_SWAP_REPAY_1,
+                          aggregatorType: AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR,
                           aggregator: PlatformUtils.getTetuLiquidator(chainId),
                           mockSwapper,
                           pathOut: ptr1.pathOut,
@@ -1078,6 +1077,7 @@ describe('PairBasedNoSwapIntTest', function() {
                           singleIteration: true,
                           entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
                           planKind: PLAN_REPAY_SWAP_REPAY_1,
+                          aggregatorType: AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR,
                           aggregator: PlatformUtils.getTetuLiquidator(chainId),
                           states0: ptr2.states,
                           pathOut: ptr2.pathOut

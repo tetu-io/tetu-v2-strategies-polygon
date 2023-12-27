@@ -286,19 +286,13 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   );
                 });
                 it("should hardwork successfully", async () => {
-                  // zkevm: tetu pool has low liquidity, so we need to set high compound ratio to avoid price impact error
-                  const platformVoter = await DeployerUtilsLocal.impersonate(
-                    await IController__factory.connect(await b.vault.controller(), signer).platformVoter()
-                  );
-                  await IStrategyV2__factory.connect(b.strategy.address, platformVoter).setCompoundRatio(100000);
-
                   const converterStrategyBase = ConverterStrategyBase__factory.connect(
                     b.strategy.address,
                     await Misc.impersonate(b.splitter.address)
                   );
 
                   // put additional fee to profit holder bo make isReadyToHardwork returns true
-                  await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
+                  await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy, PairBasedStrategyPrepareStateUtils.getCompoundRatio(chainId));
 
                   const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
                   const operator = await UniversalTestUtils.getAnOperator(b.strategy.address, signer);
@@ -340,7 +334,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                     await Misc.impersonate(b.splitter.address)
                   );
                   const platform = await converterStrategyBase.PLATFORM();
-                  await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
+                  await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy, PairBasedStrategyPrepareStateUtils.getCompoundRatio(chainId));
 
                   expect(await converterStrategyBase.isReadyToHardWork()).eq(true);
                   await converterStrategyBase.doHardWork({gasLimit: GAS_LIMIT});
@@ -459,7 +453,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   );
 
                   // put additional fee to profit holder bo make isReadyToHardwork returns true
-                  await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
+                  await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy, PairBasedStrategyPrepareStateUtils.getCompoundRatio(chainId));
 
                   const platform = await converterStrategyBase.PLATFORM();
                   const expectedErrorMessage = PlatformUtils.getErrorMessage(platform, "-14 Fuse is active");
@@ -485,7 +479,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
                   expect(await converterStrategyBase.isReadyToHardWork()).eq(false);
                   // put additional fee to profit holder bo make isReadyToHardwork returns true
-                  await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
+                  await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy, PairBasedStrategyPrepareStateUtils.getCompoundRatio(chainId));
 
                   expect(await converterStrategyBase.isReadyToHardWork()).eq(false); // fuse is active, so no changes in results
                 });
@@ -591,7 +585,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   );
 
                   // put additional fee to profit holder bo make isReadyToHardwork returns true
-                  await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
+                  await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy, PairBasedStrategyPrepareStateUtils.getCompoundRatio(chainId));
 
                   const platform = await converterStrategyBase.PLATFORM();
                   const expectedErrorMessage = PlatformUtils.getErrorMessage(platform, "-1 Need rebalance");
@@ -617,7 +611,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
                   expect(await converterStrategyBase.isReadyToHardWork()).eq(false);
                   // put additional fee to profit holder bo make isReadyToHardwork returns true
-                  await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
+                  await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy, PairBasedStrategyPrepareStateUtils.getCompoundRatio(chainId));
 
                   expect(await converterStrategyBase.isReadyToHardWork()).eq(false); // need rebalance is still true, so no changes in results
                 });
@@ -1076,7 +1070,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                 );
 
                 // put additional fee to profit holder bo make isReadyToHardwork returns true
-                await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
+                await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy, PairBasedStrategyPrepareStateUtils.getCompoundRatio(chainId));
 
                 const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
                 await converterStrategyBase.doHardWork({gasLimit: GAS_LIMIT});
