@@ -7,15 +7,15 @@ import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/Co
 import { isContractExist, txParams } from '../../deploy_constants/deploy-helpers';
 import { RunHelper } from '../../scripts/utils/RunHelper';
 import {parseUnits} from "ethers/lib/utils";
-import {ZkevmAddresses} from "../../scripts/addresses/ZkevmAddresses";
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts } = hre;
-  const { deployer, CONVERTER_ADDRESS, PANCAKE_USDC_USDT_ZKEVM, SPLITTER_USDC_ADDRESS, PANCAKE_MASTERCHEF } = await getNamedAccounts();
+  const { deployer, CONVERTER_ADDRESS, PANCAKE_USDC_USDT_ZKEVM, SPLITTER_USDC_ADDRESS_ZKEVM, PANCAKE_MASTERCHEF } = await getNamedAccounts();
 
   if (await isContractExist(hre, 'Strategy_PancakeConverterStrategy_UsdcUsdt')) {
     return;
   }
+  console.log("905_Strategy_Pancake_UsdcUsdt.2");
 
   const core = Addresses.getCore() as CoreAddresses;
 
@@ -43,9 +43,9 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     proxyDeployResult.address,
   ) as PancakeConverterStrategy;
   const params = await txParams(hre, ethers.provider);
-  await RunHelper.runAndWait(() => strategyContract.init(
+  await RunHelper.runAndWait2(strategyContract.populateTransaction.init(
     core.controller,
-    SPLITTER_USDC_ADDRESS,
+    SPLITTER_USDC_ADDRESS_ZKEVM,
     CONVERTER_ADDRESS,
     PANCAKE_USDC_USDT_ZKEVM,
     0,
