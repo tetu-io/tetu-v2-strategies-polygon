@@ -1,0 +1,293 @@
+{
+  "address": "0xE2275F2305d6b746F7F865c462f8488bA91BA465",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "strategy_",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [],
+      "name": "VERSION",
+      "outputs": [
+        {
+          "internalType": "string",
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "acceptOwnership",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "call",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "operator",
+          "type": "address"
+        },
+        {
+          "internalType": "bool",
+          "name": "status",
+          "type": "bool"
+        }
+      ],
+      "name": "changeOperatorStatus",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "checker",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "canExec",
+          "type": "bool"
+        },
+        {
+          "internalType": "bytes",
+          "name": "execPayload",
+          "type": "bytes"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "delay",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "lastRebalance",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "value",
+          "type": "address"
+        }
+      ],
+      "name": "offerOwnership",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "operators",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "owner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "pendingOwner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "value",
+          "type": "uint256"
+        }
+      ],
+      "name": "setDelay",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "strategy",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "transactionHash": "0x0d02a6b17c6f9eadff96d6236f50ee28c398ad74e5e176fb44eb70fc92be537a",
+  "receipt": {
+    "to": null,
+    "from": "0xF1dCce3a6c321176C62b71c091E3165CC9C3816E",
+    "contractAddress": "0xE2275F2305d6b746F7F865c462f8488bA91BA465",
+    "transactionIndex": 0,
+    "gasUsed": "868070",
+    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "blockHash": "0x791736c25d5f7a5b69f68948b923d084cf9865dfae34104ba3575378334e5a3d",
+    "transactionHash": "0x0d02a6b17c6f9eadff96d6236f50ee28c398ad74e5e176fb44eb70fc92be537a",
+    "logs": [],
+    "blockNumber": 8836328,
+    "cumulativeGasUsed": "868070",
+    "status": 1,
+    "byzantium": true
+  },
+  "args": [
+    "0x6A4436f1D062Ee73F7bE2ebE7395CE6346586101"
+  ],
+  "numDeployments": 1,
+  "solcInputHash": "17e7f259002e1118df09fdf359b1b60f",
+  "metadata": "{\"compiler\":{\"version\":\"0.8.17+commit.8df45f5f\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"strategy_\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[],\"name\":\"VERSION\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"acceptOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"call\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"operator\",\"type\":\"address\"},{\"internalType\":\"bool\",\"name\":\"status\",\"type\":\"bool\"}],\"name\":\"changeOperatorStatus\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"checker\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"canExec\",\"type\":\"bool\"},{\"internalType\":\"bytes\",\"name\":\"execPayload\",\"type\":\"bytes\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"delay\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"lastRebalance\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"value\",\"type\":\"address\"}],\"name\":\"offerOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"operators\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"owner\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"pendingOwner\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"}],\"name\":\"setDelay\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"strategy\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"}],\"devdoc\":{\"author\":\"a17\",\"kind\":\"dev\",\"methods\":{},\"title\":\"Gelato resolver for rebalancing v2 strategies\",\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"contracts/tools/RebalanceResolver.sol\":\"RebalanceResolver\"},\"evmVersion\":\"london\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\",\"useLiteralContent\":true},\"optimizer\":{\"enabled\":true,\"runs\":150},\"remappings\":[]},\"sources\":{\"@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\npragma solidity 0.8.17;\\n\\ninterface ISplitter {\\n\\n  function init(address controller_, address _asset, address _vault) external;\\n\\n  // *************** ACTIONS **************\\n\\n  function withdrawAllToVault() external;\\n\\n  function withdrawToVault(uint256 amount) external;\\n\\n  function coverPossibleStrategyLoss(uint earned, uint lost) external;\\n\\n  function doHardWork() external;\\n\\n  function investAll() external;\\n\\n  // **************** VIEWS ***************\\n\\n  function asset() external view returns (address);\\n\\n  function vault() external view returns (address);\\n\\n  function totalAssets() external view returns (uint256);\\n\\n  function isHardWorking() external view returns (bool);\\n\\n  function strategies(uint i) external view returns (address);\\n\\n  function strategiesLength() external view returns (uint);\\n\\n  function HARDWORK_DELAY() external view returns (uint);\\n\\n  function lastHardWorks(address strategy) external view returns (uint);\\n\\n  function pausedStrategies(address strategy) external view returns (bool);\\n\\n  function pauseInvesting(address strategy) external;\\n\\n  function continueInvesting(address strategy, uint apr) external;\\n\\n  function rebalance(uint percent, uint lossTolerance) external;\\n\\n  function getStrategyCapacity(address strategy) external view returns (uint capacity);\\n\\n}\\n\",\"keccak256\":\"0x266c43734e3da96d9e5dcdd0f19c6dbd58fdc377c9cd361cb12da3e309fbb4ec\",\"license\":\"MIT\"},\"@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV2.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\npragma solidity 0.8.17;\\n\\ninterface IStrategyV2 {\\n\\n  function NAME() external view returns (string memory);\\n\\n  function strategySpecificName() external view returns (string memory);\\n\\n  function PLATFORM() external view returns (string memory);\\n\\n  function STRATEGY_VERSION() external view returns (string memory);\\n\\n  function asset() external view returns (address);\\n\\n  function splitter() external view returns (address);\\n\\n  function compoundRatio() external view returns (uint);\\n\\n  function totalAssets() external view returns (uint);\\n\\n  /// @dev Usually, indicate that claimable rewards have reasonable amount.\\n  function isReadyToHardWork() external view returns (bool);\\n\\n  /// @return strategyLoss Loss should be covered from Insurance\\n  function withdrawAllToSplitter() external returns (uint strategyLoss);\\n\\n  /// @return strategyLoss Loss should be covered from Insurance\\n  function withdrawToSplitter(uint amount) external returns (uint strategyLoss);\\n\\n  /// @notice Stakes everything the strategy holds into the reward pool.\\n  /// @param amount_ Amount transferred to the strategy balance just before calling this function\\n  /// @param updateTotalAssetsBeforeInvest_ Recalculate total assets amount before depositing.\\n  ///                                       It can be false if we know exactly, that the amount is already actual.\\n  /// @return strategyLoss Loss should be covered from Insurance\\n  function investAll(\\n    uint amount_,\\n    bool updateTotalAssetsBeforeInvest_\\n  ) external returns (\\n    uint strategyLoss\\n  );\\n\\n  function doHardWork() external returns (uint earned, uint lost);\\n\\n  function setCompoundRatio(uint value) external;\\n\\n  /// @notice Max amount that can be deposited to the strategy (its internal capacity), see SCB-593.\\n  ///         0 means no deposit is allowed at this moment\\n  function capacity() external view returns (uint);\\n\\n  /// @notice {performanceFee}% of total profit is sent to the {performanceReceiver} before compounding\\n  function performanceReceiver() external view returns (address);\\n\\n  /// @notice A percent of total profit that is sent to the {performanceReceiver} before compounding\\n  /// @dev use FEE_DENOMINATOR\\n  function performanceFee() external view returns (uint);\\n}\\n\",\"keccak256\":\"0xc7dac6097df7310b510f1027ef9c1bd3ccd6a202ca69582f68233ee798f7c312\",\"license\":\"MIT\"},\"contracts/interfaces/IPairBasedDefaultStateProvider.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\r\\npragma solidity 0.8.17;\\r\\n\\r\\n/// @notice Provides access to getDefaultState() of a pair-based strategy\\r\\ninterface IPairBasedDefaultStateProvider {\\r\\n  /// @notice Returns the current state of the contract\\r\\n  /// @return addr [tokenA, tokenB, pool, profitHolder]\\r\\n  /// @return tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]\\r\\n  /// @return nums [totalLiquidity, fuse-status-tokenA, fuse-status-tokenB, withdrawDone, 4 thresholds of token A, 4 thresholds of token B]\\r\\n  /// @return boolValues [isStablePool, depositorSwapTokens]\\r\\n  function getDefaultState() external view returns (\\r\\n    address[] memory addr,\\r\\n    int24[] memory tickData,\\r\\n    uint[] memory nums,\\r\\n    bool[] memory boolValues\\r\\n  );\\r\\n}\",\"keccak256\":\"0x883b0f9e463485a57aa1baea9aafef64180362d336114a53f6cb8b7a94303d70\",\"license\":\"MIT\"},\"contracts/interfaces/IRebalancingV2Strategy.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\r\\npragma solidity 0.8.17;\\r\\n\\r\\nimport \\\"./IPairBasedDefaultStateProvider.sol\\\";\\r\\nimport \\\"./ISetupPairBasedStrategy.sol\\\";\\r\\n\\r\\ninterface IRebalancingV2Strategy is IPairBasedDefaultStateProvider, ISetupPairBasedStrategy {\\r\\n  function needRebalance() external view returns (bool);\\r\\n\\r\\n  /// @notice Rebalance using borrow/repay only, no swaps\\r\\n  /// @param checkNeedRebalance Revert if rebalance is not needed. Pass false to deposit after withdrawByAgg-iterations\\r\\n  function rebalanceNoSwaps(bool checkNeedRebalance) external;\\r\\n\\r\\n  /// @notice Get info about a swap required by next call of {withdrawByAggStep} within the given plan\\r\\n  function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap);\\r\\n\\r\\n  /// @notice Make withdraw iteration: [exit from the pool], [make 1 swap], [repay a debt], [enter to the pool]\\r\\n  ///         Typical sequence of the actions is: exit from the pool, make 1 swap, repay 1 debt.\\r\\n  ///         You can enter to the pool if you are sure that you won't have borrow + repay on AAVE3 in the same block.\\r\\n  /// @dev All swap-by-agg data should be prepared using {quoteWithdrawByAgg} off-chain\\r\\n  /// @param tokenToSwap_ What token should be swapped to other\\r\\n  /// @param aggregator_ Aggregator that should be used on next swap. 0 - use liquidator\\r\\n  /// @param amountToSwap_ Amount that should be swapped. 0 - no swap\\r\\n  /// @param swapData Swap rote that was prepared off-chain.\\r\\n  /// @param planEntryData PLAN_XXX + additional data, see IterationPlanKinds\\r\\n  /// @param entryToPool Allow to enter to the pool at the end. Use false if you are going to make several iterations.\\r\\n  ///                    It's possible to enter back to the pool by calling {rebalanceNoSwaps} at any moment\\r\\n  ///                    0 - not allowed, 1 - allowed, 2 - allowed only if completed\\r\\n  /// @return completed All debts were closed, leftovers were swapped to the required proportions.\\r\\n  function withdrawByAggStep(\\r\\n    address tokenToSwap_,\\r\\n    address aggregator_,\\r\\n    uint amountToSwap_,\\r\\n    bytes memory swapData,\\r\\n    bytes memory planEntryData,\\r\\n    uint entryToPool\\r\\n  ) external returns (bool completed);\\r\\n\\r\\n  /// @notice Calculate proportions of [underlying, not-underlying] required by the internal pool of the strategy\\r\\n  /// @return Proportion of the not-underlying [0...1e18]\\r\\n  function getPropNotUnderlying18() external view returns (uint);\\r\\n}\\r\\n\",\"keccak256\":\"0x1ae39d0cc7607cdb9b935e2f6bcb8db8206f180d17fc2230f368509c5173d788\",\"license\":\"MIT\"},\"contracts/interfaces/ISetupPairBasedStrategy.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\r\\npragma solidity 0.8.17;\\r\\n\\r\\n/// @notice Functions to initialize pair-based strategies\\r\\ninterface ISetupPairBasedStrategy {\\r\\n\\r\\n  /// @notice Manually set status of the fuse\\r\\n  /// @param status See PairBasedStrategyLib.FuseStatus enum for possible values\\r\\n  function setFuseStatus(uint status) external;\\r\\n\\r\\n  /// @notice Set thresholds for the fuse: [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]\\r\\n  ///         Example: [0.9, 0.92, 1.08, 1.1]\\r\\n  ///         Price falls below 0.9 - fuse is ON. Price rises back up to 0.92 - fuse is OFF.\\r\\n  ///         Price raises more and reaches 1.1 - fuse is ON again. Price falls back and reaches 1.08 - fuse OFF again.\\r\\n  /// @param values Price thresholds: [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]\\r\\n  function setFuseThresholds(uint[4] memory values) external;\\r\\n  function setStrategyProfitHolder(address strategyProfitHolder) external;\\r\\n\\r\\n  /// @notice Set withdrawDone value.\\r\\n  ///         When a fuse was triggered ON, all debts should be closed and asset should be converted to underlying.\\r\\n  ///         After completion of the conversion withdrawDone can be set to 1.\\r\\n  ///         So, {getFuseStatus} will return  withdrawDone=1 and you will know, that withdraw is not required\\r\\n  /// @param done 0 - full withdraw required, 1 - full withdraw was done\\r\\n  function setWithdrawDone(uint done) external;\\r\\n}\\r\\n\",\"keccak256\":\"0xbe3f6fdf20e05b353202bfd42cb087c106ac055310fb3af80b56a4cda2a86a79\",\"license\":\"MIT\"},\"contracts/tools/RebalanceResolver.sol\":{\"content\":\"// SPDX-License-Identifier: BUSL-1.1\\r\\npragma solidity 0.8.17;\\r\\n\\r\\nimport \\\"@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol\\\";\\r\\nimport \\\"@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV2.sol\\\";\\r\\nimport \\\"../interfaces/IRebalancingV2Strategy.sol\\\";\\r\\n\\r\\n/// @title Gelato resolver for rebalancing v2 strategies\\r\\n/// @author a17\\r\\ncontract RebalanceResolver {\\r\\n  // --- CONSTANTS ---\\r\\n\\r\\n  string public constant VERSION = \\\"3.0.0\\\";\\r\\n\\r\\n  // --- VARIABLES ---\\r\\n\\r\\n  address public immutable strategy;\\r\\n  address public owner;\\r\\n  address public pendingOwner;\\r\\n  uint public delay;\\r\\n  uint public lastRebalance;\\r\\n  mapping(address => bool) public operators;\\r\\n\\r\\n  // --- INIT ---\\r\\n\\r\\n  constructor(address strategy_) {\\r\\n    owner = msg.sender;\\r\\n    delay = 1 minutes;\\r\\n    strategy = strategy_;\\r\\n  }\\r\\n\\r\\n  modifier onlyOwner() {\\r\\n    require(msg.sender == owner, \\\"!owner\\\");\\r\\n    _;\\r\\n  }\\r\\n\\r\\n  // --- OWNER FUNCTIONS ---\\r\\n\\r\\n  function offerOwnership(address value) external onlyOwner {\\r\\n    pendingOwner = value;\\r\\n  }\\r\\n\\r\\n  function acceptOwnership() external {\\r\\n    require(msg.sender == pendingOwner, \\\"!pendingOwner\\\");\\r\\n    owner = pendingOwner;\\r\\n    pendingOwner = address(0);\\r\\n  }\\r\\n\\r\\n  function setDelay(uint value) external onlyOwner {\\r\\n    delay = value;\\r\\n  }\\r\\n\\r\\n  function changeOperatorStatus(address operator, bool status) external onlyOwner {\\r\\n    operators[operator] = status;\\r\\n  }\\r\\n\\r\\n  // --- MAIN LOGIC ---\\r\\n\\r\\n  function call() external {\\r\\n    require(operators[msg.sender], \\\"!operator\\\");\\r\\n\\r\\n    try IRebalancingV2Strategy(strategy).rebalanceNoSwaps(true) {} catch Error(string memory _err) {\\r\\n      revert(string(abi.encodePacked(\\\"Strategy error: 0x\\\", _toAsciiString(strategy), \\\" \\\", _err)));\\r\\n    } catch (bytes memory _err) {\\r\\n      revert(string(abi.encodePacked(\\\"Strategy low-level error: 0x\\\", _toAsciiString(strategy), \\\" \\\", string(_err))));\\r\\n    }\\r\\n    lastRebalance = block.timestamp;\\r\\n  }\\r\\n\\r\\n  function checker() external view returns (bool canExec, bytes memory execPayload) {\\r\\n    address strategy_ = strategy;\\r\\n    ISplitter splitter = ISplitter(IStrategyV2(strategy_).splitter());\\r\\n    if (\\r\\n      !splitter.pausedStrategies(strategy_)\\r\\n      && lastRebalance + delay < block.timestamp\\r\\n      && IRebalancingV2Strategy(strategy_).needRebalance()\\r\\n    ) {\\r\\n      return (true, abi.encodeWithSelector(RebalanceResolver.call.selector));\\r\\n    }\\r\\n\\r\\n    return (false, bytes(\\\"Not ready to rebalance\\\"));\\r\\n  }\\r\\n\\r\\n  function _toAsciiString(address x) internal pure returns (string memory) {\\r\\n    bytes memory s = new bytes(40);\\r\\n    for (uint i = 0; i < 20; i++) {\\r\\n      bytes1 b = bytes1(uint8(uint(uint160(x)) / (2 ** (8 * (19 - i)))));\\r\\n      bytes1 hi = bytes1(uint8(b) / 16);\\r\\n      bytes1 lo = bytes1(uint8(b) - 16 * uint8(hi));\\r\\n      s[2 * i] = _char(hi);\\r\\n      s[2 * i + 1] = _char(lo);\\r\\n    }\\r\\n    return string(s);\\r\\n  }\\r\\n\\r\\n  function _char(bytes1 b) internal pure returns (bytes1 c) {\\r\\n    if (uint8(b) < 10) return bytes1(uint8(b) + 0x30);\\r\\n    else return bytes1(uint8(b) + 0x57);\\r\\n  }\\r\\n}\\r\\n\",\"keccak256\":\"0x415ff388fcb8a92ec40dbd18dc3381a0fd647dcd33ba8dbe4169639a043f7ac0\",\"license\":\"BUSL-1.1\"}},\"version\":1}",
+  "bytecode": "0x60a060405234801561001057600080fd5b50604051610ea9380380610ea983398101604081905261002f91610057565b600080546001600160a01b03191633179055603c6002556001600160a01b0316608052610087565b60006020828403121561006957600080fd5b81516001600160a01b038116811461008057600080fd5b9392505050565b608051610deb6100be6000396000818161018401528181610279015281816103060152818161039901526104ef0152610deb6000f3fe608060405234801561001057600080fd5b50600436106100bf5760003560e01c80638da5cb5b1161007c5780638da5cb5b146101415780638e3e92f21461016c578063a8c62e761461017f578063cf5303cf146101a6578063e177246e146101bc578063e30c3978146101cf578063ffa1ad74146101e257600080fd5b8063106b9ca1146100c457806313e7c9d8146100e057806328b5e32b146101135780636575c4581461011d5780636a42b8f81461013057806379ba509714610139575b600080fd5b6100cd60035481565b6040519081526020015b60405180910390f35b6101036100ee36600461089f565b60046020526000908152604090205460ff1681565b60405190151581526020016100d7565b61011b610213565b005b61011b61012b3660046108d1565b6103d5565b6100cd60025481565b61011b61042a565b600054610154906001600160a01b031681565b6040516001600160a01b0390911681526020016100d7565b61011b61017a36600461089f565b61049b565b6101547f000000000000000000000000000000000000000000000000000000000000000081565b6101ae6104e7565b6040516100d792919061095a565b61011b6101ca36600461097d565b6106db565b600154610154906001600160a01b031681565b610206604051806040016040528060058152602001640332e302e360dc1b81525081565b6040516100d79190610996565b3360009081526004602052604090205460ff166102635760405162461bcd60e51b815260206004820152600960248201526810b7b832b930ba37b960b91b60448201526064015b60405180910390fd5b604051630e96e54f60e11b8152600160048201527f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031690631d2dca9e90602401600060405180830381600087803b1580156102c557600080fd5b505af19250505080156102d6575060015b6103cf576102e26109a9565b806308c379a00361036257506102f6610a00565b806103015750610364565b61032a7f000000000000000000000000000000000000000000000000000000000000000061070a565b8160405160200161033c929190610a8a565b60408051601f198184030181529082905262461bcd60e51b825261025a91600401610996565b505b3d80801561038e576040519150601f19603f3d011682016040523d82523d6000602084013e610393565b606091505b506103bd7f000000000000000000000000000000000000000000000000000000000000000061070a565b8160405160200161033c929190610ae4565b42600355565b6000546001600160a01b031633146103ff5760405162461bcd60e51b815260040161025a90610b49565b6001600160a01b03919091166000908152600460205260409020805460ff1916911515919091179055565b6001546001600160a01b031633146104745760405162461bcd60e51b815260206004820152600d60248201526c10b832b73234b733a7bbb732b960991b604482015260640161025a565b60018054600080546001600160a01b03199081166001600160a01b03841617909155169055565b6000546001600160a01b031633146104c55760405162461bcd60e51b815260040161025a90610b49565b600180546001600160a01b0319166001600160a01b0392909216919091179055565b6000606060007f000000000000000000000000000000000000000000000000000000000000000090506000816001600160a01b0316633cd8045e6040518163ffffffff1660e01b8152600401602060405180830381865afa158015610550573d6000803e3d6000fd5b505050506040513d601f19601f820116820180604052508101906105749190610b69565b604051630150908f60e31b81526001600160a01b03848116600483015291925090821690630a84847890602401602060405180830381865afa1580156105be573d6000803e3d6000fd5b505050506040513d601f19601f820116820180604052508101906105e29190610b86565b1580156105fd5750426002546003546105fb9190610bb9565b105b80156106665750816001600160a01b031663ffb86c6a6040518163ffffffff1660e01b8152600401602060405180830381865afa158015610642573d6000803e3d6000fd5b505050506040513d601f19601f820116820180604052508101906106669190610b86565b156106a05750506040805160048152602481019091526020810180516001600160e01b03166328b5e32b60e01b1790526001939092509050565b6000604051806040016040528060168152602001754e6f7420726561647920746f20726562616c616e636560501b8152509350935050509091565b6000546001600160a01b031633146107055760405162461bcd60e51b815260040161025a90610b49565b600255565b60408051602880825260608281019093526000919060208201818036833701905050905060005b601481101561084a576000610747826013610bd2565b610752906008610be5565b61075d906002610ce0565b610770906001600160a01b038716610d02565b60f81b9050600060108260f81c6107879190610d16565b60f81b905060008160f81c601061079e9190610d38565b8360f81c6107ac9190610d54565b60f81b90506107ba82610851565b856107c6866002610be5565b815181106107d6576107d6610d6d565b60200101906001600160f81b031916908160001a9053506107f681610851565b85610802866002610be5565b61080d906001610bb9565b8151811061081d5761081d610d6d565b60200101906001600160f81b031916908160001a905350505050808061084290610d83565b915050610731565b5092915050565b6000600a60f883901c10156108785761086f60f883901c6030610d9c565b60f81b92915050565b61086f60f883901c6057610d9c565b6001600160a01b038116811461089c57600080fd5b50565b6000602082840312156108b157600080fd5b81356108bc81610887565b9392505050565b801515811461089c57600080fd5b600080604083850312156108e457600080fd5b82356108ef81610887565b915060208301356108ff816108c3565b809150509250929050565b60005b8381101561092557818101518382015260200161090d565b50506000910152565b6000815180845261094681602086016020860161090a565b601f01601f19169290920160200192915050565b8215158152604060208201526000610975604083018461092e565b949350505050565b60006020828403121561098f57600080fd5b5035919050565b6020815260006108bc602083018461092e565b600060033d11156109c25760046000803e5060005160e01c5b90565b601f8201601f1916810167ffffffffffffffff811182821017156109f957634e487b7160e01b600052604160045260246000fd5b6040525050565b600060443d1015610a0e5790565b6040516003193d81016004833e81513d67ffffffffffffffff8160248401118184111715610a3e57505050505090565b8285019150815181811115610a565750505050505090565b843d8701016020828501011115610a705750505050505090565b610a7f602082860101876109c5565b509095945050505050565b710a6e8e4c2e8cacef240cae4e4dee4744060f60731b815260008351610ab781601285016020880161090a565b600160fd1b6012918401918201528351610ad881601384016020880161090a565b01601301949350505050565b7f5374726174656779206c6f772d6c6576656c206572726f723a20307800000000815260008351610b1c81601c85016020880161090a565b600160fd1b601c918401918201528351610b3d81601d84016020880161090a565b01601d01949350505050565b60208082526006908201526510b7bbb732b960d11b604082015260600190565b600060208284031215610b7b57600080fd5b81516108bc81610887565b600060208284031215610b9857600080fd5b81516108bc816108c3565b634e487b7160e01b600052601160045260246000fd5b80820180821115610bcc57610bcc610ba3565b92915050565b81810381811115610bcc57610bcc610ba3565b8082028115828204841417610bcc57610bcc610ba3565b600181815b80851115610c37578160001904821115610c1d57610c1d610ba3565b80851615610c2a57918102915b93841c9390800290610c01565b509250929050565b600082610c4e57506001610bcc565b81610c5b57506000610bcc565b8160018114610c715760028114610c7b57610c97565b6001915050610bcc565b60ff841115610c8c57610c8c610ba3565b50506001821b610bcc565b5060208310610133831016604e8410600b8410161715610cba575081810a610bcc565b610cc48383610bfc565b8060001904821115610cd857610cd8610ba3565b029392505050565b60006108bc8383610c3f565b634e487b7160e01b600052601260045260246000fd5b600082610d1157610d11610cec565b500490565b600060ff831680610d2957610d29610cec565b8060ff84160491505092915050565b60ff818116838216029081169081811461084a5761084a610ba3565b60ff8281168282160390811115610bcc57610bcc610ba3565b634e487b7160e01b600052603260045260246000fd5b600060018201610d9557610d95610ba3565b5060010190565b60ff8181168382160190811115610bcc57610bcc610ba356fea2646970667358221220f1a3543216f22dd680f89e16fa219af5f5c02db5fc62dc8d348ab21e72ba24b664736f6c63430008110033",
+  "deployedBytecode": "0x608060405234801561001057600080fd5b50600436106100bf5760003560e01c80638da5cb5b1161007c5780638da5cb5b146101415780638e3e92f21461016c578063a8c62e761461017f578063cf5303cf146101a6578063e177246e146101bc578063e30c3978146101cf578063ffa1ad74146101e257600080fd5b8063106b9ca1146100c457806313e7c9d8146100e057806328b5e32b146101135780636575c4581461011d5780636a42b8f81461013057806379ba509714610139575b600080fd5b6100cd60035481565b6040519081526020015b60405180910390f35b6101036100ee36600461089f565b60046020526000908152604090205460ff1681565b60405190151581526020016100d7565b61011b610213565b005b61011b61012b3660046108d1565b6103d5565b6100cd60025481565b61011b61042a565b600054610154906001600160a01b031681565b6040516001600160a01b0390911681526020016100d7565b61011b61017a36600461089f565b61049b565b6101547f000000000000000000000000000000000000000000000000000000000000000081565b6101ae6104e7565b6040516100d792919061095a565b61011b6101ca36600461097d565b6106db565b600154610154906001600160a01b031681565b610206604051806040016040528060058152602001640332e302e360dc1b81525081565b6040516100d79190610996565b3360009081526004602052604090205460ff166102635760405162461bcd60e51b815260206004820152600960248201526810b7b832b930ba37b960b91b60448201526064015b60405180910390fd5b604051630e96e54f60e11b8152600160048201527f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031690631d2dca9e90602401600060405180830381600087803b1580156102c557600080fd5b505af19250505080156102d6575060015b6103cf576102e26109a9565b806308c379a00361036257506102f6610a00565b806103015750610364565b61032a7f000000000000000000000000000000000000000000000000000000000000000061070a565b8160405160200161033c929190610a8a565b60408051601f198184030181529082905262461bcd60e51b825261025a91600401610996565b505b3d80801561038e576040519150601f19603f3d011682016040523d82523d6000602084013e610393565b606091505b506103bd7f000000000000000000000000000000000000000000000000000000000000000061070a565b8160405160200161033c929190610ae4565b42600355565b6000546001600160a01b031633146103ff5760405162461bcd60e51b815260040161025a90610b49565b6001600160a01b03919091166000908152600460205260409020805460ff1916911515919091179055565b6001546001600160a01b031633146104745760405162461bcd60e51b815260206004820152600d60248201526c10b832b73234b733a7bbb732b960991b604482015260640161025a565b60018054600080546001600160a01b03199081166001600160a01b03841617909155169055565b6000546001600160a01b031633146104c55760405162461bcd60e51b815260040161025a90610b49565b600180546001600160a01b0319166001600160a01b0392909216919091179055565b6000606060007f000000000000000000000000000000000000000000000000000000000000000090506000816001600160a01b0316633cd8045e6040518163ffffffff1660e01b8152600401602060405180830381865afa158015610550573d6000803e3d6000fd5b505050506040513d601f19601f820116820180604052508101906105749190610b69565b604051630150908f60e31b81526001600160a01b03848116600483015291925090821690630a84847890602401602060405180830381865afa1580156105be573d6000803e3d6000fd5b505050506040513d601f19601f820116820180604052508101906105e29190610b86565b1580156105fd5750426002546003546105fb9190610bb9565b105b80156106665750816001600160a01b031663ffb86c6a6040518163ffffffff1660e01b8152600401602060405180830381865afa158015610642573d6000803e3d6000fd5b505050506040513d601f19601f820116820180604052508101906106669190610b86565b156106a05750506040805160048152602481019091526020810180516001600160e01b03166328b5e32b60e01b1790526001939092509050565b6000604051806040016040528060168152602001754e6f7420726561647920746f20726562616c616e636560501b8152509350935050509091565b6000546001600160a01b031633146107055760405162461bcd60e51b815260040161025a90610b49565b600255565b60408051602880825260608281019093526000919060208201818036833701905050905060005b601481101561084a576000610747826013610bd2565b610752906008610be5565b61075d906002610ce0565b610770906001600160a01b038716610d02565b60f81b9050600060108260f81c6107879190610d16565b60f81b905060008160f81c601061079e9190610d38565b8360f81c6107ac9190610d54565b60f81b90506107ba82610851565b856107c6866002610be5565b815181106107d6576107d6610d6d565b60200101906001600160f81b031916908160001a9053506107f681610851565b85610802866002610be5565b61080d906001610bb9565b8151811061081d5761081d610d6d565b60200101906001600160f81b031916908160001a905350505050808061084290610d83565b915050610731565b5092915050565b6000600a60f883901c10156108785761086f60f883901c6030610d9c565b60f81b92915050565b61086f60f883901c6057610d9c565b6001600160a01b038116811461089c57600080fd5b50565b6000602082840312156108b157600080fd5b81356108bc81610887565b9392505050565b801515811461089c57600080fd5b600080604083850312156108e457600080fd5b82356108ef81610887565b915060208301356108ff816108c3565b809150509250929050565b60005b8381101561092557818101518382015260200161090d565b50506000910152565b6000815180845261094681602086016020860161090a565b601f01601f19169290920160200192915050565b8215158152604060208201526000610975604083018461092e565b949350505050565b60006020828403121561098f57600080fd5b5035919050565b6020815260006108bc602083018461092e565b600060033d11156109c25760046000803e5060005160e01c5b90565b601f8201601f1916810167ffffffffffffffff811182821017156109f957634e487b7160e01b600052604160045260246000fd5b6040525050565b600060443d1015610a0e5790565b6040516003193d81016004833e81513d67ffffffffffffffff8160248401118184111715610a3e57505050505090565b8285019150815181811115610a565750505050505090565b843d8701016020828501011115610a705750505050505090565b610a7f602082860101876109c5565b509095945050505050565b710a6e8e4c2e8cacef240cae4e4dee4744060f60731b815260008351610ab781601285016020880161090a565b600160fd1b6012918401918201528351610ad881601384016020880161090a565b01601301949350505050565b7f5374726174656779206c6f772d6c6576656c206572726f723a20307800000000815260008351610b1c81601c85016020880161090a565b600160fd1b601c918401918201528351610b3d81601d84016020880161090a565b01601d01949350505050565b60208082526006908201526510b7bbb732b960d11b604082015260600190565b600060208284031215610b7b57600080fd5b81516108bc81610887565b600060208284031215610b9857600080fd5b81516108bc816108c3565b634e487b7160e01b600052601160045260246000fd5b80820180821115610bcc57610bcc610ba3565b92915050565b81810381811115610bcc57610bcc610ba3565b8082028115828204841417610bcc57610bcc610ba3565b600181815b80851115610c37578160001904821115610c1d57610c1d610ba3565b80851615610c2a57918102915b93841c9390800290610c01565b509250929050565b600082610c4e57506001610bcc565b81610c5b57506000610bcc565b8160018114610c715760028114610c7b57610c97565b6001915050610bcc565b60ff841115610c8c57610c8c610ba3565b50506001821b610bcc565b5060208310610133831016604e8410600b8410161715610cba575081810a610bcc565b610cc48383610bfc565b8060001904821115610cd857610cd8610ba3565b029392505050565b60006108bc8383610c3f565b634e487b7160e01b600052601260045260246000fd5b600082610d1157610d11610cec565b500490565b600060ff831680610d2957610d29610cec565b8060ff84160491505092915050565b60ff818116838216029081169081811461084a5761084a610ba3565b60ff8281168282160390811115610bcc57610bcc610ba3565b634e487b7160e01b600052603260045260246000fd5b600060018201610d9557610d95610ba3565b5060010190565b60ff8181168382160190811115610bcc57610bcc610ba356fea2646970667358221220f1a3543216f22dd680f89e16fa219af5f5c02db5fc62dc8d348ab21e72ba24b664736f6c63430008110033",
+  "devdoc": {
+    "author": "a17",
+    "kind": "dev",
+    "methods": {},
+    "title": "Gelato resolver for rebalancing v2 strategies",
+    "version": 1
+  },
+  "userdoc": {
+    "kind": "user",
+    "methods": {},
+    "version": 1
+  },
+  "storageLayout": {
+    "storage": [
+      {
+        "astId": 175667,
+        "contract": "contracts/tools/RebalanceResolver.sol:RebalanceResolver",
+        "label": "owner",
+        "offset": 0,
+        "slot": "0",
+        "type": "t_address"
+      },
+      {
+        "astId": 175669,
+        "contract": "contracts/tools/RebalanceResolver.sol:RebalanceResolver",
+        "label": "pendingOwner",
+        "offset": 0,
+        "slot": "1",
+        "type": "t_address"
+      },
+      {
+        "astId": 175671,
+        "contract": "contracts/tools/RebalanceResolver.sol:RebalanceResolver",
+        "label": "delay",
+        "offset": 0,
+        "slot": "2",
+        "type": "t_uint256"
+      },
+      {
+        "astId": 175673,
+        "contract": "contracts/tools/RebalanceResolver.sol:RebalanceResolver",
+        "label": "lastRebalance",
+        "offset": 0,
+        "slot": "3",
+        "type": "t_uint256"
+      },
+      {
+        "astId": 175677,
+        "contract": "contracts/tools/RebalanceResolver.sol:RebalanceResolver",
+        "label": "operators",
+        "offset": 0,
+        "slot": "4",
+        "type": "t_mapping(t_address,t_bool)"
+      }
+    ],
+    "types": {
+      "t_address": {
+        "encoding": "inplace",
+        "label": "address",
+        "numberOfBytes": "20"
+      },
+      "t_bool": {
+        "encoding": "inplace",
+        "label": "bool",
+        "numberOfBytes": "1"
+      },
+      "t_mapping(t_address,t_bool)": {
+        "encoding": "mapping",
+        "key": "t_address",
+        "label": "mapping(address => bool)",
+        "numberOfBytes": "32",
+        "value": "t_bool"
+      },
+      "t_uint256": {
+        "encoding": "inplace",
+        "label": "uint256",
+        "numberOfBytes": "32"
+      }
+    }
+  }
+}
