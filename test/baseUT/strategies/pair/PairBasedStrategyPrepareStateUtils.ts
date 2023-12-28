@@ -111,9 +111,13 @@ export class PairBasedStrategyPrepareStateUtils {
   static async prepareToHardwork(signer: SignerWithAddress, strategy: IRebalancingV2Strategy, compoundRatio?: number) {
     const state = await PackedData.getDefaultState(strategy);
     const converterStrategyBase = ConverterStrategyBase__factory.connect(strategy.address, signer);
-    const platformVoter = await IController__factory.connect(await converterStrategyBase.controller(), signer).platformVoter();
+    // const platformVoter = await IController__factory.connect(await converterStrategyBase.controller(), signer).platformVoter();
+    const governance = await IController__factory.connect(await converterStrategyBase.controller(), signer).governance();
 
-    await converterStrategyBase.connect(await Misc.impersonate(platformVoter)).setCompoundRatio(compoundRatio ?? 90_000);
+    await converterStrategyBase.connect(
+      // await Misc.impersonate(platformVoter)
+      await Misc.impersonate(governance)
+    ).setCompoundRatio(compoundRatio ?? 90_000);
 
     await TokenUtils.getToken(
       state.tokenA,
