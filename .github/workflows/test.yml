@@ -54,6 +54,7 @@ jobs:
           TETU_LOCAL_SOLC: true
           TETU_MATIC_RPC_URL: ${{secrets.TETU_MATIC_RPC_URL}}
           TETU_BASE_RPC_URL: ${{secrets.TETU_BASE_RPC_URL}}
+          TETU_ZKEVM_RPC_URL: ${{secrets.TETU_ZKEVM_RPC_URL}}
           TETU_HARDHAT_CHAIN_ID: ${{secrets.TETU_HARDHAT_CHAIN_ID}}
       - run: npm run coverage
         env:
@@ -61,5 +62,6 @@ jobs:
           TETU_LOCAL_SOLC: true
           TETU_MATIC_RPC_URL: ${{secrets.TETU_MATIC_RPC_URL}}
           TETU_BASE_RPC_URL: ${{secrets.TETU_BASE_RPC_URL}}
+          TETU_BASE_ZKEVM_URL: ${{secrets.TETU_ZKEVM_RPC_URL}}
           TETU_HARDHAT_CHAIN_ID: ${{secrets.TETU_HARDHAT_CHAIN_ID}}
       - uses: codecov/codecov-action@v2
