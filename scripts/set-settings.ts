@@ -69,6 +69,14 @@ const strategyConfigs: { [key: number]: StrategyMap; } = {
       rebalanceDebtDelay: 600,
     },
   },
+  1101: {
+    // Strategy_PancakeConverterStrategy_UsdcUsdt
+    '0x6A4436f1D062Ee73F7bE2ebE7395CE6346586101': {
+      lockedPercentForDelayedRebalance: 3,
+      lockedPercentForForcedRebalance: 50,
+      rebalanceDebtDelay: 600,
+    },
+  },
 };
 
 async function main() {
