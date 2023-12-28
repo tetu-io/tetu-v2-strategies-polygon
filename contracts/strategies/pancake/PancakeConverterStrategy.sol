@@ -13,7 +13,7 @@ import "../pair/PairBasedStrategyLogicLib.sol";
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for Pancake
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
 ///         by utilizing fill-up and swap methods depending on the range size of the liquidity provided.
-/// @author a17
+/// @author a17, dvpublic
 contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IRebalancingV2Strategy {
 
   //region ------------------------------------------------- Constants
@@ -128,19 +128,6 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
   }
   //endregion ---------------------------------------------- METRIC VIEWS
 
-  //region --------------------------------------------- CALLBACKS
-
-  function onERC721Received(
-    address,
-    address,
-    uint256,
-    bytes memory
-  ) external pure returns (bytes4) {
-    return this.onERC721Received.selector;
-  }
-
-  //endregion --------------------------------------------- CALLBACKS
-
   //region--------------------------------------------- REBALANCE
   /// @notice Rebalance using borrow/repay only, no swaps
   /// @param checkNeedRebalance Revert if rebalance is not needed. Pass false to deposit after withdrawByAgg-iterations
@@ -168,7 +155,7 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
 
   /// @notice Get info about a swap required by next call of {withdrawByAggStep} within the given plan
   function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap) {
-    // restriction "operator only" is checked inside {initWithdrawLocal} in {quoteWithdrawStep}
+    // restriction "operator only" is checked inside {initWithdrawLocal} in {quoteWithdrawByAgg}
 
     // estimate amounts to be withdrawn from the pool
     uint totalLiquidity = state.pair.totalLiquidity;

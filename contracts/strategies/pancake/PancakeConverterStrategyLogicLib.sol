@@ -145,8 +145,8 @@ library PancakeConverterStrategyLogicLib {
     IERC20(token1).approve(liquidator, type(uint).max);
     IERC20(token0).approve(address(nft), type(uint).max);
     IERC20(token1).approve(address(nft), type(uint).max);
-    IERC20(token0).approve(address(chef), type(uint).max); // todo check
-    IERC20(token1).approve(address(chef), type(uint).max); // todo check
+    IERC20(token0).approve(address(chef), type(uint).max);
+    IERC20(token1).approve(address(chef), type(uint).max);
   }
 
   //endregion ------------------------------------------------ Helpers
@@ -169,13 +169,6 @@ library PancakeConverterStrategyLogicLib {
       "-",
       StringLib._toString(IPancakeV3Pool(pairState.pool).fee()))
     );
-  }
-
-  /// @dev Gets the liquidator swap slippage based on the pool type (stable or volatile).
-  /// @param pool The IPancakeV3Pool instance.
-  /// @return The liquidator swap slippage percentage.
-  function _getLiquidatorSwapSlippage(IPancakeV3Pool pool) internal view returns (uint) {
-    return isStablePool(pool) ? LIQUIDATOR_SWAP_SLIPPAGE_STABLE : LIQUIDATOR_SWAP_SLIPPAGE_VOLATILE;
   }
 
   /// @notice Calculate proportions of the tokens for entry kind 1
