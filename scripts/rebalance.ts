@@ -85,7 +85,7 @@ enum EventType {
 const eventLogs = new Map<EventType, string[][]>();
 const excludeErrorLogs: string[] = [];
 
-async function logEvent(eventType: EventType, params: string[], isError = true, message: string = '') {
+async function logEvent(eventType: EventType, params: string[], isError = false, message: string = '') {
   if (isError && !excludeErrorLogs.some(excludeErrorLog => excludeErrorLog.toLocaleLowerCase() === message)) {
     await sendMessageToTelegram(message);
     return;
