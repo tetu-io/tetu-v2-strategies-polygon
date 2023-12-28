@@ -98,19 +98,23 @@ export class MockAggregatorUtils {
     return dest;
   }
 
-  static async injectSwapperToLiquidator(liquidatorAddress: string, b: IBuilderResults, swapper: string) {
+  static async injectSwapperToLiquidator(liquidatorAddress: string, b: IBuilderResults, swapper?: string) {
     const liquidatorOperator = await Misc.impersonate('0xbbbbb8C4364eC2ce52c59D2Ed3E56F307E529a94')
-    const liquidatorPools = b.liquidatorPools.map(
-      x => {
-        const dest: ITetuLiquidator.PoolDataStruct = {
-          pool: x.pool,
-          swapper,
-          tokenIn: x.tokenIn,
-          tokenOut: x.tokenOut
+
+    // replace swapper in the pools by new one if necessary
+    const liquidatorPools = swapper
+      ? b.liquidatorPools.map(
+        x => {
+          const dest: ITetuLiquidator.PoolDataStruct = {
+            pool: x.pool,
+            swapper,
+            tokenIn: x.tokenIn,
+            tokenOut: x.tokenOut
+          }
+          return dest;
         }
-        return dest;
-      }
-    )
+      )
+      : b.liquidatorPools;
     const liquidator = ITetuLiquidator__factory.connect(liquidatorAddress, liquidatorOperator);
     await liquidator.connect(liquidatorOperator).addLargestPools(liquidatorPools, true);
     await liquidator.connect(liquidatorOperator).addBlueChipsPools(liquidatorPools, true);

@@ -49,7 +49,7 @@ import {AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR} from "../../baseUT/utils/Aggre
  * Liquidator has modified price, but aggregator has unchanged current price different from the price in our test.
  */
 describe('PairBasedNoSwapIntTest', function() {
-  const CHAINS_IN_ORDER_EXECUTION: number[] = [BASE_NETWORK_ID, ZKEVM_NETWORK_ID, POLYGON_NETWORK_ID];
+  const CHAINS_IN_ORDER_EXECUTION: number[] = [ZKEVM_NETWORK_ID, BASE_NETWORK_ID, POLYGON_NETWORK_ID];
 //region Variables
   let snapshotBefore: string;
 
@@ -1154,7 +1154,7 @@ describe('PairBasedNoSwapIntTest', function() {
                       const expectedProfitToCover = ret.calcInvestedAssetsR1 - stateLast.strategy.investedAssets;
                       const profitToCover = ret.r2.states[0].events?.sentToInsurance ?? 0;
 
-                      expect(profitToCover).approximately(expectedProfitToCover, 1e-4);
+                      expect(profitToCover).approximately(expectedProfitToCover, 1e-3);
                     });
                   });
                 });

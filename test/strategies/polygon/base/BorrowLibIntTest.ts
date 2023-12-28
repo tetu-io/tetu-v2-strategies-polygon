@@ -638,8 +638,9 @@ describe('BorrowLibIntTest', () => {
 
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRebalanceAssetsTest);
-            console.log("Results", r);
-            expect(r.final.costX*(SUM_PROPORTIONS-PROPORTION_SMALL)).approximately(r.final.costY*(PROPORTION_SMALL), 1);
+            const amount = r.final.costX*(SUM_PROPORTIONS-PROPORTION_SMALL);
+            const expectedAmount = r.final.costY*(PROPORTION_SMALL);
+            expect((amount - expectedAmount) / expectedAmount).lt(1e-4);
           });
         });
         describe("Need to reduce DAI, increase USDC", () => {

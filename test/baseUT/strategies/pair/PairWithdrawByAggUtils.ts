@@ -3,7 +3,12 @@ import {expect} from 'chai';
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
 import {IBuilderResults} from "./PairBasedStrategyBuilder";
-import {ConverterStrategyBase__factory, MockSwapper} from "../../../../typechain";
+import {
+  ConverterStrategyBase__factory, IERC20Metadata__factory,
+  ITetuLiquidator,
+  ITetuLiquidator__factory,
+  MockSwapper
+} from "../../../../typechain";
 import {IListStates, PairBasedStrategyPrepareStateUtils} from "./PairBasedStrategyPrepareStateUtils";
 import {IStateNum, StateUtilsNum} from "../../utils/StateUtilsNum";
 import {PLAN_REPAY_SWAP_REPAY_1, PLAN_SWAP_ONLY_2, PLAN_SWAP_REPAY_0} from "../../AppConstants";
@@ -15,6 +20,7 @@ import {AGGREGATOR_TETU_LIQUIDATOR, AggregatorType, AggregatorUtils} from "../..
 import {MockAggregatorUtils} from "../../mocks/MockAggregatorUtils";
 import {CaptureEvents} from "../CaptureEvents";
 import {PlatformUtils} from "../../utils/PlatformUtils";
+import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 
 export const SWAP_AMOUNT_DEFAULT = 0.3;
 export const SWAP_AMOUNT_ALGEBRA = 0.2;
@@ -132,7 +138,7 @@ export class PairWithdrawByAggUtils {
 
       if (p.mockSwapper) {
         console.log("------------------ restore original swapper");
-        await MockAggregatorUtils.injectSwapperToLiquidator(p.tetuLiquidator, b, b.swapper);
+        await MockAggregatorUtils.injectSwapperToLiquidator(p.tetuLiquidator, b);
       }
 
 
