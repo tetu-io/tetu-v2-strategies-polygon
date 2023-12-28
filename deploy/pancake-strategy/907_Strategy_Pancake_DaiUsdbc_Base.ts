@@ -10,17 +10,16 @@ import {parseUnits} from "ethers/lib/utils";
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts } = hre;
-  const { deployer, CONVERTER_ADDRESS, PANCAKE_USDC_USDT_ZKEVM, SPLITTER_USDC_ADDRESS_ZKEVM, PANCAKE_MASTERCHEF } = await getNamedAccounts();
+  const { deployer, CONVERTER_ADDRESS, PANCAKE_DAI_USDbC_BASE, SPLITTER_USDbC_ADDRESS, PANCAKE_MASTERCHEF_BASE } = await getNamedAccounts();
 
-  if (await isContractExist(hre, 'Strategy_PancakeConverterStrategy_UsdcUsdt')) {
+  if (await isContractExist(hre, 'Strategy_PancakeConverterStrategy_DaiUsdbc')) {
     return;
   }
-  console.log("905_Strategy_Pancake_UsdcUsdt.2");
 
   const core = Addresses.getCore() as CoreAddresses;
 
   const strategyImplDeployment = await deployments.get('PancakeConverterStrategy');
-  const proxyDeployResult = await deployments.deploy('Strategy_PancakeConverterStrategy_UsdcUsdt', {
+  const proxyDeployResult = await deployments.deploy('Strategy_PancakeConverterStrategy_DaiUsdbc', {
     contract: '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled',
     from: deployer,
     log: true,
@@ -28,7 +27,7 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   });
 
   await deployments.execute(
-    'Strategy_PancakeConverterStrategy_UsdcUsdt',
+    'Strategy_PancakeConverterStrategy_DaiUsdbc',
     {
       from: deployer,
       log: true,
@@ -45,9 +44,9 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const params = await txParams(hre, ethers.provider);
   await RunHelper.runAndWait2(strategyContract.populateTransaction.init(
     core.controller,
-    SPLITTER_USDC_ADDRESS_ZKEVM,
+    SPLITTER_USDbC_ADDRESS,
     CONVERTER_ADDRESS,
-    PANCAKE_USDC_USDT_ZKEVM,
+    PANCAKE_DAI_USDbC_BASE,
     0,
     0,
     [
@@ -56,13 +55,13 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
       parseUnits('1.003'),
       parseUnits('1.002')
     ],
-    PANCAKE_MASTERCHEF,
+    PANCAKE_MASTERCHEF_BASE,
     {
       ...params,
     },
   ));
 };
 export default func;
-func.tags = ['Strategy_PancakeConverterStrategy_UsdcUsdt'];
+func.tags = ['Strategy_PancakeConverterStrategy_DaiUsdbc'];
 func.dependencies = ['PancakeConverterStrategy'];
-func.skip = async hre => (await hre.getChainId()) !== '1101'
+func.skip = async hre => (await hre.getChainId()) !== '8453'

@@ -150,12 +150,29 @@ export const deployAddresses = {
     "hardhat": ZkevmAddresses.PANCAKE_POOL_USDT_USDC_LP,
     "zkevm": ZkevmAddresses.PANCAKE_POOL_USDT_USDC_LP
   },
-  PANCAKE_SWAP_TOKEN: {
-    "hardhat": ZkevmAddresses.PANCAKE_SWAP_TOKEN,
-    "zkevm": ZkevmAddresses.PANCAKE_SWAP_TOKEN
+  PANCAKE_USDC_USDbC_BASE: {
+    "hardhat": BaseAddresses.PANCAKE_POOL_USDC_USDbC_LP_100,
+    "base": BaseAddresses.PANCAKE_POOL_USDC_USDbC_LP_100
   },
-  PANCAKE_MASTERCHEF: {
+  PANCAKE_DAI_USDbC_BASE: {
+    "hardhat": BaseAddresses.PANCAKE_POOL_DAI_USDbC_LP_100,
+    "base": BaseAddresses.PANCAKE_POOL_DAI_USDbC_LP_100
+  },
+  PANCAKE_SWAP_TOKEN_ZKEVM: {
+    "hardhat": ZkevmAddresses.PANCAKE_SWAP_TOKEN,
+    "zkevm": ZkevmAddresses.PANCAKE_SWAP_TOKEN,
+  },
+  PANCAKE_SWAP_TOKEN_BASE: {
+    "hardhat": BaseAddresses.PANCAKE_SWAP_TOKEN,
+    "base": BaseAddresses.PANCAKE_SWAP_TOKEN
+  },
+  PANCAKE_MASTERCHEF_ZKEVM: {
     "hardhat": ZkevmAddresses.PANCAKE_MASTER_CHEF_V3,
-    "zkevm": ZkevmAddresses.PANCAKE_MASTER_CHEF_V3
-  }
+    "zkevm": ZkevmAddresses.PANCAKE_MASTER_CHEF_V3,
+  },
+  PANCAKE_MASTERCHEF_BASE: {
+    "hardhat": BaseAddresses.PANCAKE_MASTER_CHEF_V3,
+    "base": BaseAddresses.PANCAKE_MASTER_CHEF_V3,
+  },
+
 }

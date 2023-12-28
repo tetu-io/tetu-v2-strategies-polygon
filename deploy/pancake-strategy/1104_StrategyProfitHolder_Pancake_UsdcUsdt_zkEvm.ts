@@ -5,7 +5,7 @@ import {ethers} from "hardhat";
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts  } = hre;
-  const { PANCAKE_SWAP_TOKEN } = await getNamedAccounts();
+  const { PANCAKE_SWAP_TOKEN_ZKEVM } = await getNamedAccounts();
   const strategyAddress = (await deployments.get('Strategy_PancakeConverterStrategy_UsdcUsdt')).address
   const strategy = await ethers.getContractAt('PancakeConverterStrategy', strategyAddress)
   const state = await strategy.getDefaultState()
@@ -15,11 +15,11 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     true,
     undefined,
     'StrategyProfitHolder_Pancake_UsdcUsdt',
-    [strategyAddress, [state[0][0], state[0][1], PANCAKE_SWAP_TOKEN]],
+    [strategyAddress, [state[0][0], state[0][1], PANCAKE_SWAP_TOKEN_ZKEVM]],
     true
   )
 };
 export default func;
 func.tags = ['StrategyProfitHolder_Pancake_UsdcUsdt'];
 func.dependencies = ['Strategy_PancakeConverterStrategy_UsdcUsdt'];
-func.skip = async hre => (await hre.getChainId()) !== '1101'
+func.skip = async hre => (await hre.getChainId()) !== '1101';

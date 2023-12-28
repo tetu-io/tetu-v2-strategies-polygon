@@ -20,7 +20,8 @@ export async function isContractExist(hre: HardhatRuntimeEnvironment, contractNa
   return false;
 }
 
-export async function txParams(hre: HardhatRuntimeEnvironment, provider: providers.Provider) {
+/** @deprecated */
+export async function _txParams(hre: HardhatRuntimeEnvironment, provider: providers.Provider) {
 
   const gasPrice = (await provider.getGasPrice()).toNumber();
   console.log('Gas price:', formatUnits(gasPrice, 9));
@@ -48,6 +49,27 @@ export async function txParams(hre: HardhatRuntimeEnvironment, provider: provide
   return {
     gasPrice: (gasPrice * 1.1).toFixed(0),
   };
+}
+
+export async function txParams(hre: HardhatRuntimeEnvironment, provider: providers.Provider) {
+  const feeData = await provider.getFeeData();
+
+  console.log('maxPriorityFeePerGas', formatUnits(feeData.maxPriorityFeePerGas?.toString() ?? '0', 9));
+  console.log('maxFeePerGas', formatUnits(feeData.maxFeePerGas?.toString() ?? '0', 9));
+  console.log('gas price:', formatUnits(feeData.gasPrice?.toString() ?? '0', 9));
+
+  if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
+    const maxPriorityFeePerGas = Math.max(feeData.maxPriorityFeePerGas?.toNumber() ?? 1, feeData.lastBaseFeePerGas?.toNumber() ?? 1);
+    const maxFeePerGas = (feeData.maxFeePerGas?.toNumber() ?? 1) * 2;
+    return {
+      maxPriorityFeePerGas: maxPriorityFeePerGas.toFixed(0),
+      maxFeePerGas: maxFeePerGas.toFixed(0),
+    };
+  } else {
+    return {
+      gasPrice: ((feeData.gasPrice?.toNumber() ?? 1) * 1.2).toFixed(0),
+    };
+  }
 }
 
 export async function txParams2() {
