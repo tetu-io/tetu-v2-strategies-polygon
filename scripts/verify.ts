@@ -27,6 +27,10 @@ async function main() {
   await verify('KyberDebtLib', 'contracts/strategies/kyber');
   await verify('KyberConverterStrategyLogicLib', 'contracts/strategies/kyber');
   await verify('KyberConverterStrategy', 'contracts/strategies/kyber');
+  await verify('PancakeLib', 'contracts/strategies/pancake');
+  await verify('PancakeDebtLib', 'contracts/strategies/pancake');
+  await verify('PancakeConverterStrategyLogicLib', 'contracts/strategies/pancake');
+  await verify('PancakeConverterStrategy', 'contracts/strategies/pancake');
   // await verify('RebalanceDebtConfig', 'contracts/tools');
 }
 

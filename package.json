@@ -29,7 +29,13 @@
     "deploy-base": "hardhat deploy --network base --write true && npm run verify-all-base",
     "verify-all-base": "hardhat run scripts/verify.ts --network base && hardhat etherscan-verify --network base --api-url https://api.basescan.org",
     "set-settings:base": "hardhat run scripts/set-settings.ts --network base",
-    "rebalance:base": "npx cross-env NODE_OPTIONS=\"--max_old_space_size=4096\" hardhat run scripts/rebalance.ts --network base --max-memory 4096"
+    "rebalance:base": "npx cross-env NODE_OPTIONS=\"--max_old_space_size=4096\" hardhat run scripts/rebalance.ts --network base --max-memory 4096",
+
+    "deploy-zkevm": "hardhat deploy --network zkevm --write true && npm run verify-all-zkevm",
+    "verify-all-zkevm": "hardhat run scripts/verify.ts --network zkevm && hardhat etherscan-verify --network zkevm --api-url https://api-zkevm.polygonscan.com/",
+    "set-settings:zkevm": "hardhat run scripts/set-settings.ts --network zkevm",
+    "rebalance:zkevm": "npx cross-env NODE_OPTIONS=\"--max_old_space_size=4096\" hardhat run scripts/rebalance.ts --network zkevm --max-memory 4096"
+
   },
   "keywords": [
     "solidity",
