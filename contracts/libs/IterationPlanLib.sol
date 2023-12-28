@@ -106,6 +106,7 @@ library IterationPlanLib {
     uint cA1;
     uint cB1;
     uint aA2;
+    uint aB2;
   }
 //endregion ------------------------------------------------ Data types
 
@@ -321,12 +322,12 @@ library IterationPlanLib {
     }
 
     // swap A to B: full or partial
-    amountToSwap = estimateSwapAmountForRepaySwapRepay(
+    // SCB-876: swap B to A are also possible here
+    bool swapB;
+    (amountToSwap, swapB) = estimateSwapAmountForRepaySwapRepay(
       p,
-      balancesAB[0],
-      balancesAB[1],
-      idxAB[0],
-      idxAB[1],
+      [balancesAB[0], balancesAB[1]],
+      [idxAB[0], idxAB[1]],
       propB,
       totalAB[0],
       totalAB[1],
@@ -334,33 +335,38 @@ library IterationPlanLib {
       amountToRepay
     );
 
-    if (requiredAmountToReduceDebt != 0) {
-      // probably it worth to increase amount to swap?
-      uint requiredAmountToSwap = requiredAmountToReduceDebt * p.prices[idxAB[1]] * p.decs[idxAB[0]] / p.prices[idxAB[0]] / p.decs[idxAB[1]];
-      amountToSwap = Math.max(amountToSwap, requiredAmountToSwap);
-      amountToSwap = Math.min(amountToSwap, balancesAB[0] + collateralAmount);
-    }
+    if (swapB) {
+      // edge case: swap B => A; for simplicity, we don't take into account requiredAmountToReduceDebt
+      return (idxAB[1] + 1, amountToSwap, idxAB[1] + 1);
+    } else {
+      // swap A => B
+      if (requiredAmountToReduceDebt != 0) {
+        // probably it worth to increase amount to swap?
+        uint requiredAmountToSwap = requiredAmountToReduceDebt * p.prices[idxAB[1]] * p.decs[idxAB[0]] / p.prices[idxAB[0]] / p.decs[idxAB[1]];
+        amountToSwap = Math.max(amountToSwap, requiredAmountToSwap);
+        amountToSwap = Math.min(amountToSwap, balancesAB[0] + collateralAmount);
+      }
 
-    return (idxAB[0] + 1, amountToSwap, idxAB[1] + 1);
+      return (idxAB[0] + 1, amountToSwap, idxAB[1] + 1);
+    }
   }
 
   /// @notice Estimate swap amount for iteration "repay-swap-repay"
   ///         The iteration should give us amounts of assets in required proportions.
   ///         There are two cases here: full swap and partial swap. Second repay is not required if the swap is partial.
   /// @param collateralA Estimated value of collateral A received after repay balanceB
-  /// @return amount of token A to be swapped
+  /// @return amountToSwap Amount to be swapped
+  /// @return swapB False: swap A => B; True: swap B => A
   function estimateSwapAmountForRepaySwapRepay(
     SwapRepayPlanParams memory p,
-    uint balanceA,
-    uint balanceB,
-    uint indexA,
-    uint indexB,
+    uint[2] memory balancesAB,
+    uint[2] memory indicesAB,
     uint propB,
     uint totalCollateralA,
     uint totalBorrowB,
     uint collateralA,
     uint amountToRepayB
-  ) internal pure returns(uint) {
+  ) internal pure returns(uint amountToSwap, bool swapB) {
     // N - number of the state
     // bAN, bBN - balances of A and B; aAN, aBN - amounts of A and B; cAN, cBN - collateral/borrow amounts of A/B
     // alpha ~ cAN/cBN - estimated ratio of collateral/borrow
@@ -381,14 +387,13 @@ library IterationPlanLib {
     EstimateSwapAmountForRepaySwapRepayLocal memory v;
     v.x = 1e18 - propB;
     v.y = propB;
-
 // 1. repay 1
     // convert amounts A, amounts B to cost A, cost B in USD
-    v.bA1 = (balanceA + collateralA) * p.prices[indexA] / p.decs[indexA];
-    v.bB1 = (balanceB - amountToRepayB) * p.prices[indexB] / p.decs[indexB];
-    v.cB1 = (totalBorrowB - amountToRepayB) * p.prices[indexB] / p.decs[indexB];
-    v.alpha = 1e18 * totalCollateralA * p.prices[indexA] * p.decs[indexB]
-      / p.decs[indexA] / p.prices[indexB] / totalBorrowB; // (!) approx estimation
+    v.bA1 = (balancesAB[0] + collateralA) * p.prices[indicesAB[0]] / p.decs[indicesAB[0]];
+    v.bB1 = (balancesAB[1] - amountToRepayB) * p.prices[indicesAB[1]] / p.decs[indicesAB[1]];
+    v.cB1 = (totalBorrowB - amountToRepayB) * p.prices[indicesAB[1]] / p.decs[indicesAB[1]];
+    v.alpha = 1e18 * totalCollateralA * p.prices[indicesAB[0]] * p.decs[indicesAB[1]]
+      / p.decs[indicesAB[0]] / p.prices[indicesAB[1]] / totalBorrowB; // (!) approx estimation
 
 // 2. full swap
     v.aA2 = v.bA1;
@@ -402,13 +407,21 @@ library IterationPlanLib {
     ) / (v.y * v.alpha / 1e18 + v.x);
 
     if (v.aB3 > v.cB1) {
-      // there is not enough debt to make second repay
-      // we need to make partial swap and receive assets in right proportions in result
-      // v.gamma = 1e18 * (v.y * v.bA1 - v.x * v.bB1) / (v.bA1 * (v.x * v.s / 1e18 + v.y));
-      v.aA2 = v.bA1 * (v.y * v.bA1 - v.x * v.bB1) / (v.bA1 * (v.x * v.swapRatio / 1e18 + v.y));
+      if (v.y * v.bA1 >= v.x * v.bB1) {
+        // there is not enough debt to make second repay
+        // we need to make partial swap and receive assets in right proportions in result
+        // v.gamma = 1e18 * (v.y * v.bA1 - v.x * v.bB1) / (v.bA1 * (v.x * v.s / 1e18 + v.y));
+        v.aA2 = (v.y * v.bA1 - v.x * v.bB1) / (v.x * v.swapRatio / 1e18 + v.y);
+      } else {
+        // scb-867: edge case, we need to make swap B => A
+        v.aB2 = (v.x * v.bB1 - v.y * v.bA1) / (v.x * v.swapRatio / 1e18 + v.y) /* * 1e18 / v.swapRatio */ ;
+        swapB = true;
+      }
     }
 
-    return v.aA2 * p.decs[indexA] / p.prices[indexA];
+    return swapB
+      ? (v.aB2 * p.decs[indicesAB[1]] / p.prices[indicesAB[1]], true) // edge case: swap B => A
+      : (v.aA2 * p.decs[indicesAB[0]] / p.prices[indicesAB[0]], false); // normal case: swap A => B
   }
 
   /// @notice Prepare a plan to swap leftovers to required proportion

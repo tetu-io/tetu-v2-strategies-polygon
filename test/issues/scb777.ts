@@ -15,7 +15,7 @@ import {defaultAbiCoder} from "ethers/lib/utils";
 import {PackedData} from "../baseUT/utils/PackedData";
 import {Misc} from "../../scripts/utils/Misc";
 import {BigNumber, BytesLike} from "ethers";
-import {AggregatorUtils} from "../baseUT/utils/AggregatorUtils";
+import {AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR, AggregatorUtils} from "../baseUT/utils/AggregatorUtils";
 import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY_1} from "../baseUT/AppConstants";
 import {IStateNum, StateUtilsNum} from "../baseUT/utils/StateUtilsNum";
 import {ethers} from "hardhat";
@@ -50,9 +50,11 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
       await InjectUtils.injectTetuConverter(signer);
 
       await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
+        POLYGON_NETWORK_ID,
         strategy,
         MaticAddresses.TETU_LIQUIDATOR,
-          () => true // single iteration
+        AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR,
+        () => true, // single iteration
       );
     });
   });
@@ -139,7 +141,8 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
 
       if (tokenToSwap !== Misc.ZERO_ADDRESS) {
         if (aggregator === MaticAddresses.AGG_ONEINCH_V5) {
-          swapData = await AggregatorUtils.buildSwapTransactionData(
+          swapData = await AggregatorUtils.buildSwapTransactionDataForOneInch(
+            POLYGON_NETWORK_ID,
             quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
             quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
             quote.amountToSwap,
@@ -420,7 +423,8 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
 
       if (tokenToSwap !== Misc.ZERO_ADDRESS) {
         if (aggregator === MaticAddresses.AGG_ONEINCH_V5) {
-          swapData = await AggregatorUtils.buildSwapTransactionData(
+          swapData = await AggregatorUtils.buildSwapTransactionDataForOneInch(
+            POLYGON_NETWORK_ID,
             quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
             quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
             quote.amountToSwap,
@@ -616,8 +620,9 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
       console.log("quote", quote);
       console.log("unfoldBorrows.quoteWithdrawByAgg.FINISH --------------------------------", quote);
 
-      const swapData = await AggregatorUtils.buildSwapTransactionData(
-          quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+      const swapData = await AggregatorUtils.buildSwapTransactionDataForOneInch(
+          POLYGON_NETWORK_ID,
+        quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
           quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
           quote.amountToSwap,
           strategyAsOperator.address,

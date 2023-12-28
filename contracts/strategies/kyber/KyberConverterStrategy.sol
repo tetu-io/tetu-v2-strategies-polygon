@@ -16,7 +16,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
   string public constant override NAME = "Kyber Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.KYBER;
-  string public constant override STRATEGY_VERSION = "3.1.1";
+  string public constant override STRATEGY_VERSION = "3.1.2";
   //endregion ------------------------------------------------- Constants
 
   //region ------------------------------------------------- INIT
@@ -61,7 +61,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   //region --------------------------------------------- OPERATOR ACTIONS
 
   /// @notice Manually set status of the fuse
-  /// @param status See PairBasedStrategyLib.FuseStatus enum for possile values
+  /// @param status See PairBasedStrategyLib.FuseStatus enum for possible values
   function setFuseStatus(uint status) external {
     StrategyLib2.onlyOperators(controller());
     PairBasedStrategyLib.setFuseStatus(state.pair.fuseAB, PairBasedStrategyLib.FuseStatus(status));

@@ -4,9 +4,15 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {
   AlgebraConverterStrategy__factory,
   BalancerBoostedStrategy__factory,
-  ConverterStrategyBase, IBalancerGauge__factory,
-  IERC20__factory, ISplitter__factory, ITetuConverter__factory, KyberConverterStrategy__factory,
-  TetuVaultV2, UniswapV3ConverterStrategy__factory
+  ConverterStrategyBase,
+  IBalancerGauge__factory,
+  IERC20__factory,
+  ISplitter__factory,
+  ITetuConverter__factory,
+  KyberConverterStrategy__factory,
+  PancakeConverterStrategy__factory,
+  TetuVaultV2,
+  UniswapV3ConverterStrategy__factory
 } from "../../../typechain";
 import hre from "hardhat";
 import {MockHelper} from "../helpers/MockHelper";
@@ -143,6 +149,19 @@ export class StateUtils {
       const kyberStrategy = KyberConverterStrategy__factory.connect(strategy.address, signer)
       const state = await PackedData.getDefaultState(kyberStrategy);
       liquidity = state.totalLiquidity
+      borrowAssetsBalances.push(await IERC20__factory.connect(state.tokenB, signer).balanceOf(strategy.address))
+      const debtStored = await ITetuConverter__factory.connect(await strategy.converter(), signer).callStatic.getDebtAmountStored(
+        strategy.address,
+        asset.address,
+        state.tokenB,
+        false
+      )
+      collaterals.push(debtStored[1])
+      amountsToRepay.push(debtStored[0])
+    } else if (await strategy.PLATFORM() === 'Pancake')  {
+      const pancakeStrategy = PancakeConverterStrategy__factory.connect(strategy.address, signer)
+      const state = await PackedData.getDefaultState(pancakeStrategy);
+      liquidity = state.totalLiquidity;
       borrowAssetsBalances.push(await IERC20__factory.connect(state.tokenB, signer).balanceOf(strategy.address))
       const debtStored = await ITetuConverter__factory.connect(await strategy.converter(), signer).callStatic.getDebtAmountStored(
         strategy.address,

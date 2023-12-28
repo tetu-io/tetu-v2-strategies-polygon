@@ -150,7 +150,8 @@ describe.skip('KyberConverterStrategy reduce debt by agg test', function() {
 
     console.log('Quote', quote);
 
-    const swapData = await AggregatorUtils.buildSwapTransactionData(
+    const swapData = await AggregatorUtils.buildSwapTransactionDataForOneInch(
+      POLYGON_NETWORK_ID,
       quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
       quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
       quote.amountToSwap,

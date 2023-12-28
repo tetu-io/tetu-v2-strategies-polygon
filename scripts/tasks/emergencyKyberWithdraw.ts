@@ -12,18 +12,18 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {formatUnits} from "ethers/lib/utils";
 import {IController__factory} from "../../typechain/factories/@tetu_io/tetu-converter/contracts/interfaces";
 
-async function getBalances(
-  signer: SignerWithAddress,
-  strategy: KyberConverterStrategyEmergency,
-  governance: string
-): Promise<IBalances> {
-  return {
-    strategyUsdc: +formatUnits(await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, signer).balanceOf(strategy.address), 6),
-    strategyUsdt: +formatUnits(await IERC20__factory.connect(MaticAddresses.USDT_TOKEN, signer).balanceOf(strategy.address), 6),
-    governanceUsdc: +formatUnits(await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, signer).balanceOf(governance), 6),
-    governanceUsdt: +formatUnits(await IERC20__factory.connect(MaticAddresses.USDT_TOKEN, signer).balanceOf(governance), 6),
-  }
-}
+// async function getBalances(
+//   signer: SignerWithAddress,
+//   strategy: KyberConverterStrategyEmergency,
+//   governance: string
+// ): Promise<IBalances> {
+//   return {
+//     strategyUsdc: +formatUnits(await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, signer).balanceOf(strategy.address), 6),
+//     strategyUsdt: +formatUnits(await IERC20__factory.connect(MaticAddresses.USDT_TOKEN, signer).balanceOf(strategy.address), 6),
+//     governanceUsdc: +formatUnits(await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, signer).balanceOf(governance), 6),
+//     governanceUsdt: +formatUnits(await IERC20__factory.connect(MaticAddresses.USDT_TOKEN, signer).balanceOf(governance), 6),
+//   }
+// }
 
 /**
  * to run the script:
@@ -44,9 +44,9 @@ async function main() {
 
   const governance = await IController__factory.connect(await vault.controller(), signer).governance();
   const kyberStrategy = KyberConverterStrategyEmergency__factory.connect(STRATEGY, signer);
-
-  const balancesBefore = await getBalances(signer, kyberStrategy, governance);
-  console.log("Balances before", balancesBefore);
+  //
+  // const balancesBefore = await getBalances(signer, kyberStrategy, governance);
+  // console.log("Balances before", balancesBefore);
 
   await kyberStrategy.emergencyCloseDirectDebtsUsingFlashLoan();
 
@@ -56,10 +56,10 @@ async function main() {
   await kyberStrategy.salvage(MaticAddresses.USDC_TOKEN, balanceUsdc);
   await kyberStrategy.salvage(MaticAddresses.USDT_TOKEN, balanceUsdt);
 
-  const balancesAfter = await getBalances(signer, kyberStrategy, governance);
-  console.log("Balances after", balancesAfter);
-  console.log("Profit USDC:", balancesAfter.governanceUsdc - balancesBefore.governanceUsdc);
-  console.log("Profit USDT:", balancesAfter.governanceUsdt - balancesBefore.governanceUsdt);
+  // const balancesAfter = await getBalances(signer, kyberStrategy, governance);
+  // console.log("Balances after", balancesAfter);
+  // console.log("Profit USDC:", balancesAfter.governanceUsdc - balancesBefore.governanceUsdc);
+  // console.log("Profit USDT:", balancesAfter.governanceUsdt - balancesBefore.governanceUsdt);
 }
 
 main()

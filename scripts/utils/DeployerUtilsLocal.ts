@@ -37,7 +37,8 @@ import { ToolsAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/T
 import { DeployerUtils } from './DeployerUtils';
 import { Misc } from './Misc';
 import {BaseAddresses} from "../addresses/BaseAddresses";
-import {BASE_NETWORK_ID, POLYGON_NETWORK_ID} from "../../test/baseUT/utils/HardhatUtils";
+import {BASE_NETWORK_ID, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from "../../test/baseUT/utils/HardhatUtils";
+import {ZkevmAddresses} from "../addresses/ZkevmAddresses";
 
 // tslint:disable-next-line:no-var-requires
 const hre = require('hardhat');
@@ -264,6 +265,8 @@ export class DeployerUtilsLocal {
       return MaticAddresses.GOV_ADDRESS;
     } else if (chainId === BASE_NETWORK_ID) {
       return BaseAddresses.GOV_ADDRESS;
+    } else if (chainId === ZKEVM_NETWORK_ID) {
+      return ZkevmAddresses.GOV_ADDRESS;
     } else {
       throw Error('No config for ' + chainId);
     }
@@ -294,6 +297,8 @@ export class DeployerUtilsLocal {
       return MaticAddresses.WMATIC_TOKEN;
     } else if (chainId === BASE_NETWORK_ID) {
       return BaseAddresses.WETH_TOKEN;
+    } else if (chainId === ZKEVM_NETWORK_ID) {
+      return ZkevmAddresses.WETH_TOKEN;
     } else {
       throw Error('No config for ' + chainId);
     }

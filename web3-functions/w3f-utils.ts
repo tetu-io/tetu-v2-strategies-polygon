@@ -48,6 +48,7 @@ const openOceanChains = new Map<number, string>([
   [42161, 'arbitrum'],
   [10, 'optimism'],
   [8453, 'base'],
+  [1101, 'polygon_zkevm']
 ]);
 
 export async function quoteOneInch(

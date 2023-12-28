@@ -2,7 +2,36 @@ import {Misc} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
-import {AlgebraConverterStrategy, AlgebraConverterStrategy__factory, AlgebraLib, ControllerV2, ControllerV2__factory, ConverterStrategyBase__factory, ConverterStrategyBaseLibFacade2, IERC20__factory, IERC20Metadata, IERC20Metadata__factory, IRebalancingV2Strategy, IRebalancingV2Strategy__factory, ISetupPairBasedStrategy__factory, IStrategyV2, ITetuConverter, ITetuConverter__factory, ITetuLiquidator, KyberConverterStrategy, KyberConverterStrategy__factory, KyberLib, StrategySplitterV2, SwapHelper, TetuVaultV2, UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory, UniswapV3Lib, VaultFactory__factory} from "../../../../typechain";
+import {
+  AlgebraConverterStrategy,
+  AlgebraConverterStrategy__factory,
+  AlgebraLib,
+  ControllerV2,
+  ControllerV2__factory,
+  ConverterStrategyBase__factory,
+  ConverterStrategyBaseLibFacade2,
+  IERC20__factory,
+  IERC20Metadata,
+  IERC20Metadata__factory,
+  IRebalancingV2Strategy,
+  IRebalancingV2Strategy__factory,
+  ISetupPairBasedStrategy__factory,
+  IStrategyV2,
+  ITetuConverter,
+  ITetuConverter__factory,
+  ITetuLiquidator,
+  KyberConverterStrategy,
+  KyberConverterStrategy__factory,
+  KyberLib, PancakeConverterStrategy__factory,
+  PancakeLib,
+  StrategySplitterV2,
+  SwapHelper, TetuLiquidator__factory,
+  TetuVaultV2,
+  UniswapV3ConverterStrategy,
+  UniswapV3ConverterStrategy__factory,
+  UniswapV3Lib,
+  VaultFactory__factory
+} from "../../../../typechain";
 import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../utils/ConverterUtils";
@@ -12,8 +41,10 @@ import {UniversalTestUtils} from "../../utils/UniversalTestUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {IStateParams} from "../../utils/StateUtilsNum";
 import {parseUnits} from "ethers/lib/utils";
-import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../AppPlatforms";
+import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_PANCAKE, PLATFORM_UNIV3} from "../AppPlatforms";
 import {MockHelper} from "../../helpers/MockHelper";
+import {BaseAddresses} from "../../../../scripts/addresses/BaseAddresses";
+import {BASE_NETWORK_ID, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from "../../utils/HardhatUtils";
 
 /**
  * Kyber PID for most current block
@@ -64,7 +95,7 @@ export interface IStrategyBasicInfo {
   swapper: string;
   quoter: string;
   pool: string;
-  lib: UniswapV3Lib | AlgebraLib | KyberLib;
+  lib: UniswapV3Lib | AlgebraLib | KyberLib | PancakeLib;
   swapHelper?: SwapHelper;
 }
 
@@ -90,7 +121,9 @@ export class PairBasedStrategyBuilder {
   private static async setPriceImitator(
       signer: SignerWithAddress,
       state: IDefaultState,
-      strategy: IRebalancingV2Strategy
+      strategy: IRebalancingV2Strategy,
+      chainId: number,
+      converter: string
   ){
     const platform = await ConverterStrategyBase__factory.connect(strategy.address, signer).PLATFORM();
     if (platform === PLATFORM_UNIV3) {
@@ -99,15 +132,24 @@ export class PairBasedStrategyBuilder {
       await PriceOracleImitatorUtils.algebra(signer, state.pool, state.tokenA);
     } else if (platform === PLATFORM_KYBER) {
       await PriceOracleImitatorUtils.kyber(signer, state.pool, state.tokenA);
+    } else if (platform === PLATFORM_PANCAKE) {
+      if (chainId === BASE_NETWORK_ID) {
+        await PriceOracleImitatorUtils.pancakeBaseChain(signer, state.pool, state.tokenA);
+      } else if (chainId === ZKEVM_NETWORK_ID) {
+        await PriceOracleImitatorUtils.pancakeZkEvm(signer, state.pool, state.tokenA, converter);
+      } else {
+        throw Error("PairBasedStrategyBuilder: chain not supported");
+      }
     } else throw Error(`setPriceImitator: unknown platform ${platform}`);
   }
 
   private static async build(
-      p: IBuilderParams,
-      controllerAsGov: ControllerV2,
-      core: CoreAddresses,
-      data: IVaultStrategyInfo,
-      lib: UniswapV3Lib | AlgebraLib | KyberLib
+    chainId: number,
+    p: IBuilderParams,
+    controllerAsGov: ControllerV2,
+    core: CoreAddresses,
+    data: IVaultStrategyInfo,
+    lib: UniswapV3Lib | AlgebraLib | KyberLib | PancakeLib
   ): Promise<IBuilderResults> {
     const signer = p.signer;
     const gov = await Misc.impersonate(p.gov);
@@ -116,11 +158,11 @@ export class PairBasedStrategyBuilder {
     const strategy = IRebalancingV2Strategy__factory.connect(data.strategy.address, gov);
 
     // whitlist the strategy in the converter
-    await ConverterUtils.whitelist([strategy.address]);
+    await ConverterUtils.whitelist([strategy.address], p.converter);
     const state = await PackedData.getDefaultState(strategy);
 
     // prices should be the same in the pool and in the oracle
-    await this.setPriceImitator(signer, state, strategy);
+    await this.setPriceImitator(signer, state, strategy, chainId, p.converter);
 
     // prices should be the same in the pool and in the liquidator
     const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
@@ -177,7 +219,8 @@ export class PairBasedStrategyBuilder {
     }
   }
 
-  static async buildUniv3(p: IBuilderParams): Promise<IBuilderResults> {
+//region Polygon
+  static async buildUniv3(p: IBuilderParams, chainId: number): Promise<IBuilderResults> {
     const signer = p.signer;
     const gov = await Misc.impersonate(p.gov);
     const core = Addresses.getCore() as CoreAddresses;
@@ -213,7 +256,7 @@ export class PairBasedStrategyBuilder {
     );
 
     const lib = await DeployerUtils.deployContract(signer, 'UniswapV3Lib') as UniswapV3Lib;
-    return this.build(p, controller, core, data, lib);
+    return this.build(chainId, p, controller, core, data, lib);
   }
 
   static async buildAlgebra(p: IBuilderParams): Promise<IBuilderResults> {
@@ -259,7 +302,7 @@ export class PairBasedStrategyBuilder {
         false,
     );
     const lib = await DeployerUtils.deployContract(signer, 'AlgebraLib') as AlgebraLib;
-    return this.build(p, controller, core, data, lib);
+    return this.build(POLYGON_NETWORK_ID, p, controller, core, data, lib);
   }
 
   static async buildKyber(p: IBuilderParams, pid?: number): Promise<IBuilderResults> {
@@ -308,6 +351,49 @@ export class PairBasedStrategyBuilder {
         false,
     );
     const lib = await DeployerUtils.deployContract(signer, 'KyberLib') as KyberLib;
-    return this.build(p, controllerAsGov, core, data, lib);
+    return this.build(POLYGON_NETWORK_ID, p, controllerAsGov, core, data, lib);
   }
+//endregion Polygon
+
+//region Base chain
+  static async buildPancake(p: IBuilderParams, chainId: number, chef: string): Promise<IBuilderResults> {
+    const signer = p.signer;
+    const gov = await Misc.impersonate(p.gov);
+    const core = Addresses.getCore() as CoreAddresses;
+    const controller = ControllerV2__factory.connect(core.controller, gov);
+
+    const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
+      p.asset,
+      p.vaultName,
+      async(_splitterAddress: string) => {
+        const _strategy = PancakeConverterStrategy__factory.connect(
+          await DeployerUtils.deployProxy(signer, 'PancakeConverterStrategy'),
+          gov,
+        );
+
+        await _strategy.init(
+          core.controller,
+          _splitterAddress,
+          p.converter,
+          p.pool,
+          0,
+          0,
+          [0, 0, Misc.MAX_UINT, 0],
+          chef
+        );
+
+        return _strategy as unknown as IStrategyV2;
+      },
+      controller,
+      gov,
+      p.buffer ?? 1000,
+      p.depositFee ?? 300,
+      p.withdrawFee ?? 300,
+      false,
+    );
+
+    const lib = await DeployerUtils.deployContract(signer, 'PancakeLib') as PancakeLib;
+    return this.build(chainId, p, controller, core, data, lib);
+  }
+//endregion Base chain
 }

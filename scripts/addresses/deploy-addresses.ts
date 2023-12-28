@@ -1,5 +1,6 @@
 import { MaticAddresses } from './MaticAddresses';
 import { BaseAddresses } from "./BaseAddresses";
+import {ZkevmAddresses} from "./ZkevmAddresses";
 
 export const deployAddresses = {
   deployer: 0,
@@ -63,6 +64,7 @@ export const deployAddresses = {
     "hardhat": MaticAddresses.TETU_CONVERTER,
     "matic": MaticAddresses.TETU_CONVERTER,
     "base": BaseAddresses.TETU_CONVERTER,
+    "zkevm": ZkevmAddresses.TETU_CONVERTER,
   },
   UNISWAPV3_USDC_USDT_100: {
     "hardhat": MaticAddresses.UNISWAPV3_USDC_USDT_100,
@@ -94,7 +96,11 @@ export const deployAddresses = {
   },
   SPLITTER_USDC_ADDRESS: {
     "hardhat": "0xA31cE671A0069020F7c87ce23F9cAAA7274C794c",
-    "matic": "0xA31cE671A0069020F7c87ce23F9cAAA7274C794c"
+    "matic": "0xA31cE671A0069020F7c87ce23F9cAAA7274C794c",
+  },
+  SPLITTER_USDC_ADDRESS_ZKEVM: {
+    "hardhat": "0x05836f1D0372b4f6c13B2c20f315Be81ffBEA671",
+    "zkevm": "0x05836f1D0372b4f6c13B2c20f315Be81ffBEA671", // vault 0x3650823873F34a019533db164f492e09365cfa7E
   },
   SPLITTER_USDbC_ADDRESS: {
     "hardhat": "0xA01ac87f8Fc03FA2c497beFB24C74D538958DAbA",
@@ -140,4 +146,33 @@ export const deployAddresses = {
     "hardhat": MaticAddresses.KNC_TOKEN,
     "matic": MaticAddresses.KNC_TOKEN
   },
+  PANCAKE_USDC_USDT_ZKEVM: {
+    "hardhat": ZkevmAddresses.PANCAKE_POOL_USDT_USDC_LP,
+    "zkevm": ZkevmAddresses.PANCAKE_POOL_USDT_USDC_LP
+  },
+  PANCAKE_USDC_USDbC_BASE: {
+    "hardhat": BaseAddresses.PANCAKE_POOL_USDC_USDbC_LP_100,
+    "base": BaseAddresses.PANCAKE_POOL_USDC_USDbC_LP_100
+  },
+  PANCAKE_DAI_USDbC_BASE: {
+    "hardhat": BaseAddresses.PANCAKE_POOL_DAI_USDbC_LP_100,
+    "base": BaseAddresses.PANCAKE_POOL_DAI_USDbC_LP_100
+  },
+  PANCAKE_SWAP_TOKEN_ZKEVM: {
+    "hardhat": ZkevmAddresses.PANCAKE_SWAP_TOKEN,
+    "zkevm": ZkevmAddresses.PANCAKE_SWAP_TOKEN,
+  },
+  PANCAKE_SWAP_TOKEN_BASE: {
+    "hardhat": BaseAddresses.PANCAKE_SWAP_TOKEN,
+    "base": BaseAddresses.PANCAKE_SWAP_TOKEN
+  },
+  PANCAKE_MASTERCHEF_ZKEVM: {
+    "hardhat": ZkevmAddresses.PANCAKE_MASTER_CHEF_V3,
+    "zkevm": ZkevmAddresses.PANCAKE_MASTER_CHEF_V3,
+  },
+  PANCAKE_MASTERCHEF_BASE: {
+    "hardhat": BaseAddresses.PANCAKE_MASTER_CHEF_V3,
+    "base": BaseAddresses.PANCAKE_MASTER_CHEF_V3,
+  },
+
 }

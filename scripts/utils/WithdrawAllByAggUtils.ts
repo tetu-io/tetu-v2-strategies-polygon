@@ -10,6 +10,7 @@ import {IERC20Metadata__factory} from "../../typechain/factories/@tetu_io/tetu-l
 import {PLAN_SWAP_REPAY_0} from "../../test/baseUT/AppConstants";
 import {RunHelper} from "./RunHelper";
 import {ethers} from "hardhat";
+import {POLYGON_NETWORK_ID} from "../../test/baseUT/utils/HardhatUtils";
 
 export interface IMakeFullWithdraw {
   entryToPool: number;
@@ -58,7 +59,8 @@ export async function makeFullWithdraw(strategyAsOperator: IRebalancingV2Strateg
     if (tokenToSwap !== Misc.ZERO_ADDRESS) {
       if (aggregator === MaticAddresses.AGG_ONEINCH_V5) {
         console.log("1inch is in use");
-        swapData = await AggregatorUtils.buildSwapTransactionData(
+        swapData = await AggregatorUtils.buildSwapTransactionDataForOneInch(
+          POLYGON_NETWORK_ID,
           quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
           quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
           amountToSwap,

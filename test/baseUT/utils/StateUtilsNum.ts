@@ -24,7 +24,7 @@ import {
   ITetuConverter__factory,
   IUniswapV3Pool__factory,
   KyberConverterStrategy__factory,
-  KyberLib,
+  KyberLib, PancakeLib,
   TetuVaultV2,
   UniswapV3ConverterStrategy__factory,
   UniswapV3Lib
@@ -34,7 +34,7 @@ import {writeFileSyncRestoreFolder} from "./FileUtils";
 import {ConverterAdaptersHelper} from "../converter/ConverterAdaptersHelper";
 import {BigNumber} from "ethers";
 import {PackedData} from "./PackedData";
-import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../strategies/AppPlatforms";
+import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_PANCAKE, PLATFORM_UNIV3} from "../strategies/AppPlatforms";
 import {PairStrategyLiquidityUtils} from "../strategies/pair/PairStrategyLiquidityUtils";
 import {CaptureEvents, IEventsSet, ISummaryFromEventsSet} from "../strategies/CaptureEvents";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
@@ -184,7 +184,7 @@ export interface IStateParams {
 
 export interface IGetStateParams {
   eventsSet?: IEventsSet;
-  lib?: KyberLib | UniswapV3Lib | AlgebraLib;
+  lib?: KyberLib | UniswapV3Lib | AlgebraLib | PancakeLib;
   additionalParamValues?: number[];
 }
 
@@ -271,6 +271,8 @@ export class StateUtilsNum {
       await IConverterController__factory.connect(await converter.controller(), signer).priceOracle(),
       signer
     );
+    console.log("StateUtilsNumb.converter", converter.address);
+    console.log("StateUtilsNumb.priceOracle", priceOracle.address);
     const borrowManager = await IBorrowManager__factory.connect(
       await IConverterController__factory.connect(await converter.controller(), signer).borrowManager(),
       signer
@@ -304,8 +306,9 @@ export class StateUtilsNum {
       const isUniv3 = platform === PLATFORM_UNIV3;
       const isAlgebra = platform === PLATFORM_ALGEBRA;
       const isKyber = platform === PLATFORM_KYBER;
+      const isPancake = platform === PLATFORM_PANCAKE;
 
-      if (isUniv3 || isAlgebra || isKyber)  {
+      if (isUniv3 || isAlgebra || isKyber || isPancake)  {
         const uniswapV3Strategy = UniswapV3ConverterStrategy__factory.connect(strategy.address, signer);
         const state = await PackedData.getDefaultState(uniswapV3Strategy);
         // console.log("state", state);

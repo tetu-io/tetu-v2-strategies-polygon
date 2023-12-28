@@ -10,8 +10,9 @@ import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/add
 import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon';
 import { DeployerUtilsLocal } from '../../../scripts/utils/DeployerUtilsLocal';
 import { Misc } from '../../../scripts/utils/Misc';
-import {BASE_NETWORK_ID} from "../utils/HardhatUtils";
+import {BASE_NETWORK_ID, ZKEVM_NETWORK_ID} from "../utils/HardhatUtils";
 import {BaseAddresses} from "../../../scripts/addresses/BaseAddresses";
+import {ZkevmAddresses} from "../../../scripts/addresses/ZkevmAddresses";
 
 const log: Logger<undefined> = new Logger(logSettings);
 
@@ -66,6 +67,14 @@ export class PriceCalculatorUtils {
       return liquidator.getPrice(token, defaultToken, one);
     } else if (chainId === BASE_NETWORK_ID) {
       const defaultToken = BaseAddresses.USDbC_TOKEN;
+      const one = parseUnits('1');
+      if (token.toLowerCase() === defaultToken.toLowerCase()) {
+        return one;
+      }
+
+      return liquidator.getPrice(token, defaultToken, one);
+    } else if (chainId === ZKEVM_NETWORK_ID) {
+      const defaultToken = ZkevmAddresses.USDC_TOKEN;
       const one = parseUnits('1');
       if (token.toLowerCase() === defaultToken.toLowerCase()) {
         return one;

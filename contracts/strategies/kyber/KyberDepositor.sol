@@ -85,7 +85,7 @@ abstract contract KyberDepositor is DepositorBase, Initializable {
   }
 
   /// @notice Returns the total supply of the depositor.
-  /// @return In UniV3 we can not calculate the total supply of the wgole pool. Return only ourself value.
+  /// @return In UniV3 we can not calculate the total supply of the whole pool. Return only ourself value.
   function _depositorTotalSupply() override internal view virtual returns (uint) {
     return uint(state.pair.totalLiquidity);
   }

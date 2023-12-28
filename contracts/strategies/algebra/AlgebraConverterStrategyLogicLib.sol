@@ -27,9 +27,6 @@ library AlgebraConverterStrategyLogicLib {
   event RebalancedDebt(uint loss, uint profitToCover, uint coveredByRewards);
   event AlgebraFeesClaimed(uint fee0, uint fee1);
   event AlgebraRewardsClaimed(uint reward, uint bonusReward);
-  /// @param loss Total amount of loss
-  /// @param coveredByRewards Part of the loss covered by rewards
-  event CoverLoss(uint loss, uint coveredByRewards);
   //endregion ------------------------------------------------ Events
 
   //region ------------------------------------------------ Data types
@@ -271,6 +268,7 @@ library AlgebraConverterStrategyLogicLib {
 
     FARMING_CENTER.enterFarming(key, vars.tokenId, 0, false);
 
+    // todo probably we need to swap amountsConsumed depending on depositorSwapTokens in same way as in univ3
     state.pair.totalLiquidity += vars.liquidity;
     liquidityOut = uint(vars.liquidity);
   }

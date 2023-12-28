@@ -3,7 +3,12 @@ import {expect} from 'chai';
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
 import {IBuilderResults} from "./PairBasedStrategyBuilder";
-import {ConverterStrategyBase__factory, MockSwapper} from "../../../../typechain";
+import {
+  ConverterStrategyBase__factory, IERC20Metadata__factory,
+  ITetuLiquidator,
+  ITetuLiquidator__factory,
+  MockSwapper
+} from "../../../../typechain";
 import {IListStates, PairBasedStrategyPrepareStateUtils} from "./PairBasedStrategyPrepareStateUtils";
 import {IStateNum, StateUtilsNum} from "../../utils/StateUtilsNum";
 import {PLAN_REPAY_SWAP_REPAY_1, PLAN_SWAP_ONLY_2, PLAN_SWAP_REPAY_0} from "../../AppConstants";
@@ -11,19 +16,23 @@ import {buildEntryData0, buildEntryData1, buildEntryData2} from "../../utils/Ent
 import {Misc} from "../../../../scripts/utils/Misc";
 import {PackedData} from "../../utils/PackedData";
 import {BigNumber, BytesLike} from "ethers";
-import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
-import {AggregatorUtils} from "../../utils/AggregatorUtils";
+import {AGGREGATOR_TETU_LIQUIDATOR, AggregatorType, AggregatorUtils} from "../../utils/AggregatorUtils";
 import {MockAggregatorUtils} from "../../mocks/MockAggregatorUtils";
 import {CaptureEvents} from "../CaptureEvents";
+import {PlatformUtils} from "../../utils/PlatformUtils";
+import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 
 export const SWAP_AMOUNT_DEFAULT = 0.3;
 export const SWAP_AMOUNT_ALGEBRA = 0.2;
 
 export interface IWithdrawParams {
+  chainId: number;
   aggregator: string;
+  aggregatorType: AggregatorType;
   planEntryData: string;
   entryToPool: number;
   singleIteration: boolean;
+  tetuLiquidator: string;
 
   pathOut?: string;
   states0?: IStateNum[];
@@ -48,6 +57,7 @@ export interface IPrepareWithdrawTestResults {
 }
 
 export interface ICompleteWithdrawTestParams {
+  chainId: number;
   entryToPool: number;
   planKind: number;
   singleIteration: boolean;
@@ -55,8 +65,8 @@ export interface ICompleteWithdrawTestParams {
   pathOut: string;
   states0: IStateNum[];
 
-  /** ZERO by default */
-  aggregator?: string;
+  aggregator?: string; // zero by default
+  aggregatorType?: AggregatorType; // AGGREGATOR_TETU_LIQUIDATOR by default
   mockSwapper?: MockSwapper;
 }
 
@@ -84,35 +94,21 @@ export class PairWithdrawByAggUtils {
       const amountToSwap = quote.amountToSwap.eq(0) ? 0 : quote.amountToSwap;
 
       if (tokenToSwap !== Misc.ZERO_ADDRESS) {
-        if (p.aggregator === MaticAddresses.AGG_ONEINCH_V5) {
-          swapData = await AggregatorUtils.buildSwapTransactionData(
-            quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-            quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-            quote.amountToSwap,
-            strategyAsOperator.address,
-          );
-        } else if (p.aggregator === MaticAddresses.TETU_LIQUIDATOR) {
-          swapData = AggregatorUtils.buildTxForSwapUsingLiquidatorAsAggregator({
-            tokenIn: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-            tokenOut: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-            amount: quote.amountToSwap,
-            slippage: BigNumber.from(5_000)
-          });
-          console.log("swapData for tetu liquidator", swapData);
-        }
+        swapData = await AggregatorUtils.buildSwapData(
+          signer,
+          p.chainId,
+          p.aggregatorType,
+          quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+          quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+          quote.amountToSwap,
+          strategyAsOperator.address,
+        );
       }
       console.log("makeFullWithdraw.withdrawByAggStep.execute --------------------------------");
-      // console.log("tokenToSwap", tokenToSwap);
-      // console.log("AGGREGATOR", p.aggregator);
-      // console.log("amountToSwap", amountToSwap);
-      // console.log("swapData", swapData);
-      // console.log("swapData.length", swapData.length);
-      // console.log("planEntryData", p.planEntryData);
-      // console.log("ENTRY_TO_POOL_IS_ALLOWED", p.entryToPool);
 
       if (p.mockSwapper) {
-        // temporary replace swapper by mocked one
-        await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, p.mockSwapper.address);
+        console.log("------------------ temporary replace swapper by mocked one");
+        await MockAggregatorUtils.injectSwapperToLiquidator(p.tetuLiquidator, b, p.mockSwapper.address);
       }
 
       const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
@@ -141,8 +137,8 @@ export class PairWithdrawByAggUtils {
       }
 
       if (p.mockSwapper) {
-        // restore original swapper
-        await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, b.swapper);
+        console.log("------------------ restore original swapper");
+        await MockAggregatorUtils.injectSwapperToLiquidator(p.tetuLiquidator, b);
       }
 
 
@@ -192,8 +188,10 @@ export class PairWithdrawByAggUtils {
       signer2,
       b,
       {
+        chainId: p.chainId,
         singleIteration: p.singleIteration,
-        aggregator: p.aggregator ?? Misc.ZERO_ADDRESS,
+        aggregator: p.aggregator || Misc.ZERO_ADDRESS,
+        aggregatorType: p.aggregatorType ?? AGGREGATOR_TETU_LIQUIDATOR,
         entryToPool: p.entryToPool,
         planEntryData: p.planKind === PLAN_REPAY_SWAP_REPAY_1
           ? buildEntryData1(BigNumber.from(0), p.propNotUnderlying)
@@ -204,7 +202,8 @@ export class PairWithdrawByAggUtils {
               : "0x",
         pathOut: p.pathOut,
         states0: p.states0,
-        mockSwapper: p.mockSwapper
+        mockSwapper: p.mockSwapper,
+        tetuLiquidator: PlatformUtils.getTetuLiquidator(p.chainId)
       },
     );
 
