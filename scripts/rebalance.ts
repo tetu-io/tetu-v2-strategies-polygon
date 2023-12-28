@@ -35,6 +35,7 @@ const MAX_ERROR_LENGTH = 1000;
 const DELAY_BETWEEN_NSRS = 60;
 const DELAY_AFTER_NSR = 10;
 const DELAY_NEED_NSR_CONFIRM = 300;
+const DEFAULT_ENV_SEPARATOR = ':separate:';
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -68,6 +69,10 @@ const argv = require('yargs/yargs')()
     maxErrorCount: {
       type: 'number',
       default: 100
+    },
+    excludeErrorLogs: {
+      type: 'string',
+      default: ''
     }
   }).argv;
 
@@ -83,7 +88,7 @@ enum EventType {
 }
 
 const eventLogs = new Map<EventType, string[][]>();
-const excludeErrorLogs: string[] = [];
+let excludeErrorLogs: string[] = [];
 
 async function logEvent(eventType: EventType, params: string[], isError = false, message: string = '') {
   if (isError && !excludeErrorLogs.some(excludeErrorLog => excludeErrorLog.toLocaleLowerCase() === message)) {
@@ -142,6 +147,7 @@ cron.schedule(argv.cronDailyReport, async () => {
 
 async function main() {
   console.log('Strategies NSR and debt rebalancer');
+  excludeErrorLogs = argv.excludeErrorLogs.split(DEFAULT_ENV_SEPARATOR);
 
   if (!['localhost', 'matic'].includes(hre.network.name)) {
     console.log('Unsupported network', hre.network.name);
