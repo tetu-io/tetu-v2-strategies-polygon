@@ -8,8 +8,9 @@ const THRESHOLD_REFRESH = 6 * 60 * 60 * 1000;
 const actualThresholdsHits = new Map<string, number>();
 let lastThresholdRefresh = Date.now();
 
-export function isMsgNeedToPrint(msg: string): { needPrint: boolean, report: string } {
+export function isMsgNeedToPrint(msg: string): { needPrint: boolean, report: string, oldThreshold: number } {
   let refreshReport = '';
+  let oldThreshold = 0;
 
   if (Date.now() - lastThresholdRefresh > THRESHOLD_REFRESH) {
 
@@ -29,20 +30,22 @@ export function isMsgNeedToPrint(msg: string): { needPrint: boolean, report: str
     if (msg.includes(msgPattern)) {
       patternExist = true;
       const actualHits = (actualThresholdsHits.get(msgPattern) || 0) + 1;
+      console.log(msgPattern, 'actualHits', actualHits);
       actualThresholdsHits.set(msgPattern, actualHits);
 
       if (actualHits > msgThresholdCount) {
+        oldThreshold = msgThresholdCount;
         actualThresholdsHits.set(msgPattern, 0);
-        return { needPrint: true, report: refreshReport };
+        return { needPrint: true, report: refreshReport, oldThreshold };
       }
     }
   }
 
   if (!patternExist) {
     // if pattern does not exist print
-    return { needPrint: true, report: refreshReport };
+    return { needPrint: true, report: refreshReport, oldThreshold };
   } else {
     // if pattern exist but threshold do not reached - do not print
-    return { needPrint: false, report: refreshReport };
+    return { needPrint: false, report: refreshReport, oldThreshold };
   }
 }

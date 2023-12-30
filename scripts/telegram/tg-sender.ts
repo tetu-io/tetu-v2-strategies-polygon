@@ -23,10 +23,14 @@ interface SendMessageParams {
 const MAX_MSG_LENGTH = 1000;
 
 export async function sendMessageToTelegram(msg: string, extraText = '', needCheckThreshold = true) {
-  const thresholdResult = needCheckThreshold ? isMsgNeedToPrint(msg) : { needPrint: true, report: '' };
+  const thresholdResult = needCheckThreshold ? isMsgNeedToPrint(msg + extraText) : {
+    needPrint: true,
+    report: '',
+    oldThreshold: 0,
+  };
 
   if (thresholdResult.report !== '') {
-    log.info(thresholdResult.report);
+    log.info('thresholdResult.report', thresholdResult.report);
     await sendMessageToTelegram(thresholdResult.report, '', false);
   }
 
@@ -46,6 +50,10 @@ export async function sendMessageToTelegram(msg: string, extraText = '', needChe
   } catch (e) {
   }
   msg = `CHAIN ${Misc.getChainId()} | BLOCK ${block} : ${msg} \n ${extraText}`.substring(0, MAX_MSG_LENGTH);
+
+  if (thresholdResult.oldThreshold > 0) {
+    msg = `Skipped ${thresholdResult.oldThreshold} similar messages before. \n ${msg}`;
+  }
 
   const params: SendMessageParams = {
     chat_id: env.tgChatId,
