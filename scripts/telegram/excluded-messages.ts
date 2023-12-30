@@ -2,6 +2,7 @@ const THRESHOLDS = new Map<string, number>([
   ['VM Exception while processing transaction: reverted with reason string \'51\'', 100],
   ['Return amount is not enough', 100],
   ['insufficient funds for intrinsic transaction', 10],
+  ['TS-16 price impact', 25],
 ]);
 
 const THRESHOLD_REFRESH = 6 * 60 * 60 * 1000;
