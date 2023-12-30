@@ -189,12 +189,7 @@ async function main() {
                 const gas = await strategy.estimateGas.rebalanceNoSwaps(true, { ...tp, gasLimit: 15_000_000 });
                 console.log('estimated gas', formatUnits(gas, 9));
 
-                await RunHelper.runAndWait(
-                  provider,
-                  () => strategy.rebalanceNoSwaps(true, { ...tp, gasLimit: 15_000_000 }),
-                  true,
-                  true,
-                );
+                await RunHelper.runAndWait2(strategy.populateTransaction.rebalanceNoSwaps(true));
                 console.log('NSR success!', strategyName, strategyAddress);
                 if (argv.nsrMsgSuccess) {
                   await sendMessageToTelegram(`NSR success! ${strategyName} ${strategyAddress}`);
