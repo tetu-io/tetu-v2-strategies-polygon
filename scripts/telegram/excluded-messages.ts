@@ -3,6 +3,8 @@ const THRESHOLDS = new Map<string, number>([
   ['Return amount is not enough', 100],
   ['insufficient funds for intrinsic transaction', 10],
   ['TS-16 price impact', 25],
+  ['NSR success!', 20],
+  ['Rebalance success!', 20],
 ]);
 
 const THRESHOLD_REFRESH = 6 * 60 * 60 * 1000;
