@@ -99,7 +99,7 @@ export class RunHelper {
       if (stopOnError) {
         throw e;
       } else {
-        await sendMessageToTelegram(`Run and wait error: ${e}`);
+        await sendMessageToTelegram(`Run and wait error`, (e as string).toString());
         log.error('Run and wait error: ', e);
       }
     }

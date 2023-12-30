@@ -61,6 +61,6 @@ export async function splitterHardWork(splitterAdr: string) {
     }
   } catch (e) {
     console.error('HARD WORK ERROR', e);
-    await sendMessageToTelegram(`HARD WORK ERROR ${e}`);
+    await sendMessageToTelegram(`HARD WORK ERROR`, (e as string).toString());
   }
 }

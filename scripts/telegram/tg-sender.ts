@@ -1,10 +1,10 @@
-import {Logger} from "tslog";
-import axios from "axios";
-import {isExcludedMessage} from "./excluded-messages";
-import {ethers} from "hardhat";
-import logSettings from "../../log_settings";
-import {Misc} from "../utils/Misc";
+import { Logger } from 'tslog';
+import axios from 'axios';
+import { ethers } from 'hardhat';
+import logSettings from '../../log_settings';
+import { Misc } from '../utils/Misc';
 import { EnvSetup } from '../utils/EnvSetup';
+import { isMsgNeedToPrint } from './excluded-messages';
 
 const log: Logger<undefined> = new Logger(logSettings);
 
@@ -13,15 +13,24 @@ const log: Logger<undefined> = new Logger(logSettings);
 interface SendMessageParams {
   chat_id: number | string;
   text: string;
-  parse_mode?: "Markdown" | "HTML";
+  parse_mode?: 'Markdown' | 'HTML';
   disable_web_page_preview?: boolean;
   disable_notification?: boolean;
   reply_to_message_id?: number;
   reply_markup?: unknown;
 }
 
-export async function sendMessageToTelegram(msg: string) {
-  if (isExcludedMessage(msg)) {
+const MAX_MSG_LENGTH = 1000;
+
+export async function sendMessageToTelegram(msg: string, extraText = '', needCheckThreshold = true) {
+  const thresholdResult = needCheckThreshold ? isMsgNeedToPrint(msg) : { needPrint: true, report: '' };
+
+  if (thresholdResult.report !== '') {
+    log.info(thresholdResult.report);
+    await sendMessageToTelegram(thresholdResult.report, '', false);
+  }
+
+  if (!thresholdResult.needPrint) {
     return;
   }
   const env = EnvSetup.getEnv();
@@ -36,7 +45,7 @@ export async function sendMessageToTelegram(msg: string) {
     block = await ethers.provider.getBlockNumber();
   } catch (e) {
   }
-  msg = `CHAIN ${Misc.getChainId()} | BLOCK ${block} : ${msg}`;
+  msg = `CHAIN ${Misc.getChainId()} | BLOCK ${block} : ${msg} \n ${extraText}`.substring(0, MAX_MSG_LENGTH);
 
   const params: SendMessageParams = {
     chat_id: env.tgChatId,
@@ -46,8 +55,6 @@ export async function sendMessageToTelegram(msg: string) {
   try {
     await axios.post(`${TELEGRAM_API_URL}/sendMessage`, params);
   } catch (error) {
-    console.error("Error sending message to telegram:", error);
+    console.error('Error sending message to telegram:', error);
   }
-
-
 }
