@@ -82,7 +82,7 @@
     "hardhat-abi-exporter": "^2.10.1",
     "hardhat-change-network": "^0.0.7",
     "hardhat-contract-sizer": "^2.8.0",
-    "hardhat-deploy": "^0.11.25",
+    "hardhat-deploy": "0.11.25",
     "hardhat-deploy-ethers": "^0.3.0-beta.13",
     "hardhat-gas-reporter": "^1.0.9",
     "isomorphic-unfetch": "^4.0.2",
@@ -90,7 +90,6 @@
     "ky": "^0.33.3",
     "lodash": "^4.17.21",
     "mocha": "^10.2.0",
-    "node-cron": "^3.0.3",
     "pg": "^8.10.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -110,8 +109,5 @@
   },
   "engines": {
     "node": "^18.x.x"
-  },
-  "devDependencies": {
-    "@types/node-cron": "^3.0.11"
   }
 }
