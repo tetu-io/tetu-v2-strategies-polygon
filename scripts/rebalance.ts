@@ -19,6 +19,9 @@ import { subscribeTgBot } from './telegram/tg-subscribe';
 import { Misc } from './utils/Misc';
 import { NSRUtils } from './utils/NSRUtils';
 import { formatUnits } from 'ethers/lib/utils';
+import cron from 'node-cron';
+import { Simulate } from 'react-dom/test-utils';
+import error = Simulate.error;
 
 // test rebalance debt
 // NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtW3F.ts
@@ -32,6 +35,7 @@ const MAX_ERROR_LENGTH = 1000;
 const DELAY_BETWEEN_NSRS = 60;
 const DELAY_AFTER_NSR = 10;
 const DELAY_NEED_NSR_CONFIRM = 300;
+const DEFAULT_ENV_SEPARATOR = ':separate:';
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -58,10 +62,92 @@ const argv = require('yargs/yargs')()
       type: 'number',
       default: 60_000,
     },
+    cronDailyReport: {
+      type: 'string',
+      default: '22 19 * * *'
+    },
+    maxErrorCount: {
+      type: 'number',
+      default: 100
+    },
+    excludeErrorLogs: {
+      type: 'string',
+      default: ''
+    }
   }).argv;
+
+enum EventType {
+  Rebalance = 'Rebalance success',
+  NSR = 'NSR success',
+  ErrorNSR = 'Error NSR',
+  ErrorExecute = 'Error EXECUTE',
+  Empty = 'Empty result',
+  ErrorProcessing = 'Error inside strategy processing',
+  ErrorRebalance = 'Error in debt rebalance',
+  ErrorFetching = 'Error fetch from url'
+}
+
+const eventLogs = new Map<EventType, string[][]>();
+let excludeErrorLogs: string[] = [];
+
+async function logEvent(eventType: EventType, params: string[], isError = false, message: string = '') {
+  if (isError && !excludeErrorLogs.some(excludeErrorLog => excludeErrorLog.toLocaleLowerCase() === message)) {
+    await sendMessageToTelegram(message);
+    return;
+  }
+  if (!eventLogs.has(eventType)) {
+    eventLogs.set(eventType, []);
+  }
+  const events = eventLogs.get(eventType)!;
+
+  eventLogs.get(eventType)!.push(params);
+
+  if (eventType.toString().startsWith('Error') && events.length >= argv.maxErrorCount) {
+    const params = new Set(events.map(item => item.join(' - ')));
+
+    await sendMessageToTelegram(`${eventType}: ${events.length} time(s)\n\n${Array.from(params).join('\n')}`);
+    eventLogs.set(eventType, []);
+  }
+}
+
+async function sendDailyReport() {
+  let report = 'Daily Report:\n\n';
+  eventLogs.forEach((params, eventType) => {
+    report += '---------------------------------------------------------------------------------\n'
+
+    const countMap = new Map<string, number>();
+
+    params.forEach(items => {
+      const key = `${items.join(' - ')}`;
+      countMap.set(key, (countMap.get(key) || 0) + 1);
+    });
+
+    report += `${eventType} Events:\n`;
+    countMap.forEach((count, strategyInfo) => {
+      report += ` - ${strategyInfo}: ${count} time(s)\n`;
+    });
+    report += '---------------------------------------------------------------------------------\n\n'
+  });
+
+
+  if (report) {
+    await sendMessageToTelegram(report);
+  }
+
+  // clear logs
+  eventLogs.clear();
+}
+
+
+// ------------ SEND REPORT
+cron.schedule(argv.cronDailyReport, async () => {
+  await sendDailyReport();
+});
+
 
 async function main() {
   console.log('Strategies NSR and debt rebalancer');
+  excludeErrorLogs = argv.excludeErrorLogs.split(DEFAULT_ENV_SEPARATOR);
 
   if (!['localhost', 'matic'].includes(hre.network.name)) {
     console.log('Unsupported network', hre.network.name);
@@ -149,7 +235,7 @@ async function main() {
                 );
                 console.log('NSR success!', strategyName, strategyAddress);
                 if (argv.nsrMsgSuccess) {
-                  await sendMessageToTelegram(`NSR success! ${strategyName} ${strategyAddress}`);
+                  await logEvent(EventType.NSR, [strategyName, strategyAddress]);
                 }
 
                 now = await Misc.getBlockTsFromChain();
@@ -157,8 +243,12 @@ async function main() {
                 await sleep(DELAY_AFTER_NSR * 1000);
               } catch (e) {
                 console.log('Error NSR', strategyName, strategyAddress, e);
-                await sendMessageToTelegram(`Error NSR ${strategyName} ${strategyAddress} ${(e as string).toString()
-                  .substring(0, MAX_ERROR_LENGTH)}`);
+                await logEvent(
+                  EventType.ErrorNSR,
+                  [strategyName, strategyAddress],
+                  true,
+                  `Error NSR ${strategyName} ${strategyAddress} ${(e as string).toString().substring(0, MAX_ERROR_LENGTH)}`
+                );
               }
             } else {
               if (needNSRTimestamp[strategyAddress] !== 0) {
@@ -211,31 +301,43 @@ async function main() {
                   );
                   console.log('Rebalance success!', strategyName, strategyAddress);
                   if (argv.rebalanceDebtMsgSuccess) {
-                    await sendMessageToTelegram(`Rebalance success! ${strategyName} ${strategyAddress}`);
+                    await logEvent(EventType.Rebalance, [strategyName, strategyAddress])
                   }
                 } catch (e) {
                   console.log('Error EXECUTE', strategyName, strategyAddress, e);
-                  await sendMessageToTelegram(`Error EXECUTE ${strategyName} ${strategyAddress} ${(e as string).toString()
-                    .substring(0, MAX_ERROR_LENGTH)}`);
+                  await logEvent(
+                    EventType.ErrorExecute,
+                    [strategyName, strategyAddress],
+                    true,
+                    `Error EXECUTE ${strategyName} ${strategyAddress} ${(e as string).toString().substring(0, MAX_ERROR_LENGTH)}`
+                  );
                 }
               } else {
                 console.log('Result can not be executed:', strategyName, result.message);
               }
             } else {
               console.log('Empty result!', strategyName);
-              await sendMessageToTelegram('Empty result! ' + strategyName);
+              await logEvent(EventType.Empty, [strategyName, strategyAddress]);
             }
           } catch (e) {
             console.log('Error inside strategy processing', strategyAddress, e);
-            await sendMessageToTelegram(`Error inside strategy processing ${strategyAddress} ${(e as string).toString()
-              .substring(0, MAX_ERROR_LENGTH)}`);
+            await logEvent(
+              EventType.ErrorProcessing,
+              [strategyAddress],
+              true,
+              `Error inside strategy processing ${strategyAddress} ${(e as string).toString().substring(0, MAX_ERROR_LENGTH)}`
+            );
           }
         }
       }
     } catch (e) {
       console.log('error in debt rebalance loop', e);
-      await sendMessageToTelegram(`error in debt rebalance loop ${(e as string).toString()
-        .substring(0, MAX_ERROR_LENGTH)}`);
+      await logEvent(
+        EventType.ErrorRebalance,
+        [],
+        true,
+        `error in debt rebalance loop ${(e as string).toString().substring(0, MAX_ERROR_LENGTH)}`
+      );
     }
 
     await sleep(argv.rebalanceDebtLoopDelay);
@@ -252,7 +354,13 @@ const fetchFuncAxios = async(url: string) => {
       await sendMessageToTelegram(`wrong response for fetch ${url} ${r.data}`);
     }
   } catch (e) {
-    await sendMessageToTelegram(`error fetch ${url}`);
+    console.log(`error fetch ${url}`, e);
+    await logEvent(
+      EventType.ErrorFetching,
+      [url],
+      true,
+      `error fetch ${url}`
+    );
     throw e;
   }
 };
