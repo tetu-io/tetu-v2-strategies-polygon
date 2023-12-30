@@ -85,7 +85,7 @@ abstract contract KyberDepositor is DepositorBase, Initializable {
   }
 
   /// @notice Returns the total supply of the depositor.
-  /// @return In UniV3 we can not calculate the total supply of the wgole pool. Return only ourself value.
+  /// @return In UniV3 we can not calculate the total supply of the whole pool. Return only ourself value.
   function _depositorTotalSupply() override internal view virtual returns (uint) {
     return uint(state.pair.totalLiquidity);
   }
@@ -101,9 +101,10 @@ abstract contract KyberDepositor is DepositorBase, Initializable {
 
   /// @notice Handles the withdrawal operation.
   /// @param liquidityAmount The amount of liquidity to be withdrawn.
+  /// @param emergency Emergency exit (only withdraw, don't claim any rewards or make any other additional actions)
   /// @return amountsOut The amounts of the tokens withdrawn.
-  function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
-    amountsOut = KyberConverterStrategyLogicLib.exit(state, uint128(liquidityAmount));
+  function _depositorExit(uint liquidityAmount, bool emergency) override internal virtual returns (uint[] memory amountsOut) {
+    amountsOut = KyberConverterStrategyLogicLib.exit(state, uint128(liquidityAmount), emergency);
   }
 
   /// @notice Returns the amount of tokens that would be withdrawn based on the provided liquidity amount.

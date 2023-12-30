@@ -149,7 +149,8 @@ export class DoHardWorkLoopBase {
       await stateRegistrar('beforeLoop', this);
     }
     await this.loop(loops, loopValue, advanceBlocks, stateRegistrar, swap1, swap2, rebalacingStrategy, makeVolume);
-    await this.postLoopCheck();
+
+    await this.postLoopCheck(rebalacingStrategy);
     Misc.printDuration('HardWork test finished', start);
     if (stateRegistrar) {
       await stateRegistrar('final', this);
@@ -281,7 +282,6 @@ export class DoHardWorkLoopBase {
       if (swap2 && i % 2 !== 0) {
         await swap2(this.strategy, this.swapUser);
       }
-
       // *********** REBALANCE **************
       if (rebalancingStrategy) {
         const rebalancingStrategyContract = this.strategy as unknown as IRebalancingV2Strategy;
@@ -290,19 +290,28 @@ export class DoHardWorkLoopBase {
           await rebalancingStrategyContract.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
         }
       }
-
       // *********** MAKE VOLUME **************
       if (makeVolume && i % 3 === 0) {
         await makeVolume(this.strategy, this.swapUser);
       }
-
       // *********** DO HARD WORK **************
       if (advanceBlocks) {
         await TimeUtils.advanceNBlocks(loopValue);
       } else {
         await TimeUtils.advanceBlocksOnTs(loopValue);
       }
+      if (rebalancingStrategy) {
+        const rebalancingStrategyContract = this.strategy as unknown as IRebalancingV2Strategy;
+        if (await rebalancingStrategyContract.needRebalance()) {
+          console.log('RebalanceNoSwaps..');
+          await rebalancingStrategyContract.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+        }
+      }
+
+      console.log("start hardwork");
       await this.doHardWork();
+      console.log("end hardwork");
+
       // await this.loopPrintROIAndSaveEarned(i);
       await this.loopEndCheck();
       await this.loopEndActions(i, loops);
@@ -475,7 +484,7 @@ export class DoHardWorkLoopBase {
     await this.core.forwarder.distributeAll(this.vault.address);
   }
 
-  protected async postLoopCheck() {
+  protected async postLoopCheck(rebalacingStrategy?: boolean) {
     console.log('postLoopCheck...');
     // wait enough time for get rewards for liquidation
     // we need to have strategy without rewards tokens in the end
@@ -490,6 +499,15 @@ export class DoHardWorkLoopBase {
     // await this.strategy.withdrawAllToSplitter();
 
     // expect(await this.strategy.totalAssets()).is.eq(0); // Converter strategy may have dust
+
+
+    if (rebalacingStrategy) {
+      const rebalancingStrategyContract = this.strategy as unknown as IRebalancingV2Strategy;
+      if (await rebalancingStrategyContract.needRebalance()) {
+        console.log('RebalanceNoSwaps..');
+        await rebalancingStrategyContract.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+      }
+    }
 
     // need to call hard work to sell a little excess rewards
     const splitterSigner = await DeployerUtilsLocal.impersonate(await this.strategy.splitter());

@@ -56,6 +56,8 @@ describe("ConverterStrategyBaseInt", () => {
     [signer, signer2] = await ethers.getSigners();
     gov = await Misc.impersonate(MaticAddresses.GOV_ADDRESS);
     core = Addresses.getCore() as CoreAddresses;
+
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
   });
 
   after(async function() {
@@ -194,29 +196,10 @@ describe("ConverterStrategyBaseInt", () => {
           return {beforeExit, afterExit};
         }
 
-        it("should set investedAssets to 0", async () => {
-          const r = await loadFixture(makeDepositAndEmergencyExit);
-          await expect(r.beforeExit.strategy.investedAssets).gt(0);
-          await expect(r.afterExit.strategy.investedAssets).eq(0);
-        });
-        it("should set totalAssets to 0", async () => {
-          const r = await loadFixture(makeDepositAndEmergencyExit);
-          await expect(r.beforeExit.strategy.totalAssets).gt(0);
-          await expect(r.afterExit.strategy.totalAssets).eq(0);
-        });
         it("should set liquidity to 0", async () => {
           const r = await loadFixture(makeDepositAndEmergencyExit);
           await expect(r.beforeExit.strategy.liquidity).gt(0);
           await expect(r.afterExit.strategy.liquidity).eq(0);
-        });
-        it("should close all debts", async () => {
-          const r = await loadFixture(makeDepositAndEmergencyExit);
-          await expect(
-            r.beforeExit.converterDirect.platformAdapters.filter(x => x.length !== 0).length
-          ).eq(1);
-          await expect(
-            r.afterExit.converterDirect.platformAdapters.filter(x => x.length !== 0).length
-          ).eq(0);
         });
       });
     });
@@ -296,29 +279,10 @@ describe("ConverterStrategyBaseInt", () => {
           return {beforeExit, afterExit};
         }
 
-        it("should set investedAssets to 0", async () => {
-          const r = await loadFixture(makeDepositAndEmergencyExit);
-          await expect(r.beforeExit.strategy.investedAssets).gt(0);
-          await expect(r.afterExit.strategy.investedAssets).lt(DEFAULT_LIQUIDATION_THRESHOLD);
-        });
-        it("should set totalAssets to 0", async () => {
-          const r = await loadFixture(makeDepositAndEmergencyExit);
-          await expect(r.beforeExit.strategy.totalAssets).gt(0);
-          await expect(r.afterExit.strategy.totalAssets).lt(DEFAULT_LIQUIDATION_THRESHOLD);
-        });
         it("should set liquidity to 0", async () => {
           const r = await loadFixture(makeDepositAndEmergencyExit);
           await expect(r.beforeExit.gauge.strategyBalance).gt(0);
           await expect(r.afterExit.gauge.strategyBalance).eq(0);
-        });
-        it("should close all debts", async () => {
-          const r = await loadFixture(makeDepositAndEmergencyExit);
-          await expect(
-            r.beforeExit.converterDirect.platformAdapters.filter(x => x.length !== 0).length
-          ).gt(0);
-          await expect(
-            r.afterExit.converterDirect.platformAdapters.filter(x => x.length !== 0).length
-          ).eq(0);
         });
       });
     });
@@ -473,7 +437,7 @@ describe("ConverterStrategyBaseInt", () => {
       await cc.vault.setDoHardWorkOnInvest(false);
 
       // possibility to view debug messages of converter
-      // await InjectUtils.injectTetuConverter(signer);
+      await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
       // make deposits
       await TokenUtils.getToken(cc.asset, signer2.address, BigNumber.from(10000));
@@ -759,7 +723,7 @@ describe("ConverterStrategyBaseInt", () => {
       await ConverterUtils.whitelist([facade.address]);
 
       await ConverterUtils.disableAaveV2(signer);
-      await ConverterUtils.disableDForce(signer);
+      // await ConverterUtils.disableDForce(signer);
 
       const amountIn = parseUnits(p.amountIn, decimalsCollateral);
 
@@ -808,7 +772,7 @@ describe("ConverterStrategyBaseInt", () => {
       before(async function () {
         snapshotRoot = await TimeUtils.snapshot();
         await InjectUtils.injectTetuConverter(signer);
-        await InjectUtils.redeployAave3PoolAdapters(signer);
+        // await InjectUtils.redeployAave3PoolAdapters(signer);
       });
       after(async function () {
         await TimeUtils.rollback(snapshotRoot);

@@ -150,9 +150,10 @@ contract ConverterStrategyBaseLibFacade {
     uint indexCollateral,
     uint indexBorrowAsset,
     uint balanceBorrowAsset
-  ) external pure returns (
+  ) external view returns (
     uint amountOut
   ) {
+    liquidationThresholds[address(0)]; // hide pure warning
     return IterationPlanLib._getAmountToSell(
       remainingRequestedAmount,
       totalDebt,
@@ -178,31 +179,12 @@ contract ConverterStrategyBaseLibFacade {
     return ConverterStrategyBaseLib._sendTokensToForwarder(controller_, splitter_, tokens_, amounts_, thresholds_);
   }
 
-  function _recycle(
-    ITetuConverter converter_,
-    address asset,
-    uint compoundRatio,
-    address[] memory tokens,
-    ITetuLiquidator liquidator,
-    uint[] memory thresholds,
-    address[] memory rewardTokens,
-    uint[] memory rewardAmounts,
-    uint performanceFee
-  ) external returns (
+  function _recycle(ConverterStrategyBaseLib.RecycleParams memory p) external returns (
     uint[] memory amountsToForward,
-    uint amountToPerformanceAndInsurance
+    uint amountToPerformanceAndInsurance,
+    int debtToInsuranceOut
   ) {
-    return ConverterStrategyBaseLib._recycle(
-      converter_,
-      asset,
-      compoundRatio,
-      tokens,
-      liquidator,
-      thresholds,
-      rewardTokens,
-      rewardAmounts,
-      performanceFee
-    );
+    return ConverterStrategyBaseLib._recycle(p);
   }
 
   function getTokenAmounts(
@@ -285,5 +267,16 @@ contract ConverterStrategyBaseLibFacade {
     uint amountSendToRepay
   ) {
     return ConverterStrategyBaseLib._repayDebt(converter, collateralAsset, borrowAsset, amountToRepay);
+  }
+
+  function _coverDebtToInsuranceFromRewards(
+    ConverterStrategyBaseLib.RecycleParams memory p,
+    uint index,
+    uint debtAmount
+  ) external returns (
+    uint rewardsLeftovers,
+    int debtToInsuranceOut
+  ) {
+    return ConverterStrategyBaseLib._coverDebtToInsuranceFromRewards(p, index, debtAmount);
   }
 }

@@ -18,6 +18,7 @@ const ERC20_ABI = [
 
 const READER_ABI = [
   'function getLockedUnderlyingAmount(address strategy_) external view returns (uint estimatedUnderlyingAmount, uint totalAssets)',
+  'function getAmountToReduceDebtForStrategy(address strategy_, uint requiredLockedAmountPercent18) external view returns (uint requiredAmountToReduceDebt)',
 ];
 
 const CONFIG_ABI = [
@@ -46,15 +47,17 @@ const openOceanChains = new Map<number, string>([
   [56, 'bsc'],
   [42161, 'arbitrum'],
   [10, 'optimism'],
+  [8453, 'base'],
+  [1101, 'polygon_zkevm']
 ]);
 
-async function quoteOneInch(
+export async function quoteOneInch(
   fromTokenAddress: string,
   toTokenAddress: string,
   amount: string,
   fromAddress: string,
   chainId: number,
-  fetchFunc: (url: string) => Promise<unknown>,
+  fetchFunc: (url: string, headers: {}) => Promise<unknown>,
   protocols?: string,
 ): Promise<IAggQuote | undefined> {
   const params = {
@@ -67,10 +70,16 @@ async function quoteOneInch(
     allowPartialFill: false,
     protocols,
   };
-  const url = `https://api-tetu.1inch.io/v5.0/${chainId}/swap?${(new URLSearchParams(JSON.parse(JSON.stringify(params)))).toString()}`;
+
+  const oneInchApiKey = process.env.ONE_INCH_API_KEY ?? '';
+  if (oneInchApiKey === '') {
+    throw new Error('ONE_INCH_API_KEY is not set');
+  }
+
+  const url = `https://api.1inch.dev/swap/v5.0/${chainId}/swap?${(new URLSearchParams(JSON.parse(JSON.stringify(params)))).toString()}`;
   console.log('1inch API request', url);
   try {
-    const quote: ONE_INCH_RESPONSE = (await fetchFunc(url)) as ONE_INCH_RESPONSE;
+    const quote: ONE_INCH_RESPONSE = (await fetchFunc(url, {'Authorization': 'Bearer ' + oneInchApiKey})) as ONE_INCH_RESPONSE;
     if (quote && quote.tx && quote.tx.data && quote.tx.to && quote.toTokenAmount) {
       return {
         to: quote.tx.to,
@@ -94,7 +103,7 @@ async function quoteOpenOcean(
   account: string,
   chainId: number,
   provider: StaticJsonRpcProvider,
-  fetchFunc: (url: string) => Promise<unknown>,
+  fetchFunc: (url: string, headers: {}) => Promise<unknown>,
 ): Promise<IAggQuote | undefined> {
 
   const amount = formatUnits(amountWithDecimals, await (new Contract(inTokenAddress, ERC20_ABI, provider)).decimals());
@@ -114,7 +123,7 @@ async function quoteOpenOcean(
     JSON.parse(JSON.stringify(params)))).toString()}`;
   console.log('OpenOcean API request', url);
   try {
-    const quote: OPEN_OCEAN_RESPONSE = (await fetchFunc(url)) as OPEN_OCEAN_RESPONSE;
+    const quote: OPEN_OCEAN_RESPONSE = (await fetchFunc(url, {})) as OPEN_OCEAN_RESPONSE;
     if (quote && quote.data && quote.data.to && quote.data.data && quote.data.outAmount) {
       return {
         to: quote.data.to,
@@ -138,7 +147,7 @@ export async function runResolver(
   configAddress: string,
   agg: string,
   oneInchProtocols: string,
-  fetchFunc: (url: string) => Promise<unknown>,
+  fetchFunc: (url: string, headers: {}) => Promise<unknown>,
 ): Promise<Web3FunctionResult> {
   // console.log('run Resolver', `
   // strategyAddress: ${strategyAddress}
@@ -175,7 +184,9 @@ export async function runResolver(
   // console.log('isWithdrawDone', isWithdrawDone)
 
   const percent = r[0].mul(100).div(r[1].isZero() ? BigNumber.from('1') : r[1]).toNumber();
-  // console.log("Locked percent", percent)
+
+  console.log(`Current locked: ${percent}%. Max allowed locked: ${allowedLockedPercent}%`);
+
   if (!isFuseTriggered && percent <= allowedLockedPercent) {
     return {
       canExec: false,
@@ -215,10 +226,14 @@ export async function runResolver(
   const PLAN_SWAP_REPAY = 0;
   const PLAN_REPAY_SWAP_REPAY = 1;
 
+  const requiredAmountToReduceDebt = isFuseTriggered
+    ? BigNumber.from(0)
+    : await reader.getAmountToReduceDebtForStrategy(strategyAddress, allowedLockedPercent) as BigNumber;
+
   const planEntryData = !isFuseTriggered
     ? defaultAbiCoder.encode(
-      ['uint256', 'uint256'],
-      [PLAN_REPAY_SWAP_REPAY, MAX_UINT],
+      ['uint256', 'uint256', 'uint256'],
+      [PLAN_REPAY_SWAP_REPAY, MAX_UINT, requiredAmountToReduceDebt],
     )
     : defaultAbiCoder.encode(
       ['uint256', 'uint256'],

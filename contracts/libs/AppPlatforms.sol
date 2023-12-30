@@ -6,4 +6,5 @@ library AppPlatforms {
   string public constant BALANCER = "Balancer";
   string public constant ALGEBRA = "Algebra";
   string public constant KYBER = "Kyber";
+  string public constant PANCAKE = "Pancake"; // https://pancakeswap.finance/
 }

@@ -1,4 +1,4 @@
-import {PairBasedStrategyPrepareStateUtils} from "../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {PairBasedStrategyPrepareStateUtils} from "../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
 import {
   ConverterStrategyBase__factory,
   IRebalancingV2Strategy__factory,
@@ -15,13 +15,14 @@ import {defaultAbiCoder} from "ethers/lib/utils";
 import {PackedData} from "../baseUT/utils/PackedData";
 import {Misc} from "../../scripts/utils/Misc";
 import {BigNumber, BytesLike} from "ethers";
-import {AggregatorUtils} from "../baseUT/utils/AggregatorUtils";
-import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../baseUT/AppConstants";
+import {AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR, AggregatorUtils} from "../baseUT/utils/AggregatorUtils";
+import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY_1} from "../baseUT/AppConstants";
 import {IStateNum, StateUtilsNum} from "../baseUT/utils/StateUtilsNum";
 import {ethers} from "hardhat";
 import {CaptureEvents} from "../baseUT/strategies/CaptureEvents";
 import fs from "fs";
 import {InjectUtils} from "../baseUT/strategies/InjectUtils";
+import {buildEntryData1} from "../baseUT/utils/EntryDataUtils";
 
 describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
   describe("SCB-777: withdrawByAgg, TC-29", () => {
@@ -49,9 +50,11 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
       await InjectUtils.injectTetuConverter(signer);
 
       await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
+        POLYGON_NETWORK_ID,
         strategy,
         MaticAddresses.TETU_LIQUIDATOR,
-          () => true // single iteration
+        AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR,
+        () => true, // single iteration
       );
     });
   });
@@ -123,10 +126,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
 
       const state = await PackedData.getDefaultState(strategyAsOperator);
 
-      const planEntryData = defaultAbiCoder.encode(
-        ["uint256", "uint256"],
-        [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]
-      );
+      const planEntryData = buildEntryData1();
 
       console.log("unfoldBorrows.quoteWithdrawByAgg.callStatic --------------------------------");
       const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
@@ -141,7 +141,8 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
 
       if (tokenToSwap !== Misc.ZERO_ADDRESS) {
         if (aggregator === MaticAddresses.AGG_ONEINCH_V5) {
-          swapData = await AggregatorUtils.buildSwapTransactionData(
+          swapData = await AggregatorUtils.buildSwapTransactionDataForOneInch(
+            POLYGON_NETWORK_ID,
             quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
             quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
             quote.amountToSwap,
@@ -323,10 +324,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
       const signer = await DeployerUtilsLocal.impersonate(SENDER);
       const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, signer);
 
-      const planEntryData = defaultAbiCoder.encode(
-        ["uint256", "uint256"],
-        [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]
-      );
+      const planEntryData = buildEntryData1();
 
       const block = (await ethers.provider.getBlock("latest")).number;
       console.log("block", block);
@@ -388,7 +386,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
       const signer = await DeployerUtilsLocal.impersonate(SENDER);
       const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, signer);
       const aggregator = MaticAddresses.TETU_LIQUIDATOR;
-      const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
+      const planEntryData = buildEntryData1();
       const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
       console.log("quote", quote);
     });
@@ -410,7 +408,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
 
       const state = await PackedData.getDefaultState(strategyAsOperator);
 
-      const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
+      const planEntryData = buildEntryData1();
 
       console.log("unfoldBorrows.quoteWithdrawByAgg.callStatic --------------------------------");
       const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
@@ -425,7 +423,8 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
 
       if (tokenToSwap !== Misc.ZERO_ADDRESS) {
         if (aggregator === MaticAddresses.AGG_ONEINCH_V5) {
-          swapData = await AggregatorUtils.buildSwapTransactionData(
+          swapData = await AggregatorUtils.buildSwapTransactionDataForOneInch(
+            POLYGON_NETWORK_ID,
             quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
             quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
             quote.amountToSwap,
@@ -621,8 +620,9 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
       console.log("quote", quote);
       console.log("unfoldBorrows.quoteWithdrawByAgg.FINISH --------------------------------", quote);
 
-      const swapData = await AggregatorUtils.buildSwapTransactionData(
-          quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+      const swapData = await AggregatorUtils.buildSwapTransactionDataForOneInch(
+          POLYGON_NETWORK_ID,
+        quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
           quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
           quote.amountToSwap,
           strategyAsOperator.address,

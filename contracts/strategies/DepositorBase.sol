@@ -32,8 +32,9 @@ abstract contract DepositorBase {
   /// @notice Withdraw given lp amount from the pool.
   /// @param liquidityAmount Amount of liquidity to be converted
   ///                        If requested liquidityAmount >= invested, then should make full exit.
+  /// @param emergency Emergency exit (only withdraw, don't claim any rewards or make any other additional actions)
   /// @return amountsOut The order of amounts is the same as in {_depositorPoolAssets}
-  function _depositorExit(uint liquidityAmount) internal virtual returns (uint[] memory amountsOut);
+  function _depositorExit(uint liquidityAmount, bool emergency) internal virtual returns (uint[] memory amountsOut);
 
   /// @notice Quotes output for given lp amount from the pool.
   /// @dev Write function with read-only behavior. BalanceR's depositor requires not-view.
@@ -48,7 +49,7 @@ abstract contract DepositorBase {
     uint liquidity = _depositorLiquidity();
     return liquidity == 0
       ? new uint[](_depositorPoolAssets().length)
-      : _depositorExit(liquidity);
+      : _depositorExit(liquidity, true);
   }
 
   /// @notice Claim all possible rewards.

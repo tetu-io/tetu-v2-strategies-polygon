@@ -38,7 +38,6 @@ import {
   GAS_HARDWORK_WITH_REWARDS,
   GAS_WITHDRAW_ALL_TO_SPLITTER,
 } from '../../../baseUT/GasLimits';
-import { areAlmostEqual } from '../../../baseUT/utils/MathUtils';
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { TokenUtils } from '../../../../scripts/utils/TokenUtils';
 import { MaticHolders } from '../../../../scripts/addresses/MaticHolders';
@@ -48,6 +47,7 @@ import {Provider} from "@ethersproject/providers";
 import {BalancerStrategyUtils} from "../../../baseUT/strategies/BalancerStrategyUtils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import {eq} from "lodash";
 
 chai.use(chaiAsPromised);
 
@@ -92,7 +92,7 @@ describe.skip('BalancerBoostedIntTest @skip-on-coverage', function() {
     await StrategyTestUtils.deployAndSetCustomSplitter(signer, addresses);
 
     // Disable DForce (as it reverts on repay after block advance)
-    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+    // await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
 
     stateParams = {
       mainAssetSymbol: await IERC20Metadata__factory.connect(MAIN_ASSET, signer).symbol()
@@ -271,11 +271,12 @@ describe.skip('BalancerBoostedIntTest @skip-on-coverage', function() {
           expect(stateAfterDeposit.gauge.strategyBalance).gt(0)
           expect(stateAfterDeposit.splitter.totalAssets).eq(stateAfterDeposit.strategy.totalAssets)
           expect(stateAfterDeposit.vault.userShares.add(stateAfterDeposit.vault.signerShares)).eq(stateAfterDeposit.vault.totalSupply.sub(1000)) // sub INITIAL_SHARES
-          expect(areAlmostEqual(stateAfterDeposit.vault.userAssetBalance.add(stateAfterDeposit.vault.signerAssetBalance), stateAfterDeposit.vault.totalSupply.sub(1000))).eq(true) // sub INITIAL_SHARES
-          expect(areAlmostEqual(stateAfterDeposit.vault.totalAssets, stateAfterDeposit.vault.totalSupply)).eq(true)
-          expect(areAlmostEqual(stateAfterDeposit.vault.totalAssets, parseUnits((DEPOSIT_AMOUNT / 2).toString(), 6)
-            .mul(DENOMINATOR - DEPOSIT_FEE)
-            .div(DENOMINATOR))).eq(true)
+          expect(stateAfterDeposit.vault.userAssetBalance.add(stateAfterDeposit.vault.signerAssetBalance)).approximately(stateAfterDeposit.vault.totalSupply.sub(1000), 1);
+          expect(stateAfterDeposit.vault.totalAssets).approximately(stateAfterDeposit.vault.totalSupply, 1);
+          expect(stateAfterDeposit.vault.totalAssets).approximately(
+            parseUnits((DEPOSIT_AMOUNT / 2).toString(), 6).mul(DENOMINATOR - DEPOSIT_FEE).div(DENOMINATOR),
+            1
+          );
           expect(stateAfterDeposit.insurance.assetBalance).eq(stateBeforeDeposit.signer.assetBalance
             .mul(DEPOSIT_FEE)
             .div(100_000)
@@ -319,12 +320,12 @@ describe.skip('BalancerBoostedIntTest @skip-on-coverage', function() {
           expect(stateAfterDepositUser.vault.userShares.add(stateAfterDepositUser.vault.signerShares)).eq(stateAfterDepositUser.vault.totalSupply.sub(1000)) // INITIAL_SHARES
           expect(stateAfterDepositUser.vault.userAssetBalance.add(stateAfterDepositUser.vault.signerAssetBalance)).gt(stateAfterDepositUser.vault.totalSupply.sub(1000)) // INITIAL_SHARES
           expect(stateAfterDepositUser.vault.totalAssets).gt(stateAfterDepositUser.vault.totalSupply.sub(1000))
-          expect(areAlmostEqual(
-            stateAfterDepositUser.vault.totalAssets,
+          expect(stateAfterDepositUser.vault.totalAssets).approximately(
             parseUnits((DEPOSIT_AMOUNT * 1.5).toString(), 6)
               .mul(DENOMINATOR - DEPOSIT_FEE)
               .div(DENOMINATOR),
-          )).eq(true)
+              1
+          );
           expect(stateAfterDepositUser.insurance.assetBalance).eq(stateBeforeDeposit.signer.assetBalance
             .mul(DEPOSIT_FEE)
             .div(DENOMINATOR)
@@ -335,8 +336,7 @@ describe.skip('BalancerBoostedIntTest @skip-on-coverage', function() {
                 .div(DENOMINATOR)
                 .sub(recoveredLossUser),
             ))
-          expect(areAlmostEqual(
-            stateAfterDepositUser.vault.assetBalance,
+          expect(stateAfterDepositUser.vault.assetBalance).approximately(
             stateBeforeDeposit.signer.assetBalance
               .mul(DENOMINATOR - DEPOSIT_FEE)
               .div(DENOMINATOR)
@@ -352,8 +352,9 @@ describe.skip('BalancerBoostedIntTest @skip-on-coverage', function() {
                   .mul(BUFFER)
                   .div(DENOMINATOR)
                   .add(recoveredLossUser),
-              )
-          )).eq(true)
+              ),
+            1
+          );
           console.log('stateBeforeDeposit', stateBeforeDeposit);
           console.log('stateAfterDepositUser', stateAfterDepositUser);
         });
@@ -374,7 +375,7 @@ describe.skip('BalancerBoostedIntTest @skip-on-coverage', function() {
           expect(stateAfterHardwork.strategy.investedAssets).gte(stateBeforeDeposit.strategy.investedAssets)
           expect(stateAfterHardwork.gauge.strategyBalance).gte(stateBeforeDeposit.gauge.strategyBalance)
           expect(stateAfterHardwork.splitter.totalAssets).gte(stateAfterDeposit.splitter.totalAssets)
-          expect(areAlmostEqual(stateAfterDeposit.splitter.totalAssets, stateAfterHardwork.splitter.totalAssets, 3)).eq(true)
+          expect(stateAfterDeposit.splitter.totalAssets).approximately(stateAfterHardwork.splitter.totalAssets, 10);
 
           console.log('stateBeforeDeposit', stateBeforeDeposit);
           console.log('stateAfterDeposit', stateAfterDeposit);
@@ -448,11 +449,11 @@ describe.skip('BalancerBoostedIntTest @skip-on-coverage', function() {
           expect(stateAfterWithdraw.strategy.borrowAssetsBalances[1]).eq(0)
           expect(stateAfterWithdraw.strategy.totalAssets).eq(0)
           expect(stateAfterWithdraw.strategy.investedAssets).eq(0)
-          expect(areAlmostEqual(stateAfterWithdraw.splitter.assetBalance, stateAfterWithdraw.splitter.totalAssets, 6)).eq(true)
+          expect(stateAfterWithdraw.splitter.assetBalance).approximately(stateAfterWithdraw.splitter.totalAssets, 10);
           expect(stateAfterWithdraw.vault.totalSupply).eq(stateAfterDeposit.vault.totalSupply)
 
           // when leaving the pool, we pay a fee to linear pools (0.0002%)
-          expect(areAlmostEqual(stateAfterWithdraw.vault.totalAssets, stateAfterDeposit.vault.totalAssets))
+          expect(stateAfterWithdraw.vault.totalAssets).approximately(stateAfterDeposit.vault.totalAssets, 10);
           expect(stateAfterWithdraw.vault.sharePrice).lt(stateAfterDeposit.vault.sharePrice)
         });
         it('should not exceed gas limits @skip-on-coverage', async() => {
@@ -505,9 +506,9 @@ describe.skip('BalancerBoostedIntTest @skip-on-coverage', function() {
           expect(stateAfterExit.strategy.borrowAssetsBalances[1]).eq(0)
           expect(stateAfterExit.strategy.totalAssets).eq(0)
           expect(stateAfterExit.strategy.investedAssets).eq(0)
-          expect(areAlmostEqual(stateAfterExit.splitter.assetBalance, stateAfterExit.splitter.totalAssets, 6)).eq(true)
+          expect(stateAfterExit.splitter.assetBalance).approximately(stateAfterExit.splitter.totalAssets, 10);
           expect(stateAfterExit.vault.totalSupply).eq(stateAfterDeposit.vault.totalSupply)
-          expect(areAlmostEqual(stateAfterExit.vault.totalAssets, stateAfterDeposit.vault.totalAssets, 6)).eq(true)
+          expect(stateAfterExit.vault.totalAssets).approximately(stateAfterDeposit.vault.totalAssets, 10);
           expect(stateAfterExit.vault.sharePrice).lt(stateAfterDeposit.vault.sharePrice)
 
         });

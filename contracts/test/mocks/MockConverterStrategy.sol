@@ -168,7 +168,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   //endregion ------------------------------------------------------- Withdraw universal
 
   //region--------------------------------------- _handleRewards, mocked version + accessor
-  function _handleRewards() internal override returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
+  function _handleRewards() internal override returns (uint earned, uint lost, uint assetBalanceAfterClaim, uint paidDebtToInsurance) {
     address asset = baseState.asset;
     if (handleRewardsParams.initialized) {
       //      console.log("_handleRewards.mocked-version is called");
@@ -184,20 +184,20 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
           uint(- handleRewardsParams.assetBalanceChange)
         );
       }
-      return (handleRewardsParams.earned, handleRewardsParams.lost, AppLib.balance(asset));
+      return (handleRewardsParams.earned, handleRewardsParams.lost, AppLib.balance(asset), handleRewardsParams.paidDebtToInsurance);
     } else {
       return __handleRewards();
     }
   }
 
-  function __handleRewards() internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
+  function __handleRewards() internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim, uint paidDebtToInsurance) {
     address asset = baseState.asset;
     uint assetBalanceBefore = AppLib.balance(asset);
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
-    _rewardsLiquidation(rewardTokens, amounts);
+    paidDebtToInsurance = _rewardsLiquidation(rewardTokens, amounts);
     assetBalanceAfterClaim = AppLib.balance(asset);
     (uint earned2, uint lost2) = ConverterStrategyBaseLib2._registerIncome(assetBalanceBefore, assetBalanceAfterClaim);
-    return (earned + earned2, lost + lost2, assetBalanceAfterClaim);
+    return (earned + earned2, lost + lost2, assetBalanceAfterClaim, paidDebtToInsurance);
   }
 
   struct MockedHandleRewardsParams {
@@ -206,6 +206,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint lost;
     int assetBalanceChange;
     address providerBalanceChange;
+    uint paidDebtToInsurance;
   }
 
   MockedHandleRewardsParams private handleRewardsParams;
@@ -214,14 +215,16 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint earned,
     uint lost,
     int assetBalanceChange,
-    address providerBalanceChange
+    address providerBalanceChange,
+    uint paidDebtToInsurance
   ) external {
     handleRewardsParams = MockedHandleRewardsParams({
       initialized: true,
       earned: earned,
       lost: lost,
       assetBalanceChange: assetBalanceChange,
-      providerBalanceChange: providerBalanceChange
+      providerBalanceChange: providerBalanceChange,
+      paidDebtToInsurance: paidDebtToInsurance
     });
   }
   //endregion--------------------------------------- _handleRewards, mocked version + accessor
@@ -412,7 +415,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   function recycleAccess(address[] memory tokens, uint[] memory amounts) external {
     ConverterStrategyBaseLib.recycle(
       baseState,
-      _csbs.converter,
+      _csbs,
       _depositorPoolAssets(),
       controller(),
       liquidationThresholds,

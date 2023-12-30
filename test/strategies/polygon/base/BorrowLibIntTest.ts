@@ -5,11 +5,11 @@ import {
   ITetuConverter, ITetuConverter__factory, MockToken,
 } from "../../../../typechain";
 import {ethers} from "hardhat";
-import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {
+  getAaveThreePlatformAdapter,
   getAaveTwoPlatformAdapter,
   getCompoundThreePlatformAdapter,
   getDForcePlatformAdapter,
@@ -35,6 +35,8 @@ import {
 } from "../../../baseUT/GasLimits";
 import {BigNumber} from "ethers";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 describe('BorrowLibIntTest', () => {
   /** prop0 + prop1 */
@@ -61,7 +63,7 @@ describe('BorrowLibIntTest', () => {
     converter = await ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer);
 
     usdc = await IERC20Metadata__factory.connect(MaticAddresses.USDC_TOKEN, signer);
-    wmatic = await IERC20Metadata__factory.connect(MaticAddresses.WMATIC_TOKEN, signer);
+    wmatic = await IERC20Metadata__factory.connect(MaticAddresses.DAI_TOKEN, signer);
     usdt = await IERC20Metadata__factory.connect(MaticAddresses.USDT_TOKEN, signer);
 
     facade = await MockHelper.createBorrowLibFacade(signer);
@@ -74,9 +76,11 @@ describe('BorrowLibIntTest', () => {
     priceOracle = IPriceOracle__factory.connect(await converterController.priceOracle(), signer);
 
     // let's use AAVE3 (with debt-tokens and repay-borrow-in-single-block-forbidden problems)
-    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+    // await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
     await ConverterUtils.disablePlatformAdapter(signer, await getAaveTwoPlatformAdapter(signer));
-    await ConverterUtils.disablePlatformAdapter(signer, await getCompoundThreePlatformAdapter(signer));
+    // await ConverterUtils.disablePlatformAdapter(signer, await getCompoundThreePlatformAdapter(signer));
+    await ConverterUtils.allowToConvertByAave3(signer, converterController, MaticAddresses.DAI_TOKEN, MaticAddresses.USDC_TOKEN);
+    await InjectUtils.registerPair(signer, await getAaveThreePlatformAdapter(signer), MaticAddresses.USDC_TOKEN, MaticAddresses.DAI_TOKEN);
   });
 
   after(async function () {
@@ -105,8 +109,6 @@ describe('BorrowLibIntTest', () => {
     interface IRebalanceAssetsParams {
       tokenX: IERC20Metadata;
       tokenY: IERC20Metadata;
-      holderX: string;
-      holderY: string;
       /** [0 .. SUM_PROPORTIONS] */
       proportion: number;
       thresholdX?: number;
@@ -171,9 +173,12 @@ describe('BorrowLibIntTest', () => {
       const receiver = ethers.Wallet.createRandom().address;
       const facadeAsSigner = await Misc.impersonate(facade.address);
 
+      const decimalsX = await p.tokenX.decimals();
+      const decimalsY = await p.tokenY.decimals();
+
       // set up current balances
-      await BalanceUtils.getAmountFromHolder(p.tokenX.address, p.holderX, facade.address, Number(p.init.addBeforeBorrow.balanceX));
-      await BalanceUtils.getAmountFromHolder(p.tokenY.address, p.holderY, facade.address, Number(p.init.addBeforeBorrow.balanceY));
+      await TokenUtils.getToken(p.tokenX.address, facade.address, parseUnits(p.init.addBeforeBorrow.balanceX, decimalsX));
+      await TokenUtils.getToken(p.tokenY.address, facade.address, parseUnits(p.init.addBeforeBorrow.balanceY, decimalsY));
       const initial = await getState(p);
 
       // allow borrow
@@ -183,9 +188,9 @@ describe('BorrowLibIntTest', () => {
       // borrow before rebalancing
       if (p.preBorrow) {
         if (p.preBorrow.collateralAsset.address === p.tokenX.address) {
-          await BalanceUtils.getAmountFromHolder(p.tokenX.address, p.holderX, facade.address, Number(p.preBorrow.collateralAmount));
+          await TokenUtils.getToken(p.tokenX.address, facade.address, parseUnits(p.preBorrow.collateralAmount, decimalsX));
         } else {
-          await BalanceUtils.getAmountFromHolder(p.tokenY.address, p.holderY, facade.address, Number(p.preBorrow.collateralAmount))
+          await TokenUtils.getToken(p.tokenY.address, facade.address, parseUnits(p.preBorrow.collateralAmount, decimalsY));
         }
 
         const plan = await converter.findBorrowStrategies(
@@ -250,9 +255,9 @@ describe('BorrowLibIntTest', () => {
       }
     }
 
-    describe("WMATIC : usdc == 1 : 1", () => {
+    describe("DAI : usdc == 1 : 1", () => {
       describe("Current state - no debts", () => {
-        describe("Need to increase WMATIC, reduce USDC", () => {
+        describe("Need to increase DAI, reduce USDC", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -265,9 +270,6 @@ describe('BorrowLibIntTest', () => {
             return makeRebalanceAssets({
               tokenX: wmatic,
               tokenY: usdc,
-
-              holderX: MaticHolders.HOLDER_WMATIC,
-              holderY: MaticHolders.HOLDER_USDC,
 
               proportion: 50_000,
 
@@ -292,7 +294,7 @@ describe('BorrowLibIntTest', () => {
             expect(r.final.debtX).gt(0);
           });
         });
-        describe("Need to reduce WMATIC, increase USDC", () => {
+        describe("Need to reduce DAI, increase USDC", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -305,9 +307,6 @@ describe('BorrowLibIntTest', () => {
             return makeRebalanceAssets({
               tokenX: wmatic,
               tokenY: usdc,
-
-              holderX: MaticHolders.HOLDER_WMATIC,
-              holderY: MaticHolders.HOLDER_USDC,
 
               proportion: 50_000,
 
@@ -334,8 +333,8 @@ describe('BorrowLibIntTest', () => {
         });
       });
 
-      describe("Current state - direct debt - WMATIC is borrowed under USDC", () => {
-        describe("Need to increase USDC, reduce WMATIC", () => {
+      describe("Current state - direct debt - DAI is borrowed under USDC", () => {
+        describe("Need to increase USDC, reduce DAI", () => {
           describe("Partial repay and direct borrow are required", () => {
             let snapshot: string;
             before(async function () {
@@ -349,9 +348,6 @@ describe('BorrowLibIntTest', () => {
               return makeRebalanceAssets({
                 tokenX: usdc,
                 tokenY: wmatic,
-
-                holderX: MaticHolders.HOLDER_USDC,
-                holderY: MaticHolders.HOLDER_WMATIC,
 
                 proportion: 50_000,
 
@@ -393,9 +389,6 @@ describe('BorrowLibIntTest', () => {
                 tokenX: usdc,
                 tokenY: wmatic,
 
-                holderX: MaticHolders.HOLDER_USDC,
-                holderY: MaticHolders.HOLDER_WMATIC,
-
                 proportion: 50_000,
 
                 init: {
@@ -428,7 +421,7 @@ describe('BorrowLibIntTest', () => {
             });
           });
         });
-        describe("Need to reduce USDC, increase WMATIC", () => {
+        describe("Need to reduce USDC, increase DAI", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -441,9 +434,6 @@ describe('BorrowLibIntTest', () => {
             return makeRebalanceAssets({
               tokenX: usdc,
               tokenY: wmatic,
-
-              holderX: MaticHolders.HOLDER_USDC,
-              holderY: MaticHolders.HOLDER_WMATIC,
 
               proportion: 50_000,
 
@@ -478,8 +468,8 @@ describe('BorrowLibIntTest', () => {
         });
       });
 
-      describe("Current state - reverse debt - USDC is borrowed under WMATIC", () => {
-        describe("Need to increase USDC, reduce WMATIC", () => {
+      describe("Current state - reverse debt - USDC is borrowed under DAI", () => {
+        describe("Need to increase USDC, reduce DAI", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -492,9 +482,6 @@ describe('BorrowLibIntTest', () => {
             return makeRebalanceAssets({
               tokenX: usdc,
               tokenY: wmatic,
-
-              holderX: MaticHolders.HOLDER_USDC,
-              holderY: MaticHolders.HOLDER_WMATIC,
 
               proportion: 50_000,
 
@@ -527,7 +514,7 @@ describe('BorrowLibIntTest', () => {
             expect(r.final.debtY).eq(0);
           });
         });
-        describe("Need to reduce USDC, increase WMATIC", () => {
+        describe("Need to reduce USDC, increase DAI", () => {
           describe("Partial repay and direct borrow are required", () => {
             let snapshot: string;
             before(async function () {
@@ -541,9 +528,6 @@ describe('BorrowLibIntTest', () => {
               return makeRebalanceAssets({
                 tokenX: usdc,
                 tokenY: wmatic,
-
-                holderX: MaticHolders.HOLDER_USDC,
-                holderY: MaticHolders.HOLDER_WMATIC,
 
                 proportion: 50_000,
 
@@ -590,9 +574,6 @@ describe('BorrowLibIntTest', () => {
                 tokenX: usdc,
                 tokenY: wmatic,
 
-                holderX: MaticHolders.HOLDER_USDC,
-                holderY: MaticHolders.HOLDER_WMATIC,
-
                 proportion: 50_000,
 
                 init: {
@@ -628,9 +609,9 @@ describe('BorrowLibIntTest', () => {
       });
     });
 
-    describe("WMATIC : usdc == 3 : 97", () => {
+    describe("DAI : usdc == 3 : 97", () => {
       describe("Current state - no debts", () => {
-        describe("Need to increase WMATIC, reduce USDC", () => {
+        describe("Need to increase DAI, reduce USDC", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -643,9 +624,6 @@ describe('BorrowLibIntTest', () => {
             return makeRebalanceAssets({
               tokenX: wmatic,
               tokenY: usdc,
-
-              holderX: MaticHolders.HOLDER_WMATIC,
-              holderY: MaticHolders.HOLDER_USDC,
 
               proportion: PROPORTION_SMALL,
 
@@ -660,11 +638,12 @@ describe('BorrowLibIntTest', () => {
 
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRebalanceAssetsTest);
-            console.log("Results", r);
-            expect(r.final.costX*(SUM_PROPORTIONS-PROPORTION_SMALL)).approximately(r.final.costY*(PROPORTION_SMALL), 1);
+            const amount = r.final.costX*(SUM_PROPORTIONS-PROPORTION_SMALL);
+            const expectedAmount = r.final.costY*(PROPORTION_SMALL);
+            expect((amount - expectedAmount) / expectedAmount).lt(1e-4);
           });
         });
-        describe("Need to reduce WMATIC, increase USDC", () => {
+        describe("Need to reduce DAI, increase USDC", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -677,9 +656,6 @@ describe('BorrowLibIntTest', () => {
             return makeRebalanceAssets({
               tokenX: wmatic,
               tokenY: usdc,
-
-              holderX: MaticHolders.HOLDER_WMATIC,
-              holderY: MaticHolders.HOLDER_USDC,
 
               proportion: PROPORTION_SMALL,
 
@@ -700,8 +676,8 @@ describe('BorrowLibIntTest', () => {
         });
       });
 
-      describe("Current state - direct debt - WMATIC is borrowed under USDC", () => {
-        describe("Need to increase USDC, reduce WMATIC", () => {
+      describe("Current state - direct debt - DAI is borrowed under USDC", () => {
+        describe("Need to increase USDC, reduce DAI", () => {
           describe("Partial repay and direct borrow are required", () => {
             let snapshot: string;
             before(async function () {
@@ -715,9 +691,6 @@ describe('BorrowLibIntTest', () => {
               return makeRebalanceAssets({
                 tokenX: usdc,
                 tokenY: wmatic,
-
-                holderX: MaticHolders.HOLDER_USDC,
-                holderY: MaticHolders.HOLDER_WMATIC,
 
                 proportion: PROPORTION_SMALL,
 
@@ -755,9 +728,6 @@ describe('BorrowLibIntTest', () => {
                 tokenX: usdc,
                 tokenY: wmatic,
 
-                holderX: MaticHolders.HOLDER_USDC,
-                holderY: MaticHolders.HOLDER_WMATIC,
-
                 proportion: PROPORTION_SMALL,
 
                 init: {
@@ -782,7 +752,7 @@ describe('BorrowLibIntTest', () => {
             });
           });
         });
-        describe("Need to reduce USDC, increase WMATIC", () => {
+        describe("Need to reduce USDC, increase DAI", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -795,9 +765,6 @@ describe('BorrowLibIntTest', () => {
             return makeRebalanceAssets({
               tokenX: usdc,
               tokenY: wmatic,
-
-              holderX: MaticHolders.HOLDER_USDC,
-              holderY: MaticHolders.HOLDER_WMATIC,
 
               proportion: PROPORTION_SMALL,
 
@@ -823,8 +790,8 @@ describe('BorrowLibIntTest', () => {
         });
       });
 
-      describe("Current state - reverse debt - USDC is borrowed under WMATIC", () => {
-        describe("Need to increase USDC, reduce WMATIC", () => {
+      describe("Current state - reverse debt - USDC is borrowed under DAI", () => {
+        describe("Need to increase USDC, reduce DAI", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -837,9 +804,6 @@ describe('BorrowLibIntTest', () => {
             return makeRebalanceAssets({
               tokenX: usdc,
               tokenY: wmatic,
-
-              holderX: MaticHolders.HOLDER_USDC,
-              holderY: MaticHolders.HOLDER_WMATIC,
 
               proportion: PROPORTION_SMALL,
 
@@ -863,7 +827,7 @@ describe('BorrowLibIntTest', () => {
             expect(r.final.costX*(SUM_PROPORTIONS-PROPORTION_SMALL)).approximately(r.final.costY*(PROPORTION_SMALL), r.final.costY*(PROPORTION_SMALL)/1000);
           });
         });
-        describe("Need to reduce USDC, increase WMATIC", () => {
+        describe("Need to reduce USDC, increase DAI", () => {
           describe("Partial repay and direct borrow are required", () => {
             let snapshot: string;
             before(async function () {
@@ -877,9 +841,6 @@ describe('BorrowLibIntTest', () => {
               return makeRebalanceAssets({
                 tokenX: usdc,
                 tokenY: wmatic,
-
-                holderX: MaticHolders.HOLDER_USDC,
-                holderY: MaticHolders.HOLDER_WMATIC,
 
                 proportion: PROPORTION_SMALL,
 
@@ -917,9 +878,6 @@ describe('BorrowLibIntTest', () => {
                 tokenX: usdc,
                 tokenY: wmatic,
 
-                holderX: MaticHolders.HOLDER_USDC,
-                holderY: MaticHolders.HOLDER_WMATIC,
-
                 proportion: PROPORTION_SMALL,
 
                 init: {
@@ -946,9 +904,9 @@ describe('BorrowLibIntTest', () => {
       });
     });
 
-    describe("WMATIC : usdc == 97 : 3", () => {
+    describe("DAI : usdc == 97 : 3", () => {
       describe("Current state - no debts", () => {
-        describe("Need to increase WMATIC, reduce USDC", () => {
+        describe("Need to increase DAI, reduce USDC", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -961,9 +919,6 @@ describe('BorrowLibIntTest', () => {
             return makeRebalanceAssets({
               tokenX: wmatic,
               tokenY: usdc,
-
-              holderX: MaticHolders.HOLDER_WMATIC,
-              holderY: MaticHolders.HOLDER_USDC,
 
               proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
 
@@ -982,7 +937,7 @@ describe('BorrowLibIntTest', () => {
             expect(r.final.costX*(PROPORTION_SMALL)).approximately(r.final.costY*(SUM_PROPORTIONS - PROPORTION_SMALL), r.final.costX*(PROPORTION_SMALL)/1000);
           });
         });
-        describe("Need to reduce WMATIC, increase USDC", () => {
+        describe("Need to reduce DAI, increase USDC", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -995,9 +950,6 @@ describe('BorrowLibIntTest', () => {
             return makeRebalanceAssets({
               tokenX: wmatic,
               tokenY: usdc,
-
-              holderX: MaticHolders.HOLDER_WMATIC,
-              holderY: MaticHolders.HOLDER_USDC,
 
               proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
 
@@ -1018,8 +970,8 @@ describe('BorrowLibIntTest', () => {
         });
       });
 
-      describe("Current state - direct debt - WMATIC is borrowed under USDC", () => {
-        describe("Need to increase USDC, reduce WMATIC", () => {
+      describe("Current state - direct debt - DAI is borrowed under USDC", () => {
+        describe("Need to increase USDC, reduce DAI", () => {
           describe("Partial repay and direct borrow are required", () => {
             let snapshot: string;
             before(async function () {
@@ -1033,9 +985,6 @@ describe('BorrowLibIntTest', () => {
               return makeRebalanceAssets({
                 tokenX: usdc,
                 tokenY: wmatic,
-
-                holderX: MaticHolders.HOLDER_USDC,
-                holderY: MaticHolders.HOLDER_WMATIC,
 
                 proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
 
@@ -1073,9 +1022,6 @@ describe('BorrowLibIntTest', () => {
                 tokenX: usdc,
                 tokenY: wmatic,
 
-                holderX: MaticHolders.HOLDER_USDC,
-                holderY: MaticHolders.HOLDER_WMATIC,
-
                 proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
 
                 init: {
@@ -1100,7 +1046,7 @@ describe('BorrowLibIntTest', () => {
             });
           });
         });
-        describe("Need to reduce USDC, increase WMATIC", () => {
+        describe("Need to reduce USDC, increase DAI", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -1113,9 +1059,6 @@ describe('BorrowLibIntTest', () => {
             return makeRebalanceAssets({
               tokenX: usdc,
               tokenY: wmatic,
-
-              holderX: MaticHolders.HOLDER_USDC,
-              holderY: MaticHolders.HOLDER_WMATIC,
 
               proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
 
@@ -1142,8 +1085,8 @@ describe('BorrowLibIntTest', () => {
         });
       });
 
-      describe("Current state - reverse debt - USDC is borrowed under WMATIC", () => {
-        describe("Need to increase USDC, reduce WMATIC", () => {
+      describe("Current state - reverse debt - USDC is borrowed under DAI", () => {
+        describe("Need to increase USDC, reduce DAI", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -1156,9 +1099,6 @@ describe('BorrowLibIntTest', () => {
             return makeRebalanceAssets({
               tokenX: usdc,
               tokenY: wmatic,
-
-              holderX: MaticHolders.HOLDER_USDC,
-              holderY: MaticHolders.HOLDER_WMATIC,
 
               proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
 
@@ -1182,7 +1122,7 @@ describe('BorrowLibIntTest', () => {
             expect(r.final.costX*(PROPORTION_SMALL)).approximately(r.final.costY*(SUM_PROPORTIONS - PROPORTION_SMALL), 1);
           });
         });
-        describe("Need to reduce USDC, increase WMATIC", () => {
+        describe("Need to reduce USDC, increase DAI", () => {
           describe("Partial repay and direct borrow are required", () => {
             let snapshot: string;
             before(async function () {
@@ -1196,9 +1136,6 @@ describe('BorrowLibIntTest', () => {
               return makeRebalanceAssets({
                 tokenX: usdc,
                 tokenY: wmatic,
-
-                holderX: MaticHolders.HOLDER_USDC,
-                holderY: MaticHolders.HOLDER_WMATIC,
 
                 proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
 
@@ -1235,9 +1172,6 @@ describe('BorrowLibIntTest', () => {
               return makeRebalanceAssets({
                 tokenX: usdc,
                 tokenY: wmatic,
-
-                holderX: MaticHolders.HOLDER_USDC,
-                holderY: MaticHolders.HOLDER_WMATIC,
 
                 proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
 
@@ -1280,9 +1214,6 @@ describe('BorrowLibIntTest', () => {
             tokenX: usdc,
             tokenY: usdt,
 
-            holderX: MaticHolders.HOLDER_USDC,
-            holderY: MaticHolders.HOLDER_USDT,
-
             proportion: PROPORTION_SMALL,
 
             init: {
@@ -1309,7 +1240,7 @@ describe('BorrowLibIntTest', () => {
 
     describe("Gas estimation @skip-on-coverage", () => {
       describe("Current state - no debts", () => {
-        describe("Need to increase WMATIC, reduce USDC", () => {
+        describe("Need to increase DAI, reduce USDC", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -1322,9 +1253,6 @@ describe('BorrowLibIntTest', () => {
             return makeRebalanceAssets({
               tokenX: wmatic,
               tokenY: usdc,
-
-              holderX: MaticHolders.HOLDER_WMATIC,
-              holderY: MaticHolders.HOLDER_USDC,
 
               proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
 
@@ -1344,7 +1272,7 @@ describe('BorrowLibIntTest', () => {
             });
           });
         });
-        describe("Need to reduce WMATIC, increase USDC", () => {
+        describe("Need to reduce DAI, increase USDC", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -1357,9 +1285,6 @@ describe('BorrowLibIntTest', () => {
             return makeRebalanceAssets({
               tokenX: wmatic,
               tokenY: usdc,
-
-              holderX: MaticHolders.HOLDER_WMATIC,
-              holderY: MaticHolders.HOLDER_USDC,
 
               proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
 
@@ -1381,8 +1306,8 @@ describe('BorrowLibIntTest', () => {
         });
       });
 
-      describe("Current state - direct debt - WMATIC is borrowed under USDC", () => {
-        describe("Need to increase USDC, reduce WMATIC", () => {
+      describe("Current state - direct debt - DAI is borrowed under USDC", () => {
+        describe("Need to increase USDC, reduce DAI", () => {
           describe("Partial repay and direct borrow are required", () => {
             let snapshot: string;
             before(async function () {
@@ -1396,9 +1321,6 @@ describe('BorrowLibIntTest', () => {
               return makeRebalanceAssets({
                 tokenX: usdc,
                 tokenY: wmatic,
-
-                holderX: MaticHolders.HOLDER_USDC,
-                holderY: MaticHolders.HOLDER_WMATIC,
 
                 proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
 
@@ -1437,9 +1359,6 @@ describe('BorrowLibIntTest', () => {
                 tokenX: usdc,
                 tokenY: wmatic,
 
-                holderX: MaticHolders.HOLDER_USDC,
-                holderY: MaticHolders.HOLDER_WMATIC,
-
                 proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
 
                 init: {
@@ -1464,7 +1383,7 @@ describe('BorrowLibIntTest', () => {
             });
           });
         });
-        describe("Need to reduce USDC, increase WMATIC", () => {
+        describe("Need to reduce USDC, increase DAI", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -1477,9 +1396,6 @@ describe('BorrowLibIntTest', () => {
             return makeRebalanceAssets({
               tokenX: usdc,
               tokenY: wmatic,
-
-              holderX: MaticHolders.HOLDER_USDC,
-              holderY: MaticHolders.HOLDER_WMATIC,
 
               proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
 
@@ -1506,8 +1422,8 @@ describe('BorrowLibIntTest', () => {
         });
       });
 
-      describe("Current state - reverse debt - USDC is borrowed under WMATIC", () => {
-        describe("Need to increase USDC, reduce WMATIC", () => {
+      describe("Current state - reverse debt - USDC is borrowed under DAI", () => {
+        describe("Need to increase USDC, reduce DAI", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -1520,9 +1436,6 @@ describe('BorrowLibIntTest', () => {
             return makeRebalanceAssets({
               tokenX: usdc,
               tokenY: wmatic,
-
-              holderX: MaticHolders.HOLDER_USDC,
-              holderY: MaticHolders.HOLDER_WMATIC,
 
               proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
 
@@ -1547,7 +1460,7 @@ describe('BorrowLibIntTest', () => {
             });
           });
         });
-        describe("Need to reduce USDC, increase WMATIC", () => {
+        describe("Need to reduce USDC, increase DAI", () => {
           describe("Partial repay and direct borrow are required", () => {
             let snapshot: string;
             before(async function () {
@@ -1561,9 +1474,6 @@ describe('BorrowLibIntTest', () => {
               return makeRebalanceAssets({
                 tokenX: usdc,
                 tokenY: wmatic,
-
-                holderX: MaticHolders.HOLDER_USDC,
-                holderY: MaticHolders.HOLDER_WMATIC,
 
                 proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
 
@@ -1601,9 +1511,6 @@ describe('BorrowLibIntTest', () => {
               return makeRebalanceAssets({
                 tokenX: usdc,
                 tokenY: wmatic,
-
-                holderX: MaticHolders.HOLDER_USDC,
-                holderY: MaticHolders.HOLDER_WMATIC,
 
                 proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
 

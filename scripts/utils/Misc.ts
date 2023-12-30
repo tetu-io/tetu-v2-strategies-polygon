@@ -55,13 +55,27 @@ export class Misc {
     log.info('>>>' + text, ((Date.now() - start) / 1000).toFixed(1), 'sec');
   }
 
+  public static getSubgraphUrl() {
+    if(hre.network.config.chainId === 137) {
+      return 'https://api.thegraph.com/subgraphs/name/tetu-io/tetu-v2';
+    } else if(hre.network.config.chainId === 8453) {
+      return 'https://api.thegraph.com/subgraphs/name/tetu-io/tetu-v2-base';
+    } else {
+      throw new Error('Unknown net ' + hre.network.config.chainId);
+    }
+  }
+
   public static async getBlockTsFromChain(): Promise<number> {
     const signer = (await ethers.getSigners())[0];
     const tools = await DeployerUtilsLocal.getToolsAddresses();
-    const ctr = await DeployerUtils.connectInterface(signer, 'Multicall', tools.multicall) as Multicall;
-    // const ctr = await ethers.getContractAt('Multicall', tools.multicall, signer) as Multicall;
-    const ts = await ctr.getCurrentBlockTimestamp();
-    return ts.toNumber();
+    if (tools.multicall) {
+      const ctr = await DeployerUtils.connectInterface(signer, 'Multicall', tools.multicall) as Multicall;
+      // const ctr = await ethers.getContractAt('Multicall', tools.multicall, signer) as Multicall;
+      const ts = await ctr.getCurrentBlockTimestamp();
+      return ts.toNumber();
+    }
+
+    return (await ethers.provider.getBlock(await ethers.provider.getBlockNumber())).timestamp
   }
 
   public static getChainId() {
@@ -153,29 +167,34 @@ export function getConverterAddress() {
 /**
  * Address of DForce platform adapter registered in TetuConveter
  */
-export async function getDForcePlatformAdapter(signer: SignerWithAddress): Promise<string> {
-  return (await getPlatformAdapter(signer, LendingPlatformKinds.DFORCE_1)).address;
+export async function getDForcePlatformAdapter(signer: SignerWithAddress, converter0?: string): Promise<string> {
+  return (await getPlatformAdapter(signer, LendingPlatformKinds.DFORCE_1, converter0)).address;
 }
 
-export async function getAaveTwoPlatformAdapter(signer: SignerWithAddress): Promise<string> {
-  return (await getPlatformAdapter(signer, LendingPlatformKinds.AAVE2_2)).address;
+export async function getAaveTwoPlatformAdapter(signer: SignerWithAddress, converter0?: string): Promise<string> {
+  return (await getPlatformAdapter(signer, LendingPlatformKinds.AAVE2_2, converter0)).address;
 }
 
-export async function getAaveThreePlatformAdapter(signer: SignerWithAddress): Promise<string> {
-  return (await getPlatformAdapter(signer, LendingPlatformKinds.AAVE3_3)).address;
+export async function getAaveThreePlatformAdapter(signer: SignerWithAddress, converter0?: string): Promise<string> {
+  return (await getPlatformAdapter(signer, LendingPlatformKinds.AAVE3_3, converter0)).address;
 }
 
-export async function getCompoundThreePlatformAdapter(signer: SignerWithAddress): Promise<string> {
-  return (await getPlatformAdapter(signer, LendingPlatformKinds.COMPOUND3_5)).address;
+export async function getCompoundThreePlatformAdapter(signer: SignerWithAddress, converter0?: string): Promise<string> {
+  return (await getPlatformAdapter(signer, LendingPlatformKinds.COMPOUND3_5, converter0)).address;
+}
+
+export async function getMoonwellPlatformAdapter(signer: SignerWithAddress, converter0?: string): Promise<string> {
+  return (await getPlatformAdapter(signer, LendingPlatformKinds.MOONWELL_6, converter0)).address;
 }
 
 async function getPlatformAdapter(
   signer: SignerWithAddress,
   lendingPlatformKind: LendingPlatformKinds,
+  converter0?: string
 ): Promise<IPlatformAdapter> {
   const borrowManager = await BorrowManager__factory.connect(
     await IConverterController__factory.connect(
-      await ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer).controller(),
+      await ITetuConverter__factory.connect(converter0 ?? MaticAddresses.TETU_CONVERTER, signer).controller(),
       signer,
     ).borrowManager(),
     signer,

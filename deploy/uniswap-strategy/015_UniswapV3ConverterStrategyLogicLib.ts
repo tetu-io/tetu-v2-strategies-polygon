@@ -15,3 +15,4 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
 export default func;
 func.tags = ['UniswapV3ConverterStrategyLogicLib'];
 func.dependencies = ['UniswapV3Lib', 'PairBasedStrategyLogicLib', 'ConverterStrategyBaseLib2', 'UniswapV3DebtLib'];
+func.skip = async hre => (await hre.getChainId()) === '1101'

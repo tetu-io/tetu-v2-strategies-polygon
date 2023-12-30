@@ -27,10 +27,7 @@ library AlgebraConverterStrategyLogicLib {
   event RebalancedDebt(uint loss, uint profitToCover, uint coveredByRewards);
   event AlgebraFeesClaimed(uint fee0, uint fee1);
   event AlgebraRewardsClaimed(uint reward, uint bonusReward);
-  /// @param loss Total amount of loss
-  /// @param coveredByRewards Part of the loss covered by rewards
-  event CoverLoss(uint loss, uint coveredByRewards);
-  //endregion ------------------------------------------------ Data types
+  //endregion ------------------------------------------------ Events
 
   //region ------------------------------------------------ Data types
 
@@ -81,6 +78,13 @@ library AlgebraConverterStrategyLogicLib {
     uint bonusRewardInTermOfTokenA;
     uint fee0;
     uint fee1;
+  }
+
+  struct ExitLocal {
+    address strategyProfitHolder;
+    uint128 liquidity;
+    uint reward;
+    uint bonusReward;
   }
   //endregion ------------------------------------------------ Data types
 
@@ -248,26 +252,15 @@ library AlgebraConverterStrategyLogicLib {
 
       if (state.pair.totalLiquidity > 0) {
         // get reward amounts
-        (uint reward, uint bonusReward) = FARMING_CENTER.collectRewards(key, vars.tokenId);
+        (uint reward, uint bonusReward) = _collectRewards(key, vars.tokenId);
 
         // exit farming (undeposit)
         FARMING_CENTER.exitFarming(key, vars.tokenId, false);
 
         // claim rewards and send to profit holder
-        {
-          address strategyProfitHolder = state.pair.strategyProfitHolder;
-
-          if (reward > 0) {
-            address token = state.rewardToken;
-            reward = FARMING_CENTER.claimReward(token, address(this), 0, reward);
-            IERC20(token).safeTransfer(strategyProfitHolder, reward);
-          }
-          if (bonusReward > 0) {
-            address token = state.bonusRewardToken;
-            bonusReward = FARMING_CENTER.claimReward(token, address(this), 0, bonusReward);
-            IERC20(token).safeTransfer(strategyProfitHolder, bonusReward);
-          }
-        }
+        address strategyProfitHolder = state.pair.strategyProfitHolder;
+        _claimRewards(state.rewardToken, strategyProfitHolder, reward);
+        _claimRewards(state.bonusRewardToken, strategyProfitHolder, bonusReward);
       } else {
         ALGEBRA_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), vars.tokenId);
       }
@@ -275,6 +268,7 @@ library AlgebraConverterStrategyLogicLib {
 
     FARMING_CENTER.enterFarming(key, vars.tokenId, 0, false);
 
+    // todo probably we need to swap amountsConsumed depending on depositorSwapTokens in same way as in univ3
     state.pair.totalLiquidity += vars.liquidity;
     liquidityOut = uint(vars.liquidity);
   }
@@ -282,39 +276,37 @@ library AlgebraConverterStrategyLogicLib {
 
   //region ------------------------------------------------ Exit the pool
 
+  /// @param emergency Emergency exit (only withdraw, don't claim any rewards or make any other additional actions)
   function exit(
     State storage state,
-    uint128 liquidityAmountToExit
+    uint128 liquidityAmountToExit,
+    bool emergency
   ) external returns (uint[] memory amountsOut) {
+    ExitLocal memory v;
+
     amountsOut = new uint[](2);
-    address strategyProfitHolder = state.pair.strategyProfitHolder;
+    v.strategyProfitHolder = state.pair.strategyProfitHolder;
     IncentiveKey memory key = getIncentiveKey(state);
 
-    uint128 liquidity = state.pair.totalLiquidity;
+    v.liquidity = state.pair.totalLiquidity;
 
-    require(liquidity >= liquidityAmountToExit, AlgebraStrategyErrors.WRONG_LIQUIDITY);
+    require(v.liquidity >= liquidityAmountToExit, AlgebraStrategyErrors.WRONG_LIQUIDITY);
 
     // we assume here, that liquidity is not zero (otherwise it doesn't worth to call exit)
     uint tokenId = state.tokenId;
 
     // get reward amounts
-    (uint reward, uint bonusReward) = FARMING_CENTER.collectRewards(key, tokenId);
+    if (! emergency) {
+      (v.reward, v.bonusReward) = _collectRewards(key, tokenId);
+    }
 
     // exit farming (undeposit)
     FARMING_CENTER.exitFarming(getIncentiveKey(state), state.tokenId, false);
 
     // claim rewards and send to profit holder
-    {
-      if (reward > 0) {
-        address token = state.rewardToken;
-        reward = FARMING_CENTER.claimReward(token, address(this), 0, reward);
-        IERC20(token).safeTransfer(strategyProfitHolder, reward);
-      }
-      if (bonusReward > 0) {
-        address token = state.bonusRewardToken;
-        bonusReward = FARMING_CENTER.claimReward(token, address(this), 0, bonusReward);
-        IERC20(token).safeTransfer(strategyProfitHolder, bonusReward);
-      }
+    if (! emergency) {
+      _claimRewards(state.rewardToken, v.strategyProfitHolder, v.reward);
+      _claimRewards(state.bonusRewardToken, v.strategyProfitHolder, v.bonusReward);
     }
 
     // withdraw nft
@@ -339,17 +331,17 @@ library AlgebraConverterStrategyLogicLib {
 
       // send fees to profit holder
       if (fee0 > 0) {
-        IERC20(state.pair.tokenA).safeTransfer(strategyProfitHolder, fee0);
+        IERC20(state.pair.tokenA).safeTransfer(v.strategyProfitHolder, fee0);
       }
       if (fee1 > 0) {
-        IERC20(state.pair.tokenB).safeTransfer(strategyProfitHolder, fee1);
+        IERC20(state.pair.tokenB).safeTransfer(v.strategyProfitHolder, fee1);
       }
     }
 
-    liquidity -= liquidityAmountToExit;
-    state.pair.totalLiquidity = liquidity;
+    v.liquidity -= liquidityAmountToExit;
+    state.pair.totalLiquidity = v.liquidity;
 
-    if (liquidity > 0) {
+    if (v.liquidity != 0) {
       ALGEBRA_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), tokenId);
       FARMING_CENTER.enterFarming(key, tokenId, 0, false);
     }
@@ -449,15 +441,9 @@ library AlgebraConverterStrategyLogicLib {
         (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
       }
 
-      (amountsOut[2], amountsOut[3]) = FARMING_CENTER.collectRewards(getIncentiveKey(state), tokenId);
-
-      if (amountsOut[2] > 0) {
-        amountsOut[2] = FARMING_CENTER.claimReward(tokensOut[2], address(this), 0, amountsOut[2]);
-      }
-
-      if (amountsOut[3] > 0) {
-        amountsOut[3] = FARMING_CENTER.claimReward(tokensOut[3], address(this), 0, amountsOut[3]);
-      }
+      (amountsOut[2], amountsOut[3]) = _collectRewards(getIncentiveKey(state), tokenId);
+      amountsOut[2] = _claimRewards(tokensOut[2], address(0), amountsOut[2]);
+      amountsOut[3] = _claimRewards(tokensOut[3], address(0), amountsOut[3]);
 
       emit AlgebraRewardsClaimed(amountsOut[2], amountsOut[3]);
     }
@@ -486,6 +472,43 @@ library AlgebraConverterStrategyLogicLib {
 
     return earned;
   }
+
+  /// @notice Claim rewards if any, send them to {strategyProfitHolder} if !skipTransfer, hide exceptions
+  /// @param to Transfer rewards to {to}, skip transfer if 0
+  function _claimRewards(address token, address to, uint rewardAmount) internal returns (uint rewardOut) {
+    if (rewardAmount != 0) {
+      try FARMING_CENTER.claimReward(
+        token, address(this), 0, rewardAmount
+      ) returns (uint /*reward*/) {
+        // if previous calls of claimReward were failed and current call is successful,
+        // we can receive reward > rewardAmount here but we will receive only rewardAmount on the balance.
+        // Most probably it's enough to transfer min(rewardAmount, reward) but it's more reliable to check balance
+        if (to != address(0)) {
+          rewardOut = Math.min(rewardAmount, IERC20(token).balanceOf(address(this)));
+          if (rewardOut != 0) {
+            IERC20(token).safeTransfer(to, rewardOut);
+          }
+        }
+      } catch {
+        // an exception in reward-claiming shouldn't stop hardwork / withdraw
+      }
+    }
+
+    return rewardOut;
+  }
+
+  /// @notice Collect rewards, hide exceptions
+  function _collectRewards(IncentiveKey memory key, uint tokenId) internal returns (uint reward, uint bonusReward) {
+    try FARMING_CENTER.collectRewards(
+      key, tokenId
+    ) returns (uint rewardAmount, uint bonusRewardAmount) {
+      (reward, bonusReward) = (rewardAmount, bonusRewardAmount);
+    } catch {
+      // an exception in reward-claiming shouldn't stop hardwork / withdraw
+    }
+
+    return (reward, bonusReward);
+  }
   //endregion ------------------------------------------------ Rewards
 
   //region ------------------------------------------------ Rebalance
@@ -513,6 +536,7 @@ library AlgebraConverterStrategyLogicLib {
   /// @param totalAssets_ Current value of totalAssets()
   /// @return tokenAmounts Token amounts for deposit. If length == 0 - rebalance wasn't made and no deposit is required.
   function rebalanceNoSwaps(
+    IConverterStrategyBase.ConverterStrategyBaseState storage csbs,
     PairBasedStrategyLogicLib.PairState storage pairState,
     address[2] calldata converterLiquidator,
     uint totalAssets_,
@@ -545,35 +569,18 @@ library AlgebraConverterStrategyLogicLib {
 
     // rebalancing debt, setting new tick range
     if (needRebalance) {
-      uint coveredByRewards;
       AlgebraDebtLib.rebalanceNoSwaps(converterLiquidator, pairState, profitToCover, totalAssets_, splitter, v.liquidationThresholdsAB, tick);
 
       uint loss;
       (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmountsPair(v.converter, totalAssets_, v.tokenA, v.tokenB, v.liquidationThresholdsAB);
 
       if (loss != 0) {
-        coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
+        ConverterStrategyBaseLib2.coverLossAndCheckResults(csbs, splitter, loss);
       }
-      emit Rebalanced(loss, profitToCover, coveredByRewards);
+      emit Rebalanced(loss, profitToCover, 0);
     }
 
     return tokenAmounts;
-  }
-
-  /// @notice Try to cover loss from rewards then cover remain loss from insurance.
-  function _coverLoss(address splitter, uint loss, address profitHolder, address tokenA, address tokenB, address pool) internal returns (
-    uint coveredByRewards
-  ) {
-    if (loss != 0) {
-      coveredByRewards = AlgebraDebtLib.coverLossFromRewards(loss, profitHolder, tokenA, tokenB, pool);
-      uint notCovered = loss - coveredByRewards;
-      if (notCovered != 0) {
-        ConverterStrategyBaseLib2.coverLossAndCheckResults(splitter, 0, notCovered);
-      }
-      emit CoverLoss(loss, coveredByRewards);
-    }
-
-    return coveredByRewards;
   }
 
   /// @notice Initialize {v} by state values
@@ -615,6 +622,7 @@ library AlgebraConverterStrategyLogicLib {
   /// @return completed All debts were closed, leftovers were swapped to proper proportions
   /// @return tokenAmountsOut Amounts to be deposited to pool. This array is empty if no deposit allowed/required.
   function withdrawByAggStep(
+    IConverterStrategyBase.ConverterStrategyBaseState storage csbs,
     address[5] calldata addr_,
     uint[4] calldata values_,
     bytes memory swapData,
@@ -625,10 +633,7 @@ library AlgebraConverterStrategyLogicLib {
     bool completed,
     uint[] memory tokenAmountsOut
   ) {
-    address splitter = addr_[4];
-    uint entryToPool = values_[3];
     address[2] memory tokens = [pairState.tokenA, pairState.tokenB];
-    IAlgebraPool pool = IAlgebraPool(pairState.pool);
 
     // Calculate amounts to be deposited to pool, calculate loss, fix profitToCover
     uint[] memory tokenAmounts;
@@ -636,17 +641,26 @@ library AlgebraConverterStrategyLogicLib {
     (completed, tokenAmounts, loss) = PairBasedStrategyLogicLib.withdrawByAggStep(addr_, values_, swapData, planEntryData, tokens, liquidationThresholds);
 
     // cover loss
-    uint coveredByRewards;
     if (loss != 0) {
-      coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, tokens[0], tokens[1], address(pool));
+      ConverterStrategyBaseLib2.coverLossAndCheckResults(
+        csbs,
+        addr_[4], // splitter
+        loss
+      );
     }
-    emit RebalancedDebt(loss, values_[1], coveredByRewards);
+    emit RebalancedDebt(loss, values_[1], 0);
 
-    if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
-      || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
+    // uint entryToPool = values_[3];
+    if (values_[3] == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
+      || (values_[3] == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
     ) {
       // We are going to enter to the pool: update lowerTick and upperTick, initialize tokenAmountsOut
-      (pairState.lowerTick, pairState.upperTick) = AlgebraDebtLib._calcNewTickRange(pool, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
+      (pairState.lowerTick, pairState.upperTick) = AlgebraDebtLib._calcNewTickRange(
+        IAlgebraPool(pairState.pool),
+        pairState.lowerTick,
+        pairState.upperTick,
+        pairState.tickSpacing
+      );
       tokenAmountsOut = tokenAmounts;
     }
 

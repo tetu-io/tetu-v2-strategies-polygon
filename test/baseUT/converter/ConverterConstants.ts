@@ -7,7 +7,8 @@ export enum LendingPlatformKinds {
   AAVE2_2,
   AAVE3_3,
   HUNDRED_FINANCE_4,
-  COMPOUND3_5
+  COMPOUND3_5,
+  MOONWELL_6
 }
 
 /**

@@ -83,7 +83,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   }
 
   /// @notice Returns the total supply of the depositor.
-  /// @return In UniV3 we can not calculate the total supply of the wgole pool. Return only ourself value.
+  /// @return In UniV3 we can not calculate the total supply of the whole pool. Return only ourself value.
   function _depositorTotalSupply() override internal view virtual returns (uint) {
     return uint(state.pair.totalLiquidity);
   }
@@ -126,11 +126,18 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
 
   /// @notice Handles the withdrawal operation.
   /// @param liquidityAmount The amount of liquidity to be withdrawn.
+  /// @param emergency Emergency exit (only withdraw, don't claim any rewards or make any other additional actions)
   /// @return amountsOut The amounts of the tokens withdrawn.
-  function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
-    (uint fee0, uint fee1) = getFees();
+  function _depositorExit(uint liquidityAmount, bool emergency) override internal virtual returns (uint[] memory amountsOut) {
+    uint fee0;
+    uint fee1;
+    if (! emergency) {
+      (fee0, fee1) = getFees();
+    }
     amountsOut = UniswapV3ConverterStrategyLogicLib.exit(state.pair, uint128(liquidityAmount));
-    UniswapV3ConverterStrategyLogicLib.sendFeeToProfitHolder(state.pair, fee0, fee1);
+    if (! emergency) {
+      UniswapV3ConverterStrategyLogicLib.sendFeeToProfitHolder(state.pair, fee0, fee1);
+    }
   }
 
   /// @notice Returns the amount of tokens that would be withdrawn based on the provided liquidity amount.

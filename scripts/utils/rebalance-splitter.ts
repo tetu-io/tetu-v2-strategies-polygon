@@ -11,6 +11,7 @@ import { RunHelper } from './RunHelper';
 
 const VAULT = '0x0d397f4515007ae4822703b74b9922508837a04e';
 const REBALANCE_AMOUNT = 30_000;
+const LOSS_TOLERANCE = 10;
 
 async function main() {
   const [signer] = await ethers.getSigners();
@@ -48,18 +49,19 @@ async function main() {
     return;
   }
 
-  const rebalancePerc = Math.min(Math.floor((REBALANCE_AMOUNT / lowestStratTvl) * 100), 100);
+  let rebalancePerc = Math.min(Math.floor((REBALANCE_AMOUNT / lowestStratTvl) * 100), 100);
+  rebalancePerc = rebalancePerc === 0 ? 1 : rebalancePerc;
   console.log('rebalancePerc', rebalancePerc);
   console.log('lowestStratTvl', lowestStratTvl);
   console.log('lowestStrat', lowestStrat);
   console.log('lowestStratApr', lowestStratApr);
 
-  const gas = await splitter.estimateGas.rebalance(rebalancePerc, 10);
+  const gas = await splitter.estimateGas.rebalance(rebalancePerc, LOSS_TOLERANCE);
 
   const txParam = await txParams2();
   await RunHelper.runAndWaitAndSpeedUp(
     ethers.provider,
-    () => splitter.rebalance(rebalancePerc, 10, { ...txParam, gasLimit: gas.mul(2) }),
+    () => splitter.rebalance(rebalancePerc, LOSS_TOLERANCE, { ...txParam, gasLimit: gas.mul(2) }),
   );
 
 

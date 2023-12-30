@@ -26,7 +26,9 @@ import {PackedData} from "../../../baseUT/utils/PackedData";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
-import {PLAN_REPAY_SWAP_REPAY} from "../../../baseUT/AppConstants";
+import {PLAN_REPAY_SWAP_REPAY_1} from "../../../baseUT/AppConstants";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
+import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
 
 describe('AlgebraConverterStrategy reduce debt by agg test', function() {
 
@@ -46,6 +48,7 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
     const core = Addresses.getCore();
     const controller = DeployerUtilsLocal.getController(signer);
@@ -148,19 +151,17 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
 
     expect(await s.needRebalance()).eq(false)
 
-    const planEntryData = defaultAbiCoder.encode(
-      ["uint256", "uint256"],
-      [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]
-    );
+    const planEntryData = buildEntryData1();
     const quote = await strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
     console.log('Quote', quote)
 
-    const swapData = AggregatorUtils.buildSwapTransactionData(
-        quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-        quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-        quote.amountToSwap,
-        s.address,
+    const swapData = AggregatorUtils.buildSwapTransactionDataForOneInch(
+      POLYGON_NETWORK_ID,
+      quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+      quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+      quote.amountToSwap,
+      s.address,
     );
 
     await strategy.withdrawByAggStep(

@@ -1,17 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.17;
 
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV2.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
 import "./UniswapV3Lib.sol";
 import "./Uni3StrategyErrors.sol";
-import "./UniswapV3ConverterStrategyLogicLib.sol";
-import "../ConverterStrategyBaseLib.sol";
-import "../ConverterStrategyBaseLib2.sol";
 import "../../libs/BorrowLib.sol";
-import "../../interfaces/IPairBasedStrategyReaderAccess.sol";
-import "../pair/PairBasedStrategyLib.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
 
 library UniswapV3DebtLib {
@@ -22,34 +14,6 @@ library UniswapV3DebtLib {
   /// @dev should be placed local, probably will be adjusted later
   uint internal constant BORROW_PERIOD_ESTIMATION = 30 days / 2;
 //endregion  -------------------------------------------- Constants
-
-//region  -------------------------------------------- Rewards
-  function coverLossFromRewards(uint loss, address strategyProfitHolder, address tokenA, address tokenB, address pool) external returns (uint covered) {
-    uint bA = IERC20Metadata(tokenA).balanceOf(strategyProfitHolder);
-    uint bB = IERC20Metadata(tokenB).balanceOf(strategyProfitHolder);
-
-    if (loss <= bA) {
-      IERC20(tokenA).safeTransferFrom(strategyProfitHolder, address(this), loss);
-      covered = loss;
-    } else {
-      uint needToCoverA = loss;
-      if (bA > 0) {
-        IERC20(tokenA).safeTransferFrom(strategyProfitHolder, address(this), bA);
-        needToCoverA -= bA;
-      }
-      if (bB > 0) {
-        uint needTransferB = UniswapV3Lib.getPrice(pool, tokenA) * needToCoverA / 10 ** IERC20Metadata(tokenA).decimals();
-        uint canTransferB = Math.min(needTransferB, bB);
-        // There is a chance to have needTransferB == canTransferB == 0 if loss = 1
-        if (canTransferB != 0) {
-          IERC20(tokenB).safeTransferFrom(strategyProfitHolder, address(this), canTransferB);
-          needToCoverA -= needToCoverA * canTransferB / needTransferB; // needTransferB >= canTransferB != 0 here
-        }
-      }
-      covered = loss - needToCoverA;
-    }
-  }
-//endregion  -------------------------------------------- Rewards
 
 //region  -------------------------------------------- Entry data
   /// @notice Calculate proportions of the tokens for entry kind 1
@@ -145,7 +109,7 @@ library UniswapV3DebtLib {
       profitToCover,
       totalAssets,
       splitter,
-  liquidationThresholdsAB,
+      liquidationThresholdsAB,
       prop0 * BorrowLib.SUM_PROPORTIONS / (prop0 + prop1)
     );
     (pairState.lowerTick, pairState.upperTick) = (newLowerTick, newUpperTick);

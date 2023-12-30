@@ -14,14 +14,15 @@ contract PairBasedStrategyLibFacade is IPoolProportionsProvider {
     uint[] memory liquidationThresholds,
     uint[] memory amountsFromPool,
     uint planKind,
-    uint propNotUnderlying18
+    uint[2] memory entryDataValues
   ) external returns (
     address tokenToSwap,
     uint amountToSwap
   ) {
-    return PairBasedStrategyLib.quoteWithdrawStep(converterLiquidator_, tokens, liquidationThresholds, amountsFromPool, planKind, propNotUnderlying18);
+    return PairBasedStrategyLib.quoteWithdrawStep(converterLiquidator_, tokens, liquidationThresholds, amountsFromPool, planKind, entryDataValues);
   }
 
+  /// @param entryDataValues [propNotUnderlying18, entryDataParam]
   function withdrawStep(
     address[2] memory converterLiquidator_,
     address[] memory tokens,
@@ -32,7 +33,7 @@ contract PairBasedStrategyLibFacade is IPoolProportionsProvider {
     bytes memory swapData_,
     bool useLiquidator_,
     uint planKind,
-    uint propNotUnderlying18
+    uint[2] memory entryDataValues
   ) external returns (
     bool completed
   ) {
@@ -46,7 +47,7 @@ contract PairBasedStrategyLibFacade is IPoolProportionsProvider {
       swapData_,
       useLiquidator_,
       planKind,
-      propNotUnderlying18
+      entryDataValues
     );
   }
 
@@ -115,7 +116,10 @@ contract PairBasedStrategyLibFacade is IPoolProportionsProvider {
   }
   //endregion ---------------------------------------------- IPoolProportionsProvider implementation
 
-  function _extractProp(uint planKind, bytes memory planEntryData) external pure returns(uint propNotUnderlying18) {
+  function _extractProp(uint planKind, bytes memory planEntryData) external pure returns(
+    uint propNotUnderlying18,
+    uint entryDataParamValue
+  ) {
     return PairBasedStrategyLib._extractProp(planKind, planEntryData);
   }
 

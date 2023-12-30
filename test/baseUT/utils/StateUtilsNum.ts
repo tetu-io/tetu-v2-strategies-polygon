@@ -3,14 +3,39 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre from "hardhat";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {writeFileSync} from "fs";
-import {AlgebraConverterStrategy__factory, AlgebraLib, BalancerBoostedStrategy__factory, ConverterStrategyBase, ConverterStrategyBase__factory, IBalancerGauge__factory, IBorrowManager, IBorrowManager__factory, IConverterController__factory, IERC20Metadata__factory, IPoolAdapter__factory, IPriceOracle, IPriceOracle__factory, IRebalancingV2Strategy, ISplitter__factory, ITetuConverter, ITetuConverter__factory, IUniswapV3Pool__factory, KyberConverterStrategy__factory, KyberLib, TetuVaultV2, UniswapV3ConverterStrategy__factory, UniswapV3Lib} from "../../../typechain";
+import {
+  AlgebraConverterStrategy__factory,
+  AlgebraLib,
+  BalancerBoostedStrategy__factory,
+  ConverterStrategyBase,
+  ConverterStrategyBase__factory,
+  IBalancerGauge__factory,
+  IBookkeeper__factory,
+  IBorrowManager,
+  IBorrowManager__factory,
+  IConverterController__factory,
+  IERC20Metadata__factory,
+  IPoolAdapter__factory,
+  IPriceOracle,
+  IPriceOracle__factory,
+  IRebalancingV2Strategy,
+  ISplitter__factory,
+  ITetuConverter,
+  ITetuConverter__factory,
+  IUniswapV3Pool__factory,
+  KyberConverterStrategy__factory,
+  KyberLib, PancakeLib,
+  TetuVaultV2,
+  UniswapV3ConverterStrategy__factory,
+  UniswapV3Lib
+} from "../../../typechain";
 import {MockHelper} from "../helpers/MockHelper";
 import {writeFileSyncRestoreFolder} from "./FileUtils";
 import {ConverterAdaptersHelper} from "../converter/ConverterAdaptersHelper";
 import {BigNumber} from "ethers";
 import {PackedData} from "./PackedData";
-import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../strategies/AppPlatforms";
-import {PairStrategyLiquidityUtils} from "../strategies/PairStrategyLiquidityUtils";
+import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_PANCAKE, PLATFORM_UNIV3} from "../strategies/AppPlatforms";
+import {PairStrategyLiquidityUtils} from "../strategies/pair/PairStrategyLiquidityUtils";
 import {CaptureEvents, IEventsSet, ISummaryFromEventsSet} from "../strategies/CaptureEvents";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 
@@ -37,12 +62,23 @@ export interface IUniv3SpecificState {
   rebalanceEarned1: BigNumber; // rebalanceResults[1]
 }
 
+export interface IUniv3Values {
+  specificState: IUniv3SpecificState;
+  propNotUnderlying: number;
+}
+
 export interface IUniv3Pool {
   token0: string,
   token1: string,
   amount0: BigNumber,
   amount1: BigNumber
 }
+
+export interface IBorrowResults {
+  borrowGains: number;
+  borrowLosses: number;
+}
+
 /**
  * Same as IState but all numbers are without decimals
  */
@@ -64,6 +100,7 @@ export interface IStateNum {
     borrowAssetsBalances: number[];
     rewardTokensBalances?: number[];
     liquidity: number;
+    debtToInsurance: number;
   };
   gauge: {
     strategyBalance?: number;
@@ -97,6 +134,8 @@ export interface IStateNum {
     borrowAssetsPrices: number[];
     borrowAssets: string[];
     borrowAssetsNames: string[];
+    collateralsByPos?: number[][];
+    amountsToRepayByPos?: number[][];
   };
   converterReverse: {
     collaterals: number[];
@@ -107,6 +146,8 @@ export interface IStateNum {
     borrowAssetsPrices: number[];
     borrowAssets: string[];
     borrowAssetsNames: string[];
+    collateralsByPos?: number[][];
+    amountsToRepayByPos?: number[][];
   };
 
   fuseStatus?: number;
@@ -128,22 +169,23 @@ export interface IStateNum {
 
   pairCurrentTick?: ILiquidityAmountInTick;
 
-  univ3?: IUniv3SpecificState
+  univ3?: IUniv3Values;
   univ3Pool?: IUniv3Pool;
   events?: ISummaryFromEventsSet;
+
+  previewBorrowResults?: IBorrowResults;
+  additionalParams: number[];
 }
 
 export interface IStateParams {
   mainAssetSymbol: string;
+  additionalParams?: string[];
 }
 
-export interface IFixPricesChangesEventInfo {
-  assetBefore: number;
-  assetAfter: number;
-}
 export interface IGetStateParams {
   eventsSet?: IEventsSet;
-  lib?: KyberLib | UniswapV3Lib | AlgebraLib;
+  lib?: KyberLib | UniswapV3Lib | AlgebraLib | PancakeLib;
+  additionalParamValues?: number[];
 }
 
 /**
@@ -157,6 +199,8 @@ export interface IBorrowInfo {
   healthFactors: number[][];
   platformAdapters: string[][];
   totalLockedAmountInUnderlying: number;
+  amountsToRepayByPos?: number[][];
+  collateralsByPos?: number[][];
 }
 
 /**
@@ -203,7 +247,7 @@ export class StateUtilsNum {
     let borrowAssetsAddresses: string[] = [];
 
     let pairState: IPairState | undefined;
-    let univ3SpecificState: IUniv3SpecificState | undefined;
+    let univ3: IUniv3Values | undefined;
     let univ3Pool: IUniv3Pool | undefined;
 
     // Direct borrow: borrow an asset using the underlying as collateral
@@ -220,12 +264,15 @@ export class StateUtilsNum {
     let withdrawDone: number | undefined;
 
     let currentTick: ILiquidityAmountInTick | undefined;
+    let previewBorrowResults: IBorrowResults | undefined;
 
     const converter = await ITetuConverter__factory.connect(await strategy.converter(), signer);
     const priceOracle = IPriceOracle__factory.connect(
       await IConverterController__factory.connect(await converter.controller(), signer).priceOracle(),
       signer
     );
+    console.log("StateUtilsNumb.converter", converter.address);
+    console.log("StateUtilsNumb.priceOracle", priceOracle.address);
     const borrowManager = await IBorrowManager__factory.connect(
       await IConverterController__factory.connect(await converter.controller(), signer).borrowManager(),
       signer
@@ -236,6 +283,8 @@ export class StateUtilsNum {
       const poolAddress = this.getBalancerPoolAddress(await boostedStrategy.poolId());
       const pool = IERC20Metadata__factory.connect(poolAddress, signer);
       liquidity = +formatUnits(await pool.balanceOf(strategy.address), await pool.decimals());
+      // todo it's not allowed to deploy contract on each call of this function
+      // todo check if the facade is really required and move it to IGetStateParams
       const depositorFacade = await MockHelper.createBalancerBoostedDepositorFacade(signer, poolAddress);
 
       borrowAssetsAddresses = await depositorFacade._depositorPoolAssetsAccess();
@@ -257,8 +306,9 @@ export class StateUtilsNum {
       const isUniv3 = platform === PLATFORM_UNIV3;
       const isAlgebra = platform === PLATFORM_ALGEBRA;
       const isKyber = platform === PLATFORM_KYBER;
+      const isPancake = platform === PLATFORM_PANCAKE;
 
-      if (isUniv3 || isAlgebra || isKyber)  {
+      if (isUniv3 || isAlgebra || isKyber || isPancake)  {
         const uniswapV3Strategy = UniswapV3ConverterStrategy__factory.connect(strategy.address, signer);
         const state = await PackedData.getDefaultState(uniswapV3Strategy);
         // console.log("state", state);
@@ -298,25 +348,29 @@ export class StateUtilsNum {
         }
 
         if (isUniv3) {
-          const specificState = await PackedData.getSpecificStateUniv3(UniswapV3ConverterStrategy__factory.connect(strategy.address, signer));
-          univ3SpecificState = {
-            rebalanceEarned0: specificState.rebalanceEarned0,
-            rebalanceEarned1: specificState.rebalanceEarned1,
+          const uniswapStrategy = UniswapV3ConverterStrategy__factory.connect(strategy.address, signer);
+          const specificState = await PackedData.getSpecificStateUniv3(uniswapStrategy);
+          univ3 = {
+            specificState: {
+              rebalanceEarned0: specificState.rebalanceEarned0,
+              rebalanceEarned1: specificState.rebalanceEarned1,
+            },
+            propNotUnderlying: +formatUnits(await uniswapStrategy.getPropNotUnderlying18(), 18)
           }
           const pool = await IUniswapV3Pool__factory.connect(state.pool, signer);
-          const slot0 = await pool.slot0();
-          const facade = await MockHelper.createUniswapV3LibFacade(signer);
-          const poolAmountsForLiquidity = await facade.getAmountsForLiquidity(
-            slot0.sqrtPriceX96,
-            state.lowerTick,
-            state.upperTick,
-            state.totalLiquidity
-          );
+          // const slot0 = await pool.slot0();
+          // const facade = await MockHelper.createUniswapV3LibFacade(signer);
+          // const poolAmountsForLiquidity = await facade.getAmountsForLiquidity(
+          //   slot0.sqrtPriceX96,
+          //   state.lowerTick,
+          //   state.upperTick,
+          //   state.totalLiquidity
+          // );
           univ3Pool = {
             token0: await pool.token0(),
             token1: await pool.token1(),
-            amount0: poolAmountsForLiquidity.amount0,
-            amount1: poolAmountsForLiquidity.amount1
+            amount0: BigNumber.from(0), // poolAmountsForLiquidity.amount0,
+            amount1: BigNumber.from(0), // poolAmountsForLiquidity.amount1
           };
         }
 
@@ -339,7 +393,10 @@ export class StateUtilsNum {
       borrowAssetsPrices.push(+formatUnits(await priceOracle.getAssetPrice(borrowAssetAddress), 18));
     }
 
+    previewBorrowResults = await this.getPreviewBorrowResults(signer, converter, strategy, assetDecimals);
+
     const totalAssets = +formatUnits(await vault.totalAssets(), assetDecimals);
+    const totalAssetInStrategy = +formatUnits(await strategy.totalAssets(), assetDecimals);
     // noinspection UnnecessaryLocalVariableJS
     const dest: IStateNum = {
       title: title || 'no-name',
@@ -358,6 +415,7 @@ export class StateUtilsNum {
         liquidity,
         borrowAssetsBalances,
         borrowAssetsNames,
+        debtToInsurance: +formatUnits(await strategy.debtToInsurance(), assetDecimals),
       },
       vault: {
         assetBalance: +formatUnits(await asset.balanceOf(vault.address), assetDecimals),
@@ -387,7 +445,9 @@ export class StateUtilsNum {
         platformAdapters: directBorrows.platformAdapters,
         borrowAssetsPrices,
         borrowAssets: borrowAssetsAddresses,
-        borrowAssetsNames
+        borrowAssetsNames,
+        amountsToRepayByPos: directBorrows.amountsToRepayByPos,
+        collateralsByPos: directBorrows.collateralsByPos,
       },
       converterReverse: {
         collaterals: reverseBorrows.collaterals,
@@ -397,31 +457,55 @@ export class StateUtilsNum {
         platformAdapters: reverseBorrows.platformAdapters,
         borrowAssetsPrices,
         borrowAssets: borrowAssetsAddresses,
-        borrowAssetsNames
+        borrowAssetsNames,
+        amountsToRepayByPos: reverseBorrows.amountsToRepayByPos,
+        collateralsByPos: reverseBorrows.collateralsByPos,
       },
 
       fuseStatus: fuseStatusA,
-      // fuseStatusB,
       withdrawDone,
 
       lockedInConverter: Math.abs(directBorrows.totalLockedAmountInUnderlying) + Math.abs(reverseBorrows.totalLockedAmountInUnderlying),
-      lockedPercent: totalAssets === 0
+      lockedPercent: totalAssetInStrategy === 0
         ? 0
-        : (Math.abs(directBorrows.totalLockedAmountInUnderlying) + Math.abs(reverseBorrows.totalLockedAmountInUnderlying)) / totalAssets,
+        : (Math.abs(directBorrows.totalLockedAmountInUnderlying) + Math.abs(reverseBorrows.totalLockedAmountInUnderlying)) / totalAssetInStrategy,
 
       pairState,
 
       pairCurrentTick: currentTick,
 
-      univ3: univ3SpecificState,
+      univ3,
       univ3Pool,
 
       events: await CaptureEvents.getSummaryFromEventsSet(signer, p?.eventsSet),
+
+      previewBorrowResults,
+      additionalParams: p?.additionalParamValues ?? []
     }
 
     // console.log(dest)
 
-    return dest
+    return dest;
+  }
+
+  public static async getPreviewBorrowResults(
+    signer: SignerWithAddress,
+    converter: ITetuConverter,
+    strategy: ConverterStrategyBase,
+    assetDecimals: number
+  ): Promise<IBorrowResults> {
+    const ret = await IBookkeeper__factory.connect(
+      await IConverterController__factory.connect(await converter.controller(), signer).bookkeeper(),
+      signer
+    ).previewPeriod(
+      await strategy.asset(),
+      strategy.address
+    );
+
+    return {
+      borrowGains: +formatUnits(ret.gains, assetDecimals),
+      borrowLosses: +formatUnits(ret.losses, assetDecimals),
+    }
   }
 
   public static async getBorrowInfo(
@@ -440,6 +524,8 @@ export class StateUtilsNum {
     const collateralAssetNames: string[] = [];
     const listHealthFactors: number[][] = [];
     const listPlatformAdapters: string[][] = [];
+    const listCollateralsByPos: number[][] = [];
+    const listAmountsToRepayByPos: number[][] = [];
     let lockedAmount = 0;
 
     for (const collateralAsset of collateralAssets) {
@@ -478,11 +564,15 @@ export class StateUtilsNum {
 
         const healthFactors: number[] = [];
         const platformAdapters: string[] = [];
+        const collateralsByPos: number[] = [];
+        const amountsToRepayByPos: number[] = [];
         const positions = await converter.callStatic.getPositions(strategy.address, collateralAsset, borrowAsset);
         for (const position of positions) {
           const poolAdapter = IPoolAdapter__factory.connect(position, signer);
           const status = await poolAdapter.getStatus();
           healthFactors.push(+formatUnits(status.healthFactor18, 18));
+          collateralsByPos.push(+formatUnits(status.collateralAmount, collateralDecimals));
+          amountsToRepayByPos.push(+formatUnits(status.amountToPay, borrowDecimals));
 
           const config = await poolAdapter.getConfig();
           platformAdapters.push(
@@ -491,6 +581,8 @@ export class StateUtilsNum {
         }
         listHealthFactors.push(healthFactors);
         listPlatformAdapters.push(platformAdapters);
+        listCollateralsByPos.push(collateralsByPos);
+        listAmountsToRepayByPos.push(amountsToRepayByPos);
       }
     }
 
@@ -501,7 +593,9 @@ export class StateUtilsNum {
       healthFactors: listHealthFactors,
       platformAdapters: listPlatformAdapters,
       collateralAssetNames,
-      totalLockedAmountInUnderlying: lockedAmount
+      totalLockedAmountInUnderlying: lockedAmount,
+      amountsToRepayByPos: listAmountsToRepayByPos,
+      collateralsByPos: listCollateralsByPos
     }
   }
 
@@ -555,6 +649,7 @@ export class StateUtilsNum {
       'strategy.liquidity',
       'strategy.totalAssets',
       'strategy.investedAssets',
+      'strategy.debtToInsurance',
 
       'gauge.balance',
 
@@ -590,27 +685,46 @@ export class StateUtilsNum {
 
       'univ3.rebalanceEarned0',
       'univ3.rebalanceEarned1',
+      'univ3.propNotUnderlying',
 
       "pool.token0",
       "pool.token1",
       "pool.amount0",
       "pool.amount1",
 
-      'fuseStatusA',
-      'fuseStatusB',
+      'fuseStatus',
       'withdrawDone',
 
       'events.lossSplitter',
       'events.lossCoveredVault',
+      'events.feeTransferVault',
       'events.lossUncoveredCutByMax',
+
+      'events.onCoverLoss.lossToCover',
+      'events.onCoverLoss.amountCovered',
+      'events.lossUncoveredNotEnoughInsurance',
+      'events.onCoverLoss.debtToInsuranceInc',
+        
       'events.sentToInsurance',
       'events.unsentToInsurance',
-      'events.coveredByRewards',
-      'events.lossUncoveredNotEnoughInsurance',
+        
+      'events.debtToInsuranceOnProfit.debtToInsuranceBefore',
+      'events.debtToInsuranceOnProfit.increaseToDebt',
+
+      'events.payToInsurance.debtToInsuranceBefore',
+      'events.payToInsurance.debtToInsuranceAfter',
+      'events.payToInsurance.debtPaid',
+
       'events.toPerfRecycle',
       'events.toInsuranceRecycle',
       'events.toForwarderRecycle',
       'events.lossRebalance',
+
+      "fixPriceChanges.debtToInsuranceBefore",
+      "fixPriceChanges.debtToInsuranceAfter",
+      "fixPriceChanges.increaseToDebt",
+      "fixPriceChanges.investedAssetsBefore",
+      "fixPriceChanges.investedAssetsAfter",
 
       'swapByAgg.amountToSwap',
       'swapByAgg.amountIn',
@@ -618,12 +732,38 @@ export class StateUtilsNum {
       'swapByAgg.amountOutExpected',
       'swapByAgg.aggregator',
 
-      'fixPriceChanges.investedAssetsBefore',
-      'fixPriceChanges.investedAssetsAfter',
+      'borrowResults.gains',
+      'borrowResults.losses',
 
-      'pair.tick.A',
-      'pair.tick.B',
+      'preview.borrowGains',
+      'preview.borrowLosses',
+
+      "hw.investedAssetsNewPrices",
+      "hw.earnedByPrices",
+      "hw.earnedDeposit",
+      "hw.lostDeposit",
+      "hw.earnedHandleRewards",
+      "hw.lostHandleRewards",
+      "hw.paidDebtToInsurance",
+
+      "hardwork.sender",
+      "hardwork.strategy",
+      "hardwork.tvl",
+      "hardwork.avgApr",
+      "hardwork.apr",
+      "hardwork.lost",
+      "hardwork.earned",
+
+      "onWithdraw.earned",
+      "onWithdraw.earnedByPrice",
+      "onWithdraw.earned-earnedByPrice",
     ];
+
+    if (params.additionalParams) {
+      for (const title of params.additionalParams) {
+        stateHeaders.push(title);
+      }
+    }
 
     return { stateHeaders };
   }
@@ -663,7 +803,10 @@ export class StateUtilsNum {
       item.strategy.liquidity,
       item.strategy.totalAssets,
       item.strategy.investedAssets,
+      item.strategy.debtToInsurance,
+
       item.gauge.strategyBalance,
+
       item.vault.assetBalance,
       item.splitter.assetBalance,
       item.splitter.totalAssets,
@@ -693,8 +836,9 @@ export class StateUtilsNum {
       item.pairState?.rebalanceTickRange,
       item.pairState?.totalLiquidity,
 
-      item.univ3?.rebalanceEarned0,
-      item.univ3?.rebalanceEarned1,
+      item.univ3?.specificState.rebalanceEarned0,
+      item.univ3?.specificState.rebalanceEarned1,
+      item.univ3?.propNotUnderlying,
 
       item.univ3Pool?.token0,
       item.univ3Pool?.token1,
@@ -702,20 +846,39 @@ export class StateUtilsNum {
       item.univ3Pool?.amount1,
 
       item.fuseStatus,
-      // item.fuseStatusB,
       item.withdrawDone,
+
 
       item.events?.lossSplitter,
       item.events?.lossCoveredVault,
+      item.events?.feeTransferVault,
       item.events?.lossUncoveredCutByMax,
+
+      item.events?.onCoverLoss.lossToCover,
+      item.events?.onCoverLoss.amountCovered,
+      item.events?.onCoverLoss.lossUncoveredNotEnoughInsurance,
+      item.events?.onCoverLoss.debtToInsuranceInc,
+
       item.events?.sentToInsurance,
       item.events?.unsentToInsurance,
-      item.events?.coveredByRewards,
-      item.events?.lossUncoveredNotEnoughInsurance,
+
+      item.events?.changeDebtToInsuranceOnProfit?.debtToInsuranceBefore,
+      item.events?.changeDebtToInsuranceOnProfit?.increaseToDebt,
+
+      item.events?.payDebtToInsurance?.debtToInsuranceBefore,
+      item.events?.payDebtToInsurance?.debtToInsuranceAfter,
+      item.events?.payDebtToInsurance?.debtPaid,
+
       item.events?.toPerfRecycle,
       item.events?.toInsuranceRecycle,
       item.events?.toForwarderRecycle.join(" "),
       item.events?.lossRebalance,
+
+      item.events?.fixPriceChanges.debtToInsuranceBefore,
+      item.events?.fixPriceChanges.debtToInsuranceAfter,
+      item.events?.fixPriceChanges.increaseToDebt,
+      item.events?.fixPriceChanges.investedAssetsBefore,
+      item.events?.fixPriceChanges.investedAssetsAfter,
 
       item.events?.swapByAgg?.amountToSwap,
       item.events?.swapByAgg?.amountIn,
@@ -731,11 +894,33 @@ export class StateUtilsNum {
                 ? "OpenOcean"
                 : "???",
 
-      item.events?.investedAssetsBeforeFixPriceChanges,
-      item.events?.investedAssetsAfterFixPriceChanges,
+      item.events?.borrowResults.gains,
+      item.events?.borrowResults.losses,
 
-      item.pairCurrentTick?.amountTokenA,
-      item.pairCurrentTick?.amountTokenB,
+      item.previewBorrowResults?.borrowGains,
+      item.previewBorrowResults?.borrowLosses,
+
+      item.events?.onHardWorkEarnedLost?.investedAssetsNewPrices,
+      item.events?.onHardWorkEarnedLost?.earnedByPrices,
+      item.events?.onHardWorkEarnedLost?.earnedDeposit,
+      item.events?.onHardWorkEarnedLost?.lostDeposit,
+      item.events?.onHardWorkEarnedLost?.earnedHandleRewards,
+      item.events?.onHardWorkEarnedLost?.lostHandleRewards,
+      item.events?.onHardWorkEarnedLost?.paidDebtToInsurance,
+
+      item.events?.hardwork?.sender,
+      item.events?.hardwork?.strategy,
+      item.events?.hardwork?.tvl,
+      item.events?.hardwork?.avgApr,
+      item.events?.hardwork?.apr,
+      item.events?.hardwork?.lost,
+      item.events?.hardwork?.earned,
+
+      item.events?.onEarningOnWithdraw?.earned,
+      item.events?.onEarningOnWithdraw?.earnedByPrice,
+      item.events?.onEarningOnWithdraw?.delta,
+
+      ...item.additionalParams
     ]);
 
     writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', { encoding: 'utf8', flag: override ? 'w' : 'a'});
@@ -797,7 +982,7 @@ export class StateUtilsNum {
   public static getTotalUncoveredLoss(states: IStateNum[]) : number {
     let dest = 0;
     for (const state of states) {
-      dest += (state.events?.lossUncoveredCutByMax ?? 0) + (state.events?.lossUncoveredNotEnoughInsurance ?? 0);
+      dest += (state.events?.lossUncoveredCutByMax ?? 0) + (state.events?.onCoverLoss?.lossUncoveredNotEnoughInsurance ?? 0);
     }
     return dest;
   }

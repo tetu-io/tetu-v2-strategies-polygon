@@ -32,7 +32,7 @@ export class EnvSetup {
         },
         oneInchApiKey: {
           type: 'string',
-          default: ''
+          default: '',
         },
 
         /////// RPC
@@ -41,16 +41,38 @@ export class EnvSetup {
           type: 'string',
         },
 
+        baseRpcUrl: {
+          type: 'string',
+        },
+
+        zkevmRpcUrl: {
+          type: 'string',
+        },
+
         /////// BLOCKS
 
         maticForkBlock: {
           type: 'number',
-          default: 48265751, // 46320827,
+          default: 51411258, // 50771769, // 50237305, // 49480727, // 48617049, // 48265751, // 46320827,
+        },
+
+        baseForkBlock: {
+          type: 'number',
+          default: 7496637, // 6917558, // 5939287,
+        },
+
+        zkevmForkBlock: {
+          type: 'number',
+          default: 8805209, // 8587141,
         },
 
         /////// NETWORK EXPLORERS
 
         networkScanKey: {
+          type: 'string',
+        },
+
+        networkScanKeyBase: {
           type: 'string',
         },
 

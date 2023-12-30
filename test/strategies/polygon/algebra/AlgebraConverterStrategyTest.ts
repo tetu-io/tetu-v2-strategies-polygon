@@ -27,8 +27,9 @@ import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {BigNumber} from "ethers";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {PackedData} from "../../../baseUT/utils/PackedData";
-import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 describe('AlgebraConverterStrategyTest', function() {
 
@@ -46,6 +47,7 @@ describe('AlgebraConverterStrategyTest', function() {
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
     const core = Addresses.getCore();
     const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
@@ -183,9 +185,9 @@ describe('AlgebraConverterStrategyTest', function() {
             pool: MaticAddresses.ALGEBRA_USDC_USDT,
             swapHelper: await MockHelper.createSwapperHelper(signer)
           },
-          true,
+          false,
           state,
-          parseUnits('1100000', 6),
+          parseUnits('110000', 6),
           undefined,
           5
       );

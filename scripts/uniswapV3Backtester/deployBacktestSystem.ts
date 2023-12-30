@@ -1,14 +1,14 @@
 /* tslint:disable:no-trailing-whitespace */
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {
-  BorrowManager, BorrowManager__factory,
+  BorrowManager__factory,
   CErc20Immutable,
   CompPriceOracleImitator,
   Comptroller,
   Controller as LiquidatorController,
   ControllerV2,
   ControllerV2__factory,
-  ConverterController, ConverterController__factory, DebtMonitor__factory,
+  ConverterController__factory, DebtMonitor__factory,
   ForwarderV3__factory,
   HfPlatformAdapter,
   HfPoolAdapter,
@@ -41,7 +41,6 @@ import {
   VeTetu,
   VeTetu__factory
 } from "../../typechain";
-import {MaticAddresses} from "../addresses/MaticAddresses";
 import {DeployerUtils} from "../utils/DeployerUtils";
 import {Misc} from "../utils/Misc";
 import {ProxyControlled as ProxyControlled_1_0_0} from "../../typechain/@tetu_io/tetu-liquidator/contracts/proxy";
@@ -52,6 +51,12 @@ import {DeployerUtilsLocal} from "../utils/DeployerUtilsLocal";
 import {RunHelper} from "../utils/RunHelper";
 import {IRebalanceDebtSwapPoolParams, IVaultUniswapV3StrategyInfo} from "./types";
 
+export interface INetworkTokens {
+  address: string
+  name: string
+  decimals: number
+}
+
 export async function deployBacktestSystem(
   signer: SignerWithAddress,
   currentSqrtPriceX96: BigNumberish,
@@ -61,7 +66,8 @@ export async function deployBacktestSystem(
   poolFee: number,
   tickRange: number,
   rebalanceTickRange: number,
-  rebalanceDebtSwapPoolParams: IRebalanceDebtSwapPoolParams
+  rebalanceDebtSwapPoolParams: IRebalanceDebtSwapPoolParams,
+  networkTokens: INetworkTokens[]
 ): Promise<{
   gauge: MultiGauge;
   rebalanceDebtSwapPool: UniswapV3Pool | undefined;
@@ -88,7 +94,10 @@ export async function deployBacktestSystem(
   // deploy tokens
   const tokens: {[realAddress: string]: MockToken} = {}
   const mintAmount = '100000000000'; // 100b
-  tokens[getAddress(MaticAddresses.USDC_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'USDC', 6, mintAmount, true);
+  for (const networkToken of networkTokens) {
+    tokens[getAddress(networkToken.address)] = await DeployerUtils.deployMockToken(signer, networkToken.name, networkToken.decimals, mintAmount, true);
+  }
+  /*tokens[getAddress(MaticAddresses.USDC_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'USDC', 6, mintAmount, true);
   tokens[getAddress(MaticAddresses.WETH_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'WETH', 18, mintAmount, true);
   tokens[getAddress(MaticAddresses.WMATIC_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'WMATIC', 18, mintAmount, true);
   tokens[getAddress(MaticAddresses.DAI_TOKEN)] =  await DeployerUtils.deployMockToken(signer, 'DAI', 18, mintAmount, true);
@@ -96,7 +105,7 @@ export async function deployBacktestSystem(
   tokens[getAddress(MaticAddresses.miMATIC_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'miMATIC', 18, mintAmount, true);
   tokens[getAddress(MaticAddresses.WBTC_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'WBTC', 8, mintAmount, true);
   tokens[getAddress(MaticAddresses.wstETH_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'wstETH', 18, mintAmount, true);
-  tokens[getAddress(MaticAddresses.MaticX_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'MaticX', 18, mintAmount, true);
+  tokens[getAddress(MaticAddresses.MaticX_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'MaticX', 18, mintAmount, true);*/
   const tetu = await DeployerUtils.deployMockToken(signer, 'TETU', 18, '1000000', true);
 
   // deploy uniswap v3 and periphery
@@ -454,6 +463,11 @@ export async function deployBacktestSystem(
 
   await vaultStrategyInfo.strategy.connect(platformVoterSigner).setCompoundRatio(100000); // 100%
   await vaultStrategyInfo.strategy.setReinvestThresholdPercent(0); // 0%
+
+  const token0Decimals = await poolToken0.decimals()
+  const token1Decimals = await poolToken1.decimals()
+  await vaultStrategyInfo.strategy.setLiquidationThreshold(poolToken0.address, token0Decimals === 18 ? parseUnits('0.0001') : 10);
+  await vaultStrategyInfo.strategy.setLiquidationThreshold(poolToken1.address, token1Decimals === 18 ? parseUnits('0.0001') : 10);
   await converterController.setWhitelistValues([vaultStrategyInfo.strategy.address,], true)
 
   const profitHolder = await DeployerUtils.deployContractSilent(signer, 'StrategyProfitHolder', vaultStrategyInfo.strategy.address, [poolToken0.address, poolToken1.address])

@@ -2,7 +2,7 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import { DeployerUtilsLocal } from '../../../scripts/utils/DeployerUtilsLocal';
 import {
-  BorrowManager, BorrowManager__factory,
+  BorrowManager, BorrowManager__factory, ConverterController,
   ConverterController__factory, IBorrowManager,
   IBorrowManager__factory,
   IConverterController__factory,
@@ -13,16 +13,25 @@ import {
 import {
   getAaveThreePlatformAdapter, getAaveTwoPlatformAdapter,
   getConverterAddress,
-  getDForcePlatformAdapter,
+  getDForcePlatformAdapter, getMoonwellPlatformAdapter,
   Misc,
 } from '../../../scripts/utils/Misc';
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
+import {ethers} from "hardhat";
 
 export class ConverterUtils {
 
   public static async whitelist(adrs: string[], converterAddress?: string) {
-    const signer = await Misc.impersonate(MaticAddresses.GOV_ADDRESS);
-    const converterControllerAddr = await TetuConverter__factory.connect(converterAddress || getConverterAddress(), signer).controller();
+    console.log("whitelist strategy in converter", converterAddress);
+    const tetuConverterAddress = converterAddress || getConverterAddress();
+    const user = await Misc.impersonate(ethers.Wallet.createRandom().address);
+    const governance = await IConverterController__factory.connect(
+      await ITetuConverter__factory.connect(tetuConverterAddress, user).controller(),
+      user
+    ).governance();
+
+    const signer = await Misc.impersonate(governance);
+    const converterControllerAddr = await TetuConverter__factory.connect(tetuConverterAddress, signer).controller();
     const converterController = IConverterController__factory.connect(converterControllerAddr, signer);
     const converterControllerGovernanceAddr = await converterController.governance();
     const converterControllerGovernance = await DeployerUtilsLocal.impersonate(converterControllerGovernanceAddr);
@@ -30,6 +39,7 @@ export class ConverterUtils {
     const contrl = ConverterController__factory.connect(converterControllerAddr, converterControllerGovernance);
 
     await contrl.setWhitelistValues(adrs, true);
+    console.log("whitelisted");
   }
 
   /**
@@ -37,29 +47,36 @@ export class ConverterUtils {
    *
    * We can avoid disabling of DForce also by replacing DForce's price oracle by mocked version (same as in TetuConverter)
    * The mocked version returns not-zero prices after block advance.
-   * @param signer
    */
-  public static async disableDForce(signer: SignerWithAddress): Promise<string> {
+  public static async disableDForce(signer: SignerWithAddress, converter0?: string): Promise<string> {
     console.log('disableDForce...');
-    const platformAdapterAddress = await getDForcePlatformAdapter(signer);
-    await this.disablePlatformAdapter(signer, platformAdapterAddress);
+    const platformAdapterAddress = await getDForcePlatformAdapter(signer, converter0);
+    await this.disablePlatformAdapter(signer, platformAdapterAddress, converter0);
     console.log('disableDForce done.\n\n');
     return platformAdapterAddress;
   }
 
-  public static async disableAaveV3(signer: SignerWithAddress): Promise<string> {
+  public static async disableAaveV3(signer: SignerWithAddress, converter0?: string): Promise<string> {
     console.log('disableAaveV3...');
-    const platformAdapterAddress = await getAaveThreePlatformAdapter(signer);
-    await this.disablePlatformAdapter(signer, platformAdapterAddress);
+    const platformAdapterAddress = await getAaveThreePlatformAdapter(signer, converter0);
+    await this.disablePlatformAdapter(signer, platformAdapterAddress, converter0);
     console.log('disableAaveV3 done.\n\n');
     return platformAdapterAddress;
   }
 
-  public static async disableAaveV2(signer: SignerWithAddress): Promise<string> {
+  public static async disableAaveV2(signer: SignerWithAddress, converter0?: string): Promise<string> {
     console.log('disableAaveV2...');
-    const platformAdapterAddress = await getAaveTwoPlatformAdapter(signer);
-    await this.disablePlatformAdapter(signer, platformAdapterAddress);
+    const platformAdapterAddress = await getAaveTwoPlatformAdapter(signer, converter0);
+    await this.disablePlatformAdapter(signer, platformAdapterAddress, converter0);
     console.log('disableAaveV2 done.\n\n');
+    return platformAdapterAddress;
+  }
+
+  public static async disableMoonwell(signer: SignerWithAddress, converter0?: string): Promise<string> {
+    console.log('disableMoonwell...');
+    const platformAdapterAddress = await getMoonwellPlatformAdapter(signer, converter0);
+    await this.disablePlatformAdapter(signer, platformAdapterAddress, converter0);
+    console.log('disableMoonwell done.\n\n');
     return platformAdapterAddress;
   }
 
@@ -131,5 +148,13 @@ export class ConverterUtils {
       await controller.borrowManager(),
       signer
     );
+  }
+
+  public static async allowToConvertByAave3(signer: SignerWithAddress, controller: ConverterController, assetIn: string, assetOut: string) {
+    const governance = await controller.governance();
+    const platformAdapterAddress = await getAaveThreePlatformAdapter(signer);
+    const borrowManagerAddress = await controller.borrowManager();
+    const borrowManagerAsGovernance = IBorrowManager__factory.connect(borrowManagerAddress, await Misc.impersonate(governance),);
+    await borrowManagerAsGovernance.addAssetPairs(platformAdapterAddress, [assetIn], [assetOut]);
   }
 }

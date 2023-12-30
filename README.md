@@ -21,7 +21,7 @@ Twitter: https://twitter.com/tetu_io
 * [operator] strategy.setLiquidationThreshold((asset, threshold) (for each 1000)
 * [operator] strategy.seReinvestThreholdPercent((thresholdPerc18) (10)
 * [operator] strategy.setStrategyProfitHolder(strategyAddress)
-* [tetu governance] change if need strategy.setupPerformanceFee()
+* [tetu governance] change if need strategy.setupPerformanceFee(30000, treasury,0)
 * [operator] rebalanceDebtConfig.setConfig(strategyAddr, lockedPercentForDelayedRebalance, lockedPercentForForcedRebalance, rebalanceDebtDelay)
 * [tetu governance] Register RebalanceResolver as operator
 * [operator] add task for NSR with RebalanceResolver address, register task executer in the resolver

@@ -26,7 +26,7 @@ library IterationPlanLib {
   ///         Swap + second repay tries to make asset balances to proportions required by the pool.
   ///         Proportions are read from pool through IPoolProportionsProvider(this) and re-read after swapping.
   ///         This mode is intended i.e. for rebalancing debts using single iteration.
-  ///         (uint256, uint256) - (entry kind, propNotUnderlying18)
+  ///         (uint256, uint256, uint256) - (entry kind, propNotUnderlying18, required-amount-to-reduce-the-debt)
   /// propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
   ///                     The assets should be swapped to get following result proportions:
   ///                     not-underlying : underlying === propNotUnderlying18 : (1e18 - propNotUnderlying18)
@@ -72,6 +72,9 @@ library IterationPlanLib {
 
     /// @notice proportions should be taken from the pool and re-read from the pool after each swap
     bool usePoolProportions;
+
+    /// @notice "required-amount-to-reduce-debt" in the case of REPAY-SWAP-REPAY, zero in other cases
+    uint entryDataParam;
   }
 
   struct GetIterationPlanLocal {
@@ -103,6 +106,7 @@ library IterationPlanLib {
     uint cA1;
     uint cB1;
     uint aA2;
+    uint aB2;
   }
 //endregion ------------------------------------------------ Data types
 
@@ -131,9 +135,10 @@ library IterationPlanLib {
   ///    0: usePoolProportions: 1 - read proportions from the pool through IPoolProportionsProvider(this)
   ///    1: planKind: selected plan, one of PLAN_XXX
   ///    2: propNotUnderlying18: value of not-underlying proportion [0..1e18] if usePoolProportions == 0
-  ///    3: requestedAmount: total amount that should be withdrawn, it can be type(uint).max
+  ///    3: requestedBalance: total amount that should be withdrawn, it can be type(uint).max
   ///    4: indexAsset: index of the underlying in {tokens} array
   ///    5: indexToken: index of the token in {tokens} array. We are going to withdraw the token and convert it to the asset
+  ///    6: entryDataParam: required-amount-to-reduce-debt in REPAY-SWAP-REPAY case; zero in other cases
   function buildIterationPlan(
     address[2] memory converterLiquidator,
     address[] memory tokens,
@@ -141,7 +146,7 @@ library IterationPlanLib {
     uint[] memory prices,
     uint[] memory decs,
     uint[] memory balanceAdditions,
-    uint[6] memory packedData
+    uint[7] memory packedData
   ) external returns (
     uint indexToSwapPlus1,
     uint amountToSwap,
@@ -158,7 +163,8 @@ library IterationPlanLib {
         balanceAdditions: balanceAdditions,
         planKind: packedData[1],
         propNotUnderlying18: packedData[2],
-        usePoolProportions: packedData[0] != 0
+        usePoolProportions: packedData[0] != 0,
+        entryDataParam: packedData[6]
       }),
       packedData[3],
       packedData[4],
@@ -169,7 +175,7 @@ library IterationPlanLib {
   /// @notice Generate plan for next withdraw iteration. We can do only one swap per iteration.
   ///         In general, we cam make 1) single swap (direct or reverse) and 2) repay
   ///         Swap is required to get required repay-amount OR to swap leftovers on final iteration.
-  /// @param requestedAmount Amount of underlying that we need to get on balance finally.
+  /// @param requestedBalance Amount of underlying that we need to have on balance after executing the plan.
   /// @param indexAsset Index of the underlying in {p.tokens} array
   /// @param indexToken Index of the not-underlying in {p.tokens} array
   /// @return indexToSwapPlus1 1-based index of the token to be swapped; 0 means swap is not required.
@@ -178,7 +184,7 @@ library IterationPlanLib {
   ///                            0 - no repay is required - it means that this is a last step with swapping leftovers.
   function _buildIterationPlan(
     SwapRepayPlanParams memory p,
-    uint requestedAmount,
+    uint requestedBalance,
     uint indexAsset,
     uint indexToken
   ) internal returns (
@@ -196,6 +202,10 @@ library IterationPlanLib {
     if (p.planKind == IterationPlanLib.PLAN_SWAP_ONLY) {
       v.swapLeftoversNeeded = true;
     } else {
+      uint requestedAmount = requestedBalance == type(uint).max
+        ? type(uint).max
+        : AppLib.sub0(requestedBalance, v.assetBalance);
+
       if (requestedAmount < p.liquidationThresholds[indexAsset]) {
         // we don't need to repay any debts anymore, but we should swap leftovers
         v.swapLeftoversNeeded = true;
@@ -225,8 +235,8 @@ library IterationPlanLib {
                 [v.assetBalance, v.tokenBalance],
                 [indexAsset, indexToken],
                 p.propNotUnderlying18,
-                v.totalCollateral,
-                v.totalDebt
+                [v.totalCollateral, v.totalDebt],
+                p.entryDataParam
               );
             } else {
               (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanForSellAndRepay(
@@ -249,8 +259,8 @@ library IterationPlanLib {
               [v.tokenBalance, v.assetBalance],
               [indexToken, indexAsset],
               1e18 - p.propNotUnderlying18,
-              v.collateralReverse,
-              v.debtReverse
+              [v.collateralReverse, v.debtReverse],
+              p.entryDataParam
             );
           } else {
             (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanForSellAndRepay(
@@ -280,20 +290,24 @@ library IterationPlanLib {
   /// @notice Repay B, get collateral A, then swap A => B, [make one more repay B] => get A:B in required proportions
   /// @param balancesAB [balanceA, balanceB]
   /// @param idxAB [indexA, indexB]
+  /// @param totalAB [totalCollateralA, totalBorrowB]
+  /// @param requiredAmountToReduceDebt If not zero: we are going to make repay-swap-repay to reduce total
+  ///        debt on the given amount. So, if possible it worth to make swap in such a way as to reduce
+  ///        the amount of debt by the given amount.
   function _buildPlanRepaySwapRepay(
     SwapRepayPlanParams memory p,
     uint[2] memory balancesAB,
     uint[2] memory idxAB,
     uint propB,
-    uint totalCollateralA,
-    uint totalBorrowB
+    uint[2] memory totalAB,
+    uint requiredAmountToReduceDebt
   ) internal returns (
     uint indexToSwapPlus1,
     uint amountToSwap,
     uint indexToRepayPlus1
   ) {
     // use all available tokenB to repay debt and receive as much as possible tokenA
-    uint amountToRepay = Math.min(balancesAB[1], totalBorrowB);
+    uint amountToRepay = Math.min(balancesAB[1], totalAB[1]);
 
     uint collateralAmount;
     if (amountToRepay >= AppLib.DUST_AMOUNT_TOKENS) {
@@ -308,39 +322,51 @@ library IterationPlanLib {
     }
 
     // swap A to B: full or partial
-    amountToSwap = estimateSwapAmountForRepaySwapRepay(
+    // SCB-876: swap B to A are also possible here
+    bool swapB;
+    (amountToSwap, swapB) = estimateSwapAmountForRepaySwapRepay(
       p,
-      balancesAB[0],
-      balancesAB[1],
-      idxAB[0],
-      idxAB[1],
+      [balancesAB[0], balancesAB[1]],
+      [idxAB[0], idxAB[1]],
       propB,
-      totalCollateralA,
-      totalBorrowB,
+      totalAB[0],
+      totalAB[1],
       collateralAmount,
       amountToRepay
     );
 
-    return (idxAB[0] + 1, amountToSwap, idxAB[1] + 1);
+    if (swapB) {
+      // edge case: swap B => A; for simplicity, we don't take into account requiredAmountToReduceDebt
+      return (idxAB[1] + 1, amountToSwap, idxAB[1] + 1);
+    } else {
+      // swap A => B
+      if (requiredAmountToReduceDebt != 0) {
+        // probably it worth to increase amount to swap?
+        uint requiredAmountToSwap = requiredAmountToReduceDebt * p.prices[idxAB[1]] * p.decs[idxAB[0]] / p.prices[idxAB[0]] / p.decs[idxAB[1]];
+        amountToSwap = Math.max(amountToSwap, requiredAmountToSwap);
+        amountToSwap = Math.min(amountToSwap, balancesAB[0] + collateralAmount);
+      }
+
+      return (idxAB[0] + 1, amountToSwap, idxAB[1] + 1);
+    }
   }
 
   /// @notice Estimate swap amount for iteration "repay-swap-repay"
   ///         The iteration should give us amounts of assets in required proportions.
   ///         There are two cases here: full swap and partial swap. Second repay is not required if the swap is partial.
   /// @param collateralA Estimated value of collateral A received after repay balanceB
-  /// @return amount of token A to be swapped
+  /// @return amountToSwap Amount to be swapped
+  /// @return swapB False: swap A => B; True: swap B => A
   function estimateSwapAmountForRepaySwapRepay(
     SwapRepayPlanParams memory p,
-    uint balanceA,
-    uint balanceB,
-    uint indexA,
-    uint indexB,
+    uint[2] memory balancesAB,
+    uint[2] memory indicesAB,
     uint propB,
     uint totalCollateralA,
     uint totalBorrowB,
     uint collateralA,
     uint amountToRepayB
-  ) internal pure returns(uint) {
+  ) internal pure returns(uint amountToSwap, bool swapB) {
     // N - number of the state
     // bAN, bBN - balances of A and B; aAN, aBN - amounts of A and B; cAN, cBN - collateral/borrow amounts of A/B
     // alpha ~ cAN/cBN - estimated ratio of collateral/borrow
@@ -361,14 +387,13 @@ library IterationPlanLib {
     EstimateSwapAmountForRepaySwapRepayLocal memory v;
     v.x = 1e18 - propB;
     v.y = propB;
-
 // 1. repay 1
     // convert amounts A, amounts B to cost A, cost B in USD
-    v.bA1 = (balanceA + collateralA) * p.prices[indexA] / p.decs[indexA];
-    v.bB1 = (balanceB - amountToRepayB) * p.prices[indexB] / p.decs[indexB];
-    v.cB1 = (totalBorrowB - amountToRepayB) * p.prices[indexB] / p.decs[indexB];
-    v.alpha = 1e18 * totalCollateralA * p.prices[indexA] * p.decs[indexB]
-      / p.decs[indexA] / p.prices[indexB] / totalBorrowB; // (!) approx estimation
+    v.bA1 = (balancesAB[0] + collateralA) * p.prices[indicesAB[0]] / p.decs[indicesAB[0]];
+    v.bB1 = (balancesAB[1] - amountToRepayB) * p.prices[indicesAB[1]] / p.decs[indicesAB[1]];
+    v.cB1 = (totalBorrowB - amountToRepayB) * p.prices[indicesAB[1]] / p.decs[indicesAB[1]];
+    v.alpha = 1e18 * totalCollateralA * p.prices[indicesAB[0]] * p.decs[indicesAB[1]]
+      / p.decs[indicesAB[0]] / p.prices[indicesAB[1]] / totalBorrowB; // (!) approx estimation
 
 // 2. full swap
     v.aA2 = v.bA1;
@@ -382,13 +407,21 @@ library IterationPlanLib {
     ) / (v.y * v.alpha / 1e18 + v.x);
 
     if (v.aB3 > v.cB1) {
-      // there is not enough debt to make second repay
-      // we need to make partial swap and receive assets in right proportions in result
-      // v.gamma = 1e18 * (v.y * v.bA1 - v.x * v.bB1) / (v.bA1 * (v.x * v.s / 1e18 + v.y));
-      v.aA2 = v.bA1 * (v.y * v.bA1 - v.x * v.bB1) / (v.bA1 * (v.x * v.swapRatio / 1e18 + v.y));
+      if (v.y * v.bA1 >= v.x * v.bB1) {
+        // there is not enough debt to make second repay
+        // we need to make partial swap and receive assets in right proportions in result
+        // v.gamma = 1e18 * (v.y * v.bA1 - v.x * v.bB1) / (v.bA1 * (v.x * v.s / 1e18 + v.y));
+        v.aA2 = (v.y * v.bA1 - v.x * v.bB1) / (v.x * v.swapRatio / 1e18 + v.y);
+      } else {
+        // scb-867: edge case, we need to make swap B => A
+        v.aB2 = (v.x * v.bB1 - v.y * v.bA1) / (v.x * v.swapRatio / 1e18 + v.y) /* * 1e18 / v.swapRatio */ ;
+        swapB = true;
+      }
     }
 
-    return v.aA2 * p.decs[indexA] / p.prices[indexA];
+    return swapB
+      ? (v.aB2 * p.decs[indicesAB[1]] / p.prices[indicesAB[1]], true) // edge case: swap B => A
+      : (v.aA2 * p.decs[indicesAB[0]] / p.prices[indicesAB[0]], false); // normal case: swap A => B
   }
 
   /// @notice Prepare a plan to swap leftovers to required proportion
@@ -429,7 +462,7 @@ library IterationPlanLib {
 
   /// @notice Prepare a plan to swap some amount of collateral to get required repay-amount and make repaying
   ///         1) Sell collateral-asset to get missed amount-to-repay 2) make repay and get more collateral back
-  /// @param requestedAmount Amount of underlying that we need to get on balance finally.
+  /// @param requestedAmount We need to increase balance (of collateral asset) on this amount.
   /// @param totalCollateral Total amount of collateral used in the borrow
   /// @param totalDebt Total amount of debt that should be repaid to receive {totalCollateral}
   /// @param indexCollateral Index of collateral asset in {p.prices}, {p.decs}

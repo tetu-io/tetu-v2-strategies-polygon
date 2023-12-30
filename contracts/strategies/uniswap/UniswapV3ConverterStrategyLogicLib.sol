@@ -33,9 +33,6 @@ library UniswapV3ConverterStrategyLogicLib {
   event Rebalanced(uint loss, uint profitToCover, uint coveredByRewards);
   event RebalancedDebt(uint loss, uint profitToCover, uint coveredByRewards);
   event UniV3FeesClaimed(uint fee0, uint fee1);
-  /// @param loss Total amount of loss
-  /// @param coveredByRewards Part of the loss covered by rewards
-  event CoverLoss(uint loss, uint coveredByRewards);
   //endregion ------------------------------------------------ Events
 
   //region ------------------------------------------------ Data types
@@ -399,6 +396,7 @@ library UniswapV3ConverterStrategyLogicLib {
   /// @param checkNeedRebalance_ True if the function should ensure that the rebalance is required
   /// @return tokenAmounts Token amounts for deposit. If length == 0 - rebalance wasn't made and no deposit is required.
   function rebalanceNoSwaps(
+    IConverterStrategyBase.ConverterStrategyBaseState storage csbs,
     PairBasedStrategyLogicLib.PairState storage pairState,
     address[2] calldata converterLiquidator,
     uint totalAssets_,
@@ -428,33 +426,15 @@ library UniswapV3ConverterStrategyLogicLib {
     if (needRebalance) {
       UniswapV3DebtLib.rebalanceNoSwaps(converterLiquidator, pairState, profitToCover, totalAssets_, splitter, v.liquidationThresholdsAB, tick);
 
-      uint coveredByRewards;
       uint loss;
       (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmountsPair(v.converter, totalAssets_, v.tokenA, v.tokenB, v.liquidationThresholdsAB);
       if (loss != 0) {
-        coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
+        ConverterStrategyBaseLib2.coverLossAndCheckResults(csbs, splitter, loss);
       }
-      emit Rebalanced(loss, profitToCover, coveredByRewards);
+      emit Rebalanced(loss, profitToCover, 0);
     }
 
     return tokenAmounts;
-  }
-
-  /// @notice Try to cover loss from rewards then cover remain loss from insurance.
-  function _coverLoss(address splitter, uint loss, address profitHolder, address tokenA, address tokenB, address pool) internal returns (
-    uint coveredByRewards
-  ) {
-    if (loss != 0) {
-      coveredByRewards = UniswapV3DebtLib.coverLossFromRewards(loss, profitHolder, tokenA, tokenB, pool);
-      uint notCovered = loss - coveredByRewards;
-      if (notCovered != 0) {
-        ConverterStrategyBaseLib2.coverLossAndCheckResults(splitter, 0, notCovered);
-      }
-
-      emit CoverLoss(loss, coveredByRewards);
-    }
-
-    return coveredByRewards;
   }
 
   /// @notice Initialize {v} by state values
@@ -497,6 +477,7 @@ library UniswapV3ConverterStrategyLogicLib {
   /// @return completed All debts were closed, leftovers were swapped to proper proportions
   /// @return tokenAmountsOut Amounts to be deposited to pool. This array is empty if no deposit allowed/required.
   function withdrawByAggStep(
+    IConverterStrategyBase.ConverterStrategyBaseState storage csbs,
     address[5] calldata addr_,
     uint[4] calldata values_,
     bytes memory swapData,
@@ -507,10 +488,8 @@ library UniswapV3ConverterStrategyLogicLib {
     bool completed,
     uint[] memory tokenAmountsOut
   ) {
-    address splitter = addr_[4];
     uint entryToPool = values_[3];
     address[2] memory tokens = [pairState.tokenA, pairState.tokenB];
-    IUniswapV3Pool pool = IUniswapV3Pool(pairState.pool);
 
     // Calculate amounts to be deposited to pool, calculate loss, fix profitToCover
     uint[] memory tokenAmounts;
@@ -525,18 +504,21 @@ library UniswapV3ConverterStrategyLogicLib {
     );
 
     // cover loss
-    uint coveredByRewards;
     if (loss != 0) {
-      coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, tokens[0], tokens[1], address(pool));
+      ConverterStrategyBaseLib2.coverLossAndCheckResults(
+        csbs,
+        addr_[4],
+        loss
+      );
     }
-    emit RebalancedDebt(loss, values_[1], coveredByRewards);
+    emit RebalancedDebt(loss, values_[1], 0);
 
     if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
       || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
     ) {
       // We are going to enter to the pool: update lowerTick and upperTick, initialize tokenAmountsOut
       (pairState.lowerTick, pairState.upperTick) = UniswapV3DebtLib._calcNewTickRange(
-        pool,
+        IUniswapV3Pool(pairState.pool),
         pairState.lowerTick,
         pairState.upperTick,
         pairState.tickSpacing

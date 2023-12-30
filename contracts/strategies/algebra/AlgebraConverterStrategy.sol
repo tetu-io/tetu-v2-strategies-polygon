@@ -16,7 +16,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
   string public constant override NAME = "Algebra Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.ALGEBRA;
-  string public constant override STRATEGY_VERSION = "3.0.0";
+  string public constant override STRATEGY_VERSION = "3.1.3";
 
   //endregion ------------------------------------------------- Constants
 
@@ -61,7 +61,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   //region --------------------------------------------- OPERATOR ACTIONS
 
   /// @notice Manually set status of the fuse
-  /// @param status See PairBasedStrategyLib.FuseStatus enum for possile values
+  /// @param status See PairBasedStrategyLib.FuseStatus enum for possible values
   function setFuseStatus(uint status) external {
     StrategyLib2.onlyOperators(controller());
     PairBasedStrategyLib.setFuseStatus(state.pair.fuseAB, PairBasedStrategyLib.FuseStatus(status));
@@ -149,6 +149,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
     (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
     uint[] memory tokenAmounts = AlgebraConverterStrategyLogicLib.rebalanceNoSwaps(
+      _csbs,
       state.pair,
       [address(_csbs.converter), address(AppLib._getLiquidator(_controller))],
       oldTotalAssets,
@@ -213,6 +214,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     // check "operator only", make withdraw step, cover-loss, send profit to cover, prepare to enter to the pool
     uint[] memory tokenAmounts;
     (completed, tokenAmounts) = AlgebraConverterStrategyLogicLib.withdrawByAggStep(
+      _csbs,
       [tokenToSwap_, aggregator_, controller(), address(_csbs.converter), baseState.splitter],
       [amountToSwap_, profitToCover, oldTotalAssets, entryToPool],
       swapData,
@@ -277,11 +279,17 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   /// @return earned The amount of earned rewards.
   /// @return lost The amount of lost rewards.
   /// @return assetBalanceAfterClaim The asset balance after claiming rewards.
-  function _handleRewards() override internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
+  /// @return paidDebtToInsurance Earned amount spent on debt-to-insurance payment
+  function _handleRewards() override internal virtual returns (
+    uint earned,
+    uint lost,
+    uint assetBalanceAfterClaim,
+    uint paidDebtToInsurance
+  ) {
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
     earned = AlgebraConverterStrategyLogicLib.calcEarned(state.pair.tokenA, controller(), rewardTokens, amounts);
-    _rewardsLiquidation(rewardTokens, amounts);
-    return (earned, lost, AppLib.balance(baseState.asset));
+    paidDebtToInsurance = _rewardsLiquidation(rewardTokens, amounts);
+    return (earned, lost, AppLib.balance(baseState.asset), paidDebtToInsurance);
   }
 
   /// @notice Deposit given amount to the pool.
@@ -321,8 +329,9 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
     // withdraw all liquidity from pool
     // after disableFuse() liquidity is zero
-    if (state.pair.totalLiquidity > 0) {
-      _depositorEmergencyExit();
+    uint liquidity = state.pair.totalLiquidity;
+    if (liquidity != 0) {
+      _depositorExit(liquidity, false);
     }
   }
 

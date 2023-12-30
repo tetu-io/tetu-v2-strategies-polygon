@@ -1,5 +1,4 @@
 /* tslint:disable:interface-name */
-import { config as dotEnvConfig } from 'dotenv';
 import '@nomicfoundation/hardhat-chai-matchers';
 import '@nomiclabs/hardhat-ethers';
 import '@nomiclabs/hardhat-etherscan';
@@ -17,7 +16,6 @@ import { deployAddresses } from './scripts/addresses/deploy-addresses';
 import '@gelatonetwork/web3-functions-sdk/hardhat-plugin';
 import path from 'path';
 import { TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD } from 'hardhat/builtin-tasks/task-names';
-import { exec } from 'child_process';
 import './hardhat-verify/verify1-task';
 import "hardhat-change-network";
 import { EnvSetup } from './scripts/utils/EnvSetup';
@@ -58,11 +56,15 @@ export default {
         url:
           EnvSetup.getEnv().hardhatChainId === 1 ? EnvSetup.getEnv().ethRpcUrl :
             EnvSetup.getEnv().hardhatChainId === 137 ? EnvSetup.getEnv().maticRpcUrl :
-              undefined,
+                EnvSetup.getEnv().hardhatChainId === 8453 ? EnvSetup.getEnv().baseRpcUrl :
+                    EnvSetup.getEnv().hardhatChainId === 1101? EnvSetup.getEnv().zkevmRpcUrl :
+                       undefined,
         blockNumber:
           EnvSetup.getEnv().hardhatChainId === 1 ? EnvSetup.getEnv().ethForkBlock !== 0 ? EnvSetup.getEnv().ethForkBlock : undefined :
             EnvSetup.getEnv().hardhatChainId === 137 ? EnvSetup.getEnv().maticForkBlock !== 0 ? EnvSetup.getEnv().maticForkBlock : undefined :
-              undefined,
+                EnvSetup.getEnv().hardhatChainId === 8453 ? EnvSetup.getEnv().baseForkBlock !== 0 ? EnvSetup.getEnv().baseForkBlock : undefined :
+  	            EnvSetup.getEnv().hardhatChainId === 1101 ? EnvSetup.getEnv().zkevmForkBlock !== 0 ? EnvSetup.getEnv().zkevmForkBlock : undefined :
+                        undefined,
       } : undefined,
       accounts: {
         mnemonic: 'test test test test test test test test test test test junk',
@@ -79,6 +81,29 @@ export default {
       // gasPrice: 50_000_000_000,
       // gasMultiplier: 1.3,
       accounts: [EnvSetup.getEnv().privateKey],
+    },
+    base: {
+      url: EnvSetup.getEnv().baseRpcUrl || '',
+      timeout: 99999,
+      chainId: 8453,
+      gas: 12_000_000,
+      accounts: [EnvSetup.getEnv().privateKey],
+      verify: {
+        etherscan: {
+          apiKey: EnvSetup.getEnv().networkScanKeyBase
+        }
+      }
+    },
+    zkevm: {
+      url: EnvSetup.getEnv().zkevmRpcUrl || '',
+      chainId: 1101,
+      accounts: [EnvSetup.getEnv().privateKey],
+      gasPrice: 1000000000,
+      verify: {
+        etherscan: {
+          apiKey: EnvSetup.getEnv().networkScanKeyZkevm
+        }
+      }
     },
     w3fmatic: {
       chainId: 137,
@@ -109,7 +134,27 @@ export default {
       goerli: EnvSetup.getEnv().networkScanKey,
       sepolia: EnvSetup.getEnv().networkScanKey,
       polygon: EnvSetup.getEnv().networkScanKeyMatic || EnvSetup.getEnv().networkScanKey,
+      base: EnvSetup.getEnv().networkScanKeyBase || EnvSetup.getEnv().networkScanKey,
+      zkevm: EnvSetup.getEnv().networkScanKeyZkevm || EnvSetup.getEnv().networkScanKey,
     },
+    customChains: [
+      {
+        network: "base",
+        chainId: 8453,
+        urls: {
+          apiURL: "https://api.basescan.org/api",
+          browserURL: "https://basescan.org"
+        }
+      },
+      {
+        network: "zkevm",
+        chainId: 1101,
+        urls: {
+          apiURL: "https://api-zkevm.polygonscan.com/api",
+          browserURL: "https://zkevm.polygonscan.com/"
+        }
+      },
+    ]
   },
   verify: {
     etherscan: {

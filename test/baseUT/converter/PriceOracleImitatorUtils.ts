@@ -1,24 +1,46 @@
 /* tslint:disable:no-trailing-whitespace */
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ConverterUtils} from "../utils/ConverterUtils";
-import {getAaveTwoPlatformAdapter, getDForcePlatformAdapter, Misc} from "../../../scripts/utils/Misc";
+import {getAaveTwoPlatformAdapter, Misc} from "../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 import {
-  AggregatorInterface,
+  AggregatorInterface, ConverterController__factory,
   IAave3PriceOracle,
-  IAave3PriceOracle__factory, IAlgebraPool__factory,
+  IAave3PriceOracle__factory,
+  IAlgebraPool__factory,
   IBVault__factory,
-  IComposableStablePool__factory,
-  ILinearPool__factory, IPool__factory,
-  IUniswapV3Pool__factory
+  IComposableStablePool__factory, IERC20Metadata__factory, IKeomPriceOracle__factory,
+  ILinearPool__factory,
+  IMoonwellComptroller__factory, IMoonwellPriceOracle__factory,
+  IPancakeV3Pool__factory,
+  IPool__factory,
+  IPriceOracle__factory,
+  IUniswapV3Pool__factory, PriceOracleKeomZkevm, TetuConverter__factory,
 } from "../../../typechain";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {BigNumber} from "ethers";
+import {BASE_NETWORK_ID, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from "../utils/HardhatUtils";
+import {BaseAddresses} from "../../../scripts/addresses/BaseAddresses";
+import {parseUnits} from "ethers/lib/utils";
+import {ZkevmAddresses} from "../../../scripts/addresses/ZkevmAddresses";
+import {KeomUtils} from "../utils/protocols/KeomUtils";
+import {InjectUtils} from "../strategies/InjectUtils";
 
 export class PriceOracleImitatorUtils {
   public static async getPrice(signer: SignerWithAddress, token: string): Promise<BigNumber> {
-    const aave3Oracle = IAave3PriceOracle__factory.connect(MaticAddresses.AAVE3_PRICE_ORACLE, signer);
-    return aave3Oracle.getAssetPrice(token)
+    const chainId = Misc.getChainId()
+    if (chainId === POLYGON_NETWORK_ID) {
+      const aave3Oracle = IAave3PriceOracle__factory.connect(MaticAddresses.AAVE3_PRICE_ORACLE, signer);
+      return aave3Oracle.getAssetPrice(token)
+    } else if (chainId === BASE_NETWORK_ID) {
+      const priceOracle = IPriceOracle__factory.connect(BaseAddresses.TETU_CONVERTER_PRICE_ORACLE, signer)
+      return (await priceOracle.getAssetPrice(token)).div(parseUnits('1', 10))
+    } else if (chainId === ZKEVM_NETWORK_ID) {
+      const priceOracle = IPriceOracle__factory.connect(ZkevmAddresses.TETU_CONVERTER_PRICE_ORACLE, signer)
+      return (await priceOracle.getAssetPrice(token)).div(parseUnits('1', 10))
+    } else {
+      throw new Error(`PriceOracleImitatorUtils.getPrice: unsupported chainId ${chainId}`)
+    }
   }
 
   public static async balancerBoosted(
@@ -28,7 +50,7 @@ export class PriceOracleImitatorUtils {
     stableTokenPrice: string = '100000000'
   ) {
     // Disable all lending platforms except AAVE3
-    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+    // await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
     await ConverterUtils.disablePlatformAdapter(signer, await getAaveTwoPlatformAdapter(signer));
 
     const poolOwner = await Misc.impersonate(MaticAddresses.AAVE3_POOL_OWNER);
@@ -75,7 +97,7 @@ export class PriceOracleImitatorUtils {
     stableTokenPrice: string = '100000000'
   ) {
     // Disable all lending platforms except AAVE3
-    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+    // await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
     await ConverterUtils.disablePlatformAdapter(signer, await getAaveTwoPlatformAdapter(signer));
 
     const poolOwner = await Misc.impersonate(MaticAddresses.AAVE3_POOL_OWNER);
@@ -100,7 +122,7 @@ export class PriceOracleImitatorUtils {
     stableTokenPrice: string = '100000000'
   ) {
     // Disable all lending platforms except AAVE3
-    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+    // await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
     await ConverterUtils.disablePlatformAdapter(signer, await getAaveTwoPlatformAdapter(signer));
 
     const poolOwner = await Misc.impersonate(MaticAddresses.AAVE3_POOL_OWNER);
@@ -125,7 +147,7 @@ export class PriceOracleImitatorUtils {
     stableTokenPrice: string = '100000000'
   ) {
     // Disable all lending platforms except AAVE3
-    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+    // await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
     await ConverterUtils.disablePlatformAdapter(signer, await getAaveTwoPlatformAdapter(signer));
 
     const poolOwner = await Misc.impersonate(MaticAddresses.AAVE3_POOL_OWNER);
@@ -141,5 +163,80 @@ export class PriceOracleImitatorUtils {
     ]
 
     await priceOracleAsPoolOwner.setAssetSources([stableToken, volatileToken], sources.map(x => x.address));
+  }
+
+  public static async pancakeBaseChain(
+    signer: SignerWithAddress,
+    pool: string,
+    stableToken: string,
+    stableTokenPrice: string = "1"
+  ) {
+    const comptroller = IMoonwellComptroller__factory.connect(BaseAddresses.MOONWELL_COMPTROLLER, signer);
+    const admin = await Misc.impersonate(await comptroller.admin());
+    const priceOracle = await comptroller.oracle();
+
+    const pancakePool = IPancakeV3Pool__factory.connect(pool, signer);
+    const token0 = await pancakePool.token0();
+    const token1 = await pancakePool.token1();
+    const volatileToken = token0.toLowerCase() === stableToken.toLowerCase() ? token1 : token0
+
+    await IMoonwellPriceOracle__factory.connect(priceOracle, admin).setFeed(
+      await IERC20Metadata__factory.connect(stableToken, signer).symbol(),
+      (await DeployerUtils.deployContract(signer, 'MoonwellAggregatorV3Fixed', parseUnits(stableTokenPrice, 8))).address
+    );
+
+    await IMoonwellPriceOracle__factory.connect(priceOracle, admin).setFeed(
+      await IERC20Metadata__factory.connect(volatileToken, signer).symbol(),
+      (await DeployerUtils.deployContract(signer, 'MoonwellAggregatorV3PancakePool', pool, volatileToken)).address
+    );
+  }
+
+  public static async pancakeZkEvm(
+    signer: SignerWithAddress,
+    pool: string,
+    stableAsset: string,
+    converter: string
+  ) {
+    console.log("pancakeZkEvm.pool", pool);
+    console.log("pancakeZkEvm.stableToken", stableAsset);
+    console.log("pancakeZkEvm.converter", converter);
+    // 1) replace whole price oracle by mocked version
+    // 2) replace price oracle in TetuConverter
+
+    const comptroller = IMoonwellComptroller__factory.connect(ZkevmAddresses.KEOM_COMPTROLLER, signer);
+    const admin = await Misc.impersonate(await comptroller.admin());
+    console.log("pancakeZkEvm.admin", admin.address);
+
+    const pancakePool = IPancakeV3Pool__factory.connect(pool, signer);
+    const token0 = await pancakePool.token0();
+    const token1 = await pancakePool.token1();
+    const volatileAsset = token0.toLowerCase() === stableAsset.toLowerCase() ? token1 : token0;
+    console.log("pancakeZkEvm.volatileAsset", volatileAsset);
+
+    const stableKToken = KeomUtils.getKToken(stableAsset);
+    const volatileToken = KeomUtils.getKToken(volatileAsset);
+
+    const newPriceOracle = await DeployerUtils.deployContract(
+      signer,
+      'KeomPriceOraclePancake',
+      await comptroller.oracle(),
+      stableAsset,
+      stableKToken,
+      volatileAsset,
+      volatileToken,
+      pool,
+    );
+    await comptroller.connect(admin)._setPriceOracle(newPriceOracle.address);
+    console.log("pancakeZkEvm.newPriceOracle", newPriceOracle.address);
+
+    const tetuConverterPriceOracle = await DeployerUtils.deployContract(signer, "PriceOracleKeomZkevm", newPriceOracle.address) as PriceOracleKeomZkevm;
+    console.log("pancakeZkEvm.tetuConverterPriceOracle", tetuConverterPriceOracle.address);
+
+    const converterControllerAddress = await TetuConverter__factory.connect(converter, signer).controller();
+    const converterGovernance = await Misc.impersonate(
+      await ConverterController__factory.connect(converterControllerAddress, signer).governance()
+    );
+    const converterController = ConverterController__factory.connect(converterControllerAddress, converterGovernance);
+    await converterController.setPriceOracle(tetuConverterPriceOracle.address);
   }
 }

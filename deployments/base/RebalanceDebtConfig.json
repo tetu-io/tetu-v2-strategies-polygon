@@ -1,0 +1,247 @@
+{
+  "address": "0xfD5EB3a77B0263271713758AD88A43022E04afEA",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "controller_",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [],
+      "name": "VERSION",
+      "outputs": [
+        {
+          "internalType": "string",
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "controller",
+      "outputs": [
+        {
+          "internalType": "contract IController",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "operators",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "strategy",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "lockedPercentForDelayedRebalance",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "lockedPercentForForcedRebalance",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "rebalanceDebtDelay",
+          "type": "uint256"
+        }
+      ],
+      "name": "setConfig",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "strategyConfig",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "lockedPercentForDelayedRebalance",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "lockedPercentForForcedRebalance",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "rebalanceDebtDelay",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "transactionHash": "0xb0fc467a6604cc087e7d3874546e111f62ce8fe42100c49be92bcdd471f42c18",
+  "receipt": {
+    "to": null,
+    "from": "0xbbbbb8C4364eC2ce52c59D2Ed3E56F307E529a94",
+    "contractAddress": "0xfD5EB3a77B0263271713758AD88A43022E04afEA",
+    "transactionIndex": 2,
+    "gasUsed": "263815",
+    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "blockHash": "0xc79a8cd27d9d94a900024b3eaa15a8895883fd63b9399772f72dd64e6ab185a6",
+    "transactionHash": "0xb0fc467a6604cc087e7d3874546e111f62ce8fe42100c49be92bcdd471f42c18",
+    "logs": [],
+    "blockNumber": 7785151,
+    "cumulativeGasUsed": "434127",
+    "status": 1,
+    "byzantium": true
+  },
+  "args": [
+    "0x255707B70BF90aa112006E1b07B9AeA6De021424"
+  ],
+  "numDeployments": 3,
+  "solcInputHash": "e76158ae9a22536febb5003c96af34b3",
+  "metadata": "{\"compiler\":{\"version\":\"0.8.17+commit.8df45f5f\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"controller_\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[],\"name\":\"VERSION\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"controller\",\"outputs\":[{\"internalType\":\"contract IController\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"operators\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"strategy\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"lockedPercentForDelayedRebalance\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"lockedPercentForForcedRebalance\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"rebalanceDebtDelay\",\"type\":\"uint256\"}],\"name\":\"setConfig\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"strategyConfig\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"lockedPercentForDelayedRebalance\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"lockedPercentForForcedRebalance\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"rebalanceDebtDelay\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"contracts/tools/RebalanceDebtConfig.sol\":\"RebalanceDebtConfig\"},\"evmVersion\":\"london\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\",\"useLiteralContent\":true},\"optimizer\":{\"enabled\":true,\"runs\":150},\"remappings\":[]},\"sources\":{\"@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\n\\npragma solidity 0.8.17;\\n\\ninterface IController {\\n\\n  // --- DEPENDENCY ADDRESSES\\n  function governance() external view returns (address);\\n\\n  function voter() external view returns (address);\\n\\n  function liquidator() external view returns (address);\\n\\n  function forwarder() external view returns (address);\\n\\n  function investFund() external view returns (address);\\n\\n  function veDistributor() external view returns (address);\\n\\n  function platformVoter() external view returns (address);\\n\\n  // --- VAULTS\\n\\n  function vaults(uint id) external view returns (address);\\n\\n  function vaultsList() external view returns (address[] memory);\\n\\n  function vaultsListLength() external view returns (uint);\\n\\n  function isValidVault(address _vault) external view returns (bool);\\n\\n  // --- restrictions\\n\\n  function isOperator(address _adr) external view returns (bool);\\n\\n\\n}\\n\",\"keccak256\":\"0x86716b8a4775605c31b8bb9f90f8f4a18b709ff4435182f3a148803368060a8c\",\"license\":\"MIT\"},\"contracts/tools/RebalanceDebtConfig.sol\":{\"content\":\"// SPDX-License-Identifier: BUSL-1.1\\npragma solidity 0.8.17;\\n\\nimport \\\"@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol\\\";\\n\\ncontract RebalanceDebtConfig {\\n    string public constant VERSION = \\\"1.0.0\\\";\\n\\n    struct Config {\\n        uint lockedPercentForDelayedRebalance;\\n        uint lockedPercentForForcedRebalance;\\n        uint rebalanceDebtDelay;\\n    }\\n\\n    IController public controller;\\n    mapping(address => Config) public strategyConfig;\\n    mapping(address => bool) public operators;\\n\\n    constructor(address controller_) {\\n        controller = IController(controller_);\\n    }\\n\\n    function setConfig(\\n        address strategy,\\n        uint lockedPercentForDelayedRebalance,\\n        uint lockedPercentForForcedRebalance,\\n        uint rebalanceDebtDelay\\n    ) external {\\n        require(controller.isOperator(msg.sender), \\\"RDC: denied\\\");\\n\\n        strategyConfig[strategy] = Config(\\n            lockedPercentForDelayedRebalance,\\n            lockedPercentForForcedRebalance,\\n            rebalanceDebtDelay\\n        );\\n    }\\n}\\n\",\"keccak256\":\"0xd7f6c2a4f0474e3934fb6f838d503c32dbd6870bb24495e30c178b126a738872\",\"license\":\"BUSL-1.1\"}},\"version\":1}",
+  "bytecode": "0x608060405234801561001057600080fd5b506040516103f13803806103f183398101604081905261002f91610054565b600080546001600160a01b0319166001600160a01b0392909216919091179055610084565b60006020828403121561006657600080fd5b81516001600160a01b038116811461007d57600080fd5b9392505050565b61035e806100936000396000f3fe608060405234801561001057600080fd5b50600436106100575760003560e01c806313e7c9d81461005c57806391450e6314610094578063ecf88111146100dd578063f77c4791146100f2578063ffa1ad741461011d575b600080fd5b61007f61006a36600461025d565b60026020526000908152604090205460ff1681565b60405190151581526020015b60405180910390f35b6100c26100a236600461025d565b600160208190526000918252604090912080549181015460029091015483565b6040805193845260208401929092529082015260600161008b565b6100f06100eb36600461027f565b61014e565b005b600054610105906001600160a01b031681565b6040516001600160a01b03909116815260200161008b565b610141604051806040016040528060058152602001640312e302e360dc1b81525081565b60405161008b91906102b8565b6000546040516336b87bd760e11b81523360048201526001600160a01b0390911690636d70f7ae90602401602060405180830381865afa158015610196573d6000803e3d6000fd5b505050506040513d601f19601f820116820180604052508101906101ba9190610306565b6101f85760405162461bcd60e51b815260206004820152600b60248201526a149110ce8819195b9a595960aa1b604482015260640160405180910390fd5b6040805160608101825293845260208085019384528482019283526001600160a01b03909516600090815260019586905220925183559051928201929092559051600290910155565b80356001600160a01b038116811461025857600080fd5b919050565b60006020828403121561026f57600080fd5b61027882610241565b9392505050565b6000806000806080858703121561029557600080fd5b61029e85610241565b966020860135965060408601359560600135945092505050565b600060208083528351808285015260005b818110156102e5578581018301518582016040015282016102c9565b506000604082860101526040601f19601f8301168501019250505092915050565b60006020828403121561031857600080fd5b8151801515811461027857600080fdfea26469706673582212204bd5ca26304149c0a94933915b255594c3acdd29b18eb9c6f5f5ad8cae67a5ef64736f6c63430008110033",
+  "deployedBytecode": "0x608060405234801561001057600080fd5b50600436106100575760003560e01c806313e7c9d81461005c57806391450e6314610094578063ecf88111146100dd578063f77c4791146100f2578063ffa1ad741461011d575b600080fd5b61007f61006a36600461025d565b60026020526000908152604090205460ff1681565b60405190151581526020015b60405180910390f35b6100c26100a236600461025d565b600160208190526000918252604090912080549181015460029091015483565b6040805193845260208401929092529082015260600161008b565b6100f06100eb36600461027f565b61014e565b005b600054610105906001600160a01b031681565b6040516001600160a01b03909116815260200161008b565b610141604051806040016040528060058152602001640312e302e360dc1b81525081565b60405161008b91906102b8565b6000546040516336b87bd760e11b81523360048201526001600160a01b0390911690636d70f7ae90602401602060405180830381865afa158015610196573d6000803e3d6000fd5b505050506040513d601f19601f820116820180604052508101906101ba9190610306565b6101f85760405162461bcd60e51b815260206004820152600b60248201526a149110ce8819195b9a595960aa1b604482015260640160405180910390fd5b6040805160608101825293845260208085019384528482019283526001600160a01b03909516600090815260019586905220925183559051928201929092559051600290910155565b80356001600160a01b038116811461025857600080fd5b919050565b60006020828403121561026f57600080fd5b61027882610241565b9392505050565b6000806000806080858703121561029557600080fd5b61029e85610241565b966020860135965060408601359560600135945092505050565b600060208083528351808285015260005b818110156102e5578581018301518582016040015282016102c9565b506000604082860101526040601f19601f8301168501019250505092915050565b60006020828403121561031857600080fd5b8151801515811461027857600080fdfea26469706673582212204bd5ca26304149c0a94933915b255594c3acdd29b18eb9c6f5f5ad8cae67a5ef64736f6c63430008110033",
+  "devdoc": {
+    "kind": "dev",
+    "methods": {},
+    "version": 1
+  },
+  "userdoc": {
+    "kind": "user",
+    "methods": {},
+    "version": 1
+  },
+  "storageLayout": {
+    "storage": [
+      {
+        "astId": 165430,
+        "contract": "contracts/tools/RebalanceDebtConfig.sol:RebalanceDebtConfig",
+        "label": "controller",
+        "offset": 0,
+        "slot": "0",
+        "type": "t_contract(IController)3957"
+      },
+      {
+        "astId": 165435,
+        "contract": "contracts/tools/RebalanceDebtConfig.sol:RebalanceDebtConfig",
+        "label": "strategyConfig",
+        "offset": 0,
+        "slot": "1",
+        "type": "t_mapping(t_address,t_struct(Config)165427_storage)"
+      },
+      {
+        "astId": 165439,
+        "contract": "contracts/tools/RebalanceDebtConfig.sol:RebalanceDebtConfig",
+        "label": "operators",
+        "offset": 0,
+        "slot": "2",
+        "type": "t_mapping(t_address,t_bool)"
+      }
+    ],
+    "types": {
+      "t_address": {
+        "encoding": "inplace",
+        "label": "address",
+        "numberOfBytes": "20"
+      },
+      "t_bool": {
+        "encoding": "inplace",
+        "label": "bool",
+        "numberOfBytes": "1"
+      },
+      "t_contract(IController)3957": {
+        "encoding": "inplace",
+        "label": "contract IController",
+        "numberOfBytes": "20"
+      },
+      "t_mapping(t_address,t_bool)": {
+        "encoding": "mapping",
+        "key": "t_address",
+        "label": "mapping(address => bool)",
+        "numberOfBytes": "32",
+        "value": "t_bool"
+      },
+      "t_mapping(t_address,t_struct(Config)165427_storage)": {
+        "encoding": "mapping",
+        "key": "t_address",
+        "label": "mapping(address => struct RebalanceDebtConfig.Config)",
+        "numberOfBytes": "32",
+        "value": "t_struct(Config)165427_storage"
+      },
+      "t_struct(Config)165427_storage": {
+        "encoding": "inplace",
+        "label": "struct RebalanceDebtConfig.Config",
+        "members": [
+          {
+            "astId": 165422,
+            "contract": "contracts/tools/RebalanceDebtConfig.sol:RebalanceDebtConfig",
+            "label": "lockedPercentForDelayedRebalance",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 165424,
+            "contract": "contracts/tools/RebalanceDebtConfig.sol:RebalanceDebtConfig",
+            "label": "lockedPercentForForcedRebalance",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 165426,
+            "contract": "contracts/tools/RebalanceDebtConfig.sol:RebalanceDebtConfig",
+            "label": "rebalanceDebtDelay",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_uint256"
+          }
+        ],
+        "numberOfBytes": "96"
+      },
+      "t_uint256": {
+        "encoding": "inplace",
+        "label": "uint256",
+        "numberOfBytes": "32"
+      }
+    }
+  }
+}

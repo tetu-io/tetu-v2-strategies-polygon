@@ -7,7 +7,10 @@ import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
 import {MaticAddresses} from "../addresses/MaticAddresses";
 import {AggregatorUtils} from "../../test/baseUT/utils/AggregatorUtils";
 import {IERC20Metadata__factory} from "../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
-import {PLAN_SWAP_REPAY} from "../../test/baseUT/AppConstants";
+import {PLAN_SWAP_REPAY_0} from "../../test/baseUT/AppConstants";
+import {RunHelper} from "./RunHelper";
+import {ethers} from "hardhat";
+import {POLYGON_NETWORK_ID} from "../../test/baseUT/utils/HardhatUtils";
 
 export interface IMakeFullWithdraw {
   entryToPool: number;
@@ -32,7 +35,7 @@ export async function makeFullWithdraw(strategyAsOperator: IRebalancingV2Strateg
   while (true) {
     const planEntryData = p?.planEntryDataGetter
       ? await p?.planEntryDataGetter()
-      : defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY, 0]);
+      : defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY_0, 0]);
 
     console.log(`=========================== ${step} =====================`);
     const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
@@ -56,7 +59,8 @@ export async function makeFullWithdraw(strategyAsOperator: IRebalancingV2Strateg
     if (tokenToSwap !== Misc.ZERO_ADDRESS) {
       if (aggregator === MaticAddresses.AGG_ONEINCH_V5) {
         console.log("1inch is in use");
-        swapData = await AggregatorUtils.buildSwapTransactionData(
+        swapData = await AggregatorUtils.buildSwapTransactionDataForOneInch(
+          POLYGON_NETWORK_ID,
           quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
           quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
           amountToSwap,
@@ -82,19 +86,23 @@ export async function makeFullWithdraw(strategyAsOperator: IRebalancingV2Strateg
       p.entryToPool,
       {gasLimit: 9_000_000}
     );
-    const eventsSet = await CaptureEvents.makeWithdrawByAggStep(
-      strategyAsOperator,
-      tokenToSwap,
-      aggregator,
-      amountToSwap,
-      swapData,
-      planEntryData,
-      p.entryToPool,
+    await RunHelper.runAndWait(
+      () => strategyAsOperator.withdrawByAggStep(tokenToSwap, aggregator, amountToSwap, swapData, planEntryData, p.entryToPool)
     );
-    console.log(`makeFullWithdraw.withdrawByAggStep.FINISH --------------------------------`);
+
+    // const eventsSet = await CaptureEvents.makeWithdrawByAggStep(
+    //   strategyAsOperator,
+    //   tokenToSwap,
+    //   aggregator,
+    //   amountToSwap,
+    //   swapData,
+    //   planEntryData,
+    //   p.entryToPool,
+    // );
+    // console.log(`makeFullWithdraw.withdrawByAggStep.FINISH --------------------------------`);
 
     if (p.saveStates) {
-      await p?.saveStates(`w${step++}`, eventsSet);
+      await p?.saveStates(`w${step++}`);
     }
 
     if (p?.singleIteration) break;
@@ -102,6 +110,10 @@ export async function makeFullWithdraw(strategyAsOperator: IRebalancingV2Strateg
       if (await p.isCompleted(completed)) break;
     } else {
       if (completed) break;
+    }
+
+    if (aggregator === MaticAddresses.AGG_ONEINCH_V5) {
+      await new Promise(r => setTimeout(r, 5000));
     }
   }
 }

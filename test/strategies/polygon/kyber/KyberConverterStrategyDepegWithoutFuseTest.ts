@@ -32,10 +32,12 @@ import {KyberLiquidityUtils} from "../../../baseUT/strategies/kyber/KyberLiquidi
 import {writeFileSyncRestoreFolder} from "../../../baseUT/utils/FileUtils";
 import {writeFileSync} from "fs";
 import {PackedData} from "../../../baseUT/utils/PackedData";
-import {KYBER_PID} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
+import {KYBER_PID} from "../../../baseUT/strategies/pair/PairBasedStrategyBuilder";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
-describe('KyberConverterStrategyDepegWithoutFuseTest', function() {
+/// Kyber is not used after security incident nov-2023
+describe.skip('KyberConverterStrategyDepegWithoutFuseTest', function() {
 
   let snapshotBefore: string;
   let snapshot: string;
@@ -54,6 +56,7 @@ describe('KyberConverterStrategyDepegWithoutFuseTest', function() {
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
+    await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
 
     const core = Addresses.getCore();
     const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);

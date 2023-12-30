@@ -27,9 +27,6 @@ library KyberConverterStrategyLogicLib {
   event RebalancedDebt(uint loss, uint profitToCover, uint coveredByRewards);
   event KyberFeesClaimed(uint fee0, uint fee1);
   event KyberRewardsClaimed(uint reward);
-  /// @param loss Total amount of loss
-  /// @param coveredByRewards Part of the loss covered by rewards
-  event CoverLoss(uint loss, uint coveredByRewards);
   //endregion ------------------------------------------------ Events
 
   //region ------------------------------------------------ Data types
@@ -58,7 +55,6 @@ library KyberConverterStrategyLogicLib {
 
     bool fuseStatusChangedAB;
     PairBasedStrategyLib.FuseStatus fuseStatusAB;
-    uint coveredByRewards;
 
     uint poolPrice;
     uint poolPriceAdjustment;
@@ -270,9 +266,11 @@ library KyberConverterStrategyLogicLib {
 
   //region ------------------------------------------------ Exit from the pool
 
+  /// @param emergency Emergency exit (only withdraw, don't claim any rewards or make any other additional actions)
   function exit(
     State storage state,
-    uint128 liquidityAmountToExit
+    uint128 liquidityAmountToExit,
+    bool emergency
   ) external returns (uint[] memory amountsOut) {
     amountsOut = new uint[](2);
 
@@ -297,15 +295,17 @@ library KyberConverterStrategyLogicLib {
 
     // get rewards
     if (staked) {
-      uint reward = _harvest(nftIds[0], vars.pId);
-      // send to profit holder
-      if (reward > 0) {
-        IERC20(KNC).safeTransfer(vars.strategyProfitHolder, reward);
-      }
+      if (!emergency) {
+        uint reward = _harvest(nftIds[0], vars.pId);
+        // send to profit holder
+        if (reward > 0) {
+          IERC20(KNC).safeTransfer(vars.strategyProfitHolder, reward);
+        }
 
-      // get fees
-      // when exiting, fees are collected twice so as not to lose anything when rebalancing (the position goes out of range)
-      (feeA, feeB) = _claimFees(state);
+        // get fees
+        // when exiting, fees are collected twice so as not to lose anything when rebalancing (the position goes out of range)
+        (feeA, feeB) = _claimFees(state);
+      }
 
       liqs[0] = uint(liquidity);
 
@@ -320,7 +320,7 @@ library KyberConverterStrategyLogicLib {
     uint rTokensOwed;
     (amountsOut[0], amountsOut[1], rTokensOwed) = KYBER_NFT.removeLiquidity(IBasePositionManager.RemoveLiquidityParams(nftIds[0], liquidityAmountToExit, 0, 0, block.timestamp));
 
-    if (rTokensOwed > 0) {
+    if (!emergency && rTokensOwed != 0) {
 //      KYBER_NFT.syncFeeGrowth(nftIds[0]);
       (,uint amount0, uint amount1) = KYBER_NFT.burnRTokens(IBasePositionManager.BurnRTokenParams(nftIds[0], 0, 0, block.timestamp));
       if (state.pair.depositorSwapTokens) {
@@ -349,7 +349,7 @@ library KyberConverterStrategyLogicLib {
     liquidity -= liquidityAmountToExit;
     state.pair.totalLiquidity = liquidity;
 
-    if (liquidity > 0 && !isFarmEnded(vars.pId)) {
+    if (liquidity != 0 && !isFarmEnded(vars.pId)) {
       liqs[0] = uint(liquidity);
       FARMING_CENTER.deposit(nftIds);
       state.staked = true;
@@ -524,6 +524,7 @@ library KyberConverterStrategyLogicLib {
   /// @param totalAssets_ Current value of totalAssets()
   /// @return tokenAmounts Token amounts for deposit. If length == 0 - rebalance wasn't made and no deposit is required.
   function rebalanceNoSwaps(
+    IConverterStrategyBase.ConverterStrategyBaseState storage csbs,
     PairBasedStrategyLogicLib.PairState storage pairState,
     address[2] calldata converterLiquidator,
     uint totalAssets_,
@@ -562,28 +563,12 @@ library KyberConverterStrategyLogicLib {
       uint loss;
       (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmountsPair(v.converter, totalAssets_, v.tokenA, v.tokenB, v.liquidationThresholdsAB);
       if (loss != 0) {
-        v.coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
+        ConverterStrategyBaseLib2.coverLossAndCheckResults(csbs, splitter, loss);
       }
-      emit Rebalanced(loss, profitToCover, v.coveredByRewards);
+      emit Rebalanced(loss, profitToCover, 0);
     }
 
     return tokenAmounts;
-  }
-
-  /// @notice Try to cover loss from rewards then cover remain loss from insurance.
-  function _coverLoss(address splitter, uint loss, address profitHolder, address tokenA, address tokenB, address pool) internal returns (
-    uint coveredByRewards
-  ){
-    if (loss != 0) {
-      coveredByRewards = KyberDebtLib.coverLossFromRewards(loss, profitHolder, tokenA, tokenB, pool);
-      uint notCovered = loss - coveredByRewards;
-      if (notCovered != 0) {
-        ConverterStrategyBaseLib2.coverLossAndCheckResults(splitter, 0, notCovered);
-      }
-      emit CoverLoss(loss, coveredByRewards);
-    }
-
-    return coveredByRewards;
   }
 
   /// @notice Initialize {v} by state values
@@ -625,6 +610,7 @@ library KyberConverterStrategyLogicLib {
   /// @return completed All debts were closed, leftovers were swapped to proper proportions
   /// @return tokenAmountsOut Amounts to be deposited to pool. This array is empty if no deposit allowed/required.
   function withdrawByAggStep(
+    IConverterStrategyBase.ConverterStrategyBaseState storage csbs,
     address[5] calldata addr_,
     uint[4] calldata values_,
     bytes memory swapData,
@@ -635,10 +621,8 @@ library KyberConverterStrategyLogicLib {
     bool completed,
     uint[] memory tokenAmountsOut
   ) {
-    address splitter = addr_[4];
     uint entryToPool = values_[3];
     address[2] memory tokens = [pairState.tokenA, pairState.tokenB];
-    IPool pool = IPool(pairState.pool);
 
     // Calculate amounts to be deposited to pool, calculate loss, fix profitToCover
     uint[] memory tokenAmounts;
@@ -646,17 +630,25 @@ library KyberConverterStrategyLogicLib {
     (completed, tokenAmounts, loss) = PairBasedStrategyLogicLib.withdrawByAggStep(addr_, values_, swapData, planEntryData, tokens, liquidationThresholds);
 
     // cover loss
-    uint coveredByRewards;
     if (loss != 0) {
-      coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, tokens[0], tokens[1], address(pool));
+      ConverterStrategyBaseLib2.coverLossAndCheckResults(
+        csbs,
+        addr_[4], // splitter
+        loss
+      );
     }
-    emit RebalancedDebt(loss, values_[1], coveredByRewards);
+    emit RebalancedDebt(loss, values_[1], 0);
 
     if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
       || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
     ) {
       // We are going to enter to the pool: update lowerTick and upperTick, initialize tokenAmountsOut
-      (pairState.lowerTick, pairState.upperTick) = KyberDebtLib._calcNewTickRange(pool, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
+      (pairState.lowerTick, pairState.upperTick) = KyberDebtLib._calcNewTickRange(
+        IPool(pairState.pool),
+        pairState.lowerTick,
+        pairState.upperTick,
+        pairState.tickSpacing
+      );
       tokenAmountsOut = tokenAmounts;
     }
 
