@@ -1,4 +1,4 @@
-import {BigNumber, ContractTransaction, PopulatedTransaction, providers} from 'ethers';
+import { BigNumber, ContractTransaction, PopulatedTransaction, providers } from 'ethers';
 import { Logger } from 'tslog';
 import logSettings from '../../log_settings';
 import { Misc } from './Misc';
@@ -6,8 +6,8 @@ import { TransactionResponse } from '@ethersproject/abstract-provider/src.ts';
 import { SpeedUp } from './SpeedUp';
 import { StaticJsonRpcProvider } from '@ethersproject/providers/src.ts/url-json-rpc-provider';
 import { sendMessageToTelegram } from '../telegram/tg-sender';
-import { ethers } from 'hardhat';
-import {formatUnits} from "ethers/lib/utils";
+import hre, { ethers } from 'hardhat';
+import { formatUnits, parseUnits } from 'ethers/lib/utils';
 
 const log: Logger<undefined> = new Logger(logSettings);
 
@@ -156,19 +156,25 @@ export class RunHelper {
   }
 
   public static async runAndWait2(txPopulated: Promise<PopulatedTransaction>, stopOnError = true, wait = true) {
-    console.log('prepare run and wait2')
+    console.log('prepare run and wait2');
     const tx = await txPopulated;
     const signer = (await ethers.getSigners())[0];
-    const gas = (await signer.estimateGas(tx)).toNumber()
+    const gas = (await signer.estimateGas(tx)).toNumber();
 
     const params = await RunHelper.txParams();
-    console.log('params', params)
+    console.log('params', params);
 
     tx.gasLimit = BigNumber.from(gas).mul(15).div(10);
 
-    if (params?.maxFeePerGas) tx.maxFeePerGas = BigNumber.from(params.maxFeePerGas);
-    if (params?.maxPriorityFeePerGas) tx.maxPriorityFeePerGas = BigNumber.from(params.maxPriorityFeePerGas);
-    if (params?.gasPrice) tx.gasPrice = BigNumber.from(params.gasPrice);
+    if (params?.maxFeePerGas) {
+      tx.maxFeePerGas = BigNumber.from(params.maxFeePerGas);
+    }
+    if (params?.maxPriorityFeePerGas) {
+      tx.maxPriorityFeePerGas = BigNumber.from(params.maxPriorityFeePerGas);
+    }
+    if (params?.gasPrice) {
+      tx.gasPrice = BigNumber.from(params.gasPrice);
+    }
 
     return RunHelper.runAndWait(() => signer.sendTransaction(tx), stopOnError, wait);
   }
@@ -180,10 +186,17 @@ export class RunHelper {
 
     console.log('maxPriorityFeePerGas', formatUnits(feeData.maxPriorityFeePerGas?.toString() ?? '0', 9));
     console.log('maxFeePerGas', formatUnits(feeData.maxFeePerGas?.toString() ?? '0', 9));
+    console.log('lastBaseFeePerGas', formatUnits(feeData.lastBaseFeePerGas?.toString() ?? '0', 9));
     console.log('gas price:', formatUnits(feeData.gasPrice?.toString() ?? '0', 9));
 
     if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
-      const maxPriorityFeePerGas = Math.max(feeData.maxPriorityFeePerGas?.toNumber() ?? 1, feeData.lastBaseFeePerGas?.toNumber() ?? 1);
+      const maxPriorityFeePerGas = Math.min(
+        Math.max(
+          feeData.maxPriorityFeePerGas?.toNumber() ?? 1,
+          feeData.lastBaseFeePerGas?.toNumber() ?? 1,
+        ),
+        maxFeesPerNetwork(),
+      );
       const maxFeePerGas = (feeData.maxFeePerGas?.toNumber() ?? 1) * 2;
       return {
         maxPriorityFeePerGas: maxPriorityFeePerGas.toFixed(0),
@@ -195,4 +208,15 @@ export class RunHelper {
       };
     }
   }
+}
+
+function maxFeesPerNetwork() {
+  const network = hre.network.name;
+  let fee = 999_999;
+
+  if (network === 'base') {
+    fee = 0.00001;
+  }
+
+  return parseUnits(fee.toFixed(9), 9).toNumber();
 }
