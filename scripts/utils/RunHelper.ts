@@ -217,6 +217,9 @@ function maxFeesPerNetwork() {
   if (network === 'base') {
     fee = 0.00001;
   }
+  if (network === 'matic' || network === 'polygon') {
+    fee = 100;
+  }
 
   return parseUnits(fee.toFixed(9), 9).toNumber();
 }
