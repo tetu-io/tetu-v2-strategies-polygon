@@ -1,9 +1,27 @@
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
 import { providers } from 'ethers';
 import { formatUnits, parseUnits } from 'ethers/lib/utils';
-import { ethers } from 'hardhat';
+import hre, { ethers } from 'hardhat';
 import { delay } from '@nomiclabs/hardhat-etherscan/dist/src/etherscan/EtherscanService';
 import { Libraries } from 'hardhat-deploy/types';
+import axios from 'axios';
+
+type OWLRACLE_RESPONSE = {
+  timestamp: string,
+  lastBlock: number,
+  avgTime: number,
+  avgTx: number,
+  avgGas: number,
+  speeds: [
+    {
+      acceptance: number
+      maxFeePerGas: number
+      maxPriorityFeePerGas: number
+      baseFee: number
+      estimatedFee: number
+    },
+  ],
+};
 
 // tslint:disable-next-line:no-var-requires
 const hreLocal = require('hardhat');
@@ -20,46 +38,44 @@ export async function isContractExist(hre: HardhatRuntimeEnvironment, contractNa
   return false;
 }
 
-/** @deprecated */
-export async function _txParams(hre: HardhatRuntimeEnvironment, provider: providers.Provider) {
 
-  const gasPrice = (await provider.getGasPrice()).toNumber();
-  console.log('Gas price:', formatUnits(gasPrice, 9));
-  if (hre.network.name === 'hardhat') {
-    return {
-      maxPriorityFeePerGas: parseUnits('1', 9),
-      maxFeePerGas: (gasPrice * 1.5).toFixed(0),
-    };
-  } else if (hre.network.config.chainId === 137) {
-    return {
-      maxPriorityFeePerGas: parseUnits('50', 9),
-      maxFeePerGas: (gasPrice * 3).toFixed(0),
-    };
-  } else if (hre.network.config.chainId === 1) {
-    return {
-      maxPriorityFeePerGas: parseUnits('1', 9),
-      maxFeePerGas: (gasPrice * 1.5).toFixed(0),
-    };
-  } else if (hre.network.config.chainId === 8453) {
-    return {
-      maxPriorityFeePerGas: (gasPrice * 0.8).toFixed(0),
-      maxFeePerGas: (gasPrice * 1.5).toFixed(0),
-    };
-  }
-  return {
-    gasPrice: (gasPrice * 1.1).toFixed(0),
-  };
-}
-
-export async function txParams(hre: HardhatRuntimeEnvironment, provider: providers.Provider) {
+export async function txParams(
+  hreL: HardhatRuntimeEnvironment = hre,
+  provider: providers.Provider = ethers.provider,
+  acceptance = 2,
+) {
   const feeData = await provider.getFeeData();
+
 
   console.log('maxPriorityFeePerGas', formatUnits(feeData.maxPriorityFeePerGas?.toString() ?? '0', 9));
   console.log('maxFeePerGas', formatUnits(feeData.maxFeePerGas?.toString() ?? '0', 9));
+  console.log('lastBaseFeePerGas', formatUnits(feeData.lastBaseFeePerGas?.toString() ?? '0', 9));
   console.log('gas price:', formatUnits(feeData.gasPrice?.toString() ?? '0', 9));
 
   if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
-    const maxPriorityFeePerGas = Math.max(feeData.maxPriorityFeePerGas?.toNumber() ?? 1, feeData.lastBaseFeePerGas?.toNumber() ?? 1);
+
+    // use owlracle for complex networks
+    // https://owlracle.info
+    const TETU_OWLRACLE_KEY = process.env.TETU_OWLRACLE_KEY || '';
+    if (TETU_OWLRACLE_KEY !== '' && hre.network.name !== 'hardhat') {
+      const network = hre.network.config.chainId;
+      console.log('network', network);
+      const res = await axios.get(`https://api.owlracle.info/v4/${network}/gas?apikey=${TETU_OWLRACLE_KEY}`);
+      const data = await res.data as OWLRACLE_RESPONSE;
+      // console.log('Owlracle data:', data);
+      const d = data.speeds[acceptance];
+
+      console.log('Owlracle data:', d);
+
+      feeData.maxPriorityFeePerGas = parseUnits(d.maxPriorityFeePerGas.toFixed(9), 9);
+      feeData.maxFeePerGas = parseUnits(d.maxFeePerGas.toFixed(9), 9);
+
+    }
+
+    const maxPriorityFeePerGas = Math.min(
+      feeData.maxPriorityFeePerGas.toNumber(),
+      maxFeesPerNetwork(),
+    );
     const maxFeePerGas = (feeData.maxFeePerGas?.toNumber() ?? 1) * 2;
     return {
       maxPriorityFeePerGas: maxPriorityFeePerGas.toFixed(0),
@@ -72,8 +88,22 @@ export async function txParams(hre: HardhatRuntimeEnvironment, provider: provide
   }
 }
 
+function maxFeesPerNetwork() {
+  const network = hre.network.name;
+  let fee = 999_999;
+
+  if (network === 'base') {
+    fee = 0.00001;
+  }
+  if (network === 'matic' || network === 'polygon') {
+    fee = 100;
+  }
+
+  return parseUnits(fee.toFixed(9), 9).toNumber();
+}
+
 export async function txParams2() {
-  return txParams(hreLocal, ethers.provider);
+  return txParams();
 }
 
 export async function getDeployedContractByName(name: string): Promise<string> {
@@ -110,7 +140,7 @@ export async function hardhatDeploy(
     args,
     libraries,
     skipIfAlreadyDeployed,
-    ...(await txParams(hre, ethers.provider)),
+    ...(await txParams()),
   });
 
   const newAdr = await deployments.get(deploymentName || contractName);

@@ -192,7 +192,7 @@ export class RunHelper {
     if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
       const maxPriorityFeePerGas = Math.min(
         Math.max(
-          feeData.maxPriorityFeePerGas?.toNumber() ?? 1,
+          // feeData.maxPriorityFeePerGas?.toNumber() ?? 1, // this value very high on base network for some reason
           feeData.lastBaseFeePerGas?.toNumber() ?? 1,
         ),
         maxFeesPerNetwork(),
