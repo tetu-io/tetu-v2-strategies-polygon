@@ -271,8 +271,8 @@ export class StateUtilsNum {
       await IConverterController__factory.connect(await converter.controller(), signer).priceOracle(),
       signer
     );
-    console.log("StateUtilsNumb.converter", converter.address);
-    console.log("StateUtilsNumb.priceOracle", priceOracle.address);
+    // console.log("StateUtilsNum.converter", converter.address);
+    // console.log("StateUtilsNum.priceOracle", priceOracle.address);
     const borrowManager = await IBorrowManager__factory.connect(
       await IConverterController__factory.connect(await converter.controller(), signer).borrowManager(),
       signer
