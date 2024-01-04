@@ -5,6 +5,7 @@ const THRESHOLDS = new Map<string, number>([
   ['TS-16 price impact', 25],
   ['NSR success!', 20],
   ['Rebalance success!', 20],
+  ['502 Bad Gateway', 100],
 ]);
 
 const THRESHOLD_REFRESH = 6 * 60 * 60 * 1000;

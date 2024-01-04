@@ -14,13 +14,13 @@ import {
   StrategySplitterV2__factory,
   TetuVaultV2__factory,
 } from '../typechain';
-import { config as dotEnvConfig } from 'dotenv';
 import { subscribeTgBot } from './telegram/tg-subscribe';
 import { Misc } from './utils/Misc';
 import { NSRUtils } from './utils/NSRUtils';
 import { formatUnits } from 'ethers/lib/utils';
 import { BaseAddresses } from './addresses/BaseAddresses';
 import { splitterHardWork } from './utils/splitter-hardwork';
+import { EnvSetup } from './utils/EnvSetup';
 
 // test rebalance debt
 // NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtW3F.ts
@@ -37,65 +37,10 @@ const DELAY_AFTER_NSR = 10;
 // this delay should be ~average time for arbitragers rebalance the pool across networks
 // prev value 300(5min) leaded to probably higher loss, move back to this value if 30min works bad
 const DELAY_NEED_NSR_CONFIRM = 1800;
-const DEFAULT_ENV_SEPARATOR = ':separate:';
-
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    nsrMsgSuccess: { //
-      type: 'boolean',
-      default: false,
-    },
-    rebalanceDebtAgg: {
-      type: 'string',
-      default: '',
-    },
-    rebalanceDebt1InchProtocols: {
-      type: 'string',
-      default: '',
-    },
-    rebalanceDebtMsgSuccess: {
-      type: 'boolean',
-      default: false,
-    },
-    rebalanceDebtLoopDelay: {
-      type: 'number',
-      default: 60_000,
-    },
-    cronDailyReport: {
-      type: 'string',
-      default: '22 19 * * *',
-    },
-    maxErrorCount: {
-      type: 'number',
-      default: 100,
-    },
-    excludeErrorLogs: {
-      type: 'string',
-      default: '',
-    },
-  }).argv;
-
-enum EventType {
-  Rebalance = 'Rebalance success',
-  NSR = 'NSR success',
-  ErrorNSR = 'Error NSR',
-  ErrorExecute = 'Error EXECUTE',
-  Empty = 'Empty result',
-  ErrorProcessing = 'Error inside strategy processing',
-  ErrorRebalance = 'Error in debt rebalance',
-  ErrorFetching = 'Error fetch from url'
-}
-
-const eventLogs = new Map<EventType, string[][]>();
-let excludeErrorLogs: string[] = [];
 
 
 async function main() {
   console.log('Strategies NSR and debt rebalancer');
-  excludeErrorLogs = argv.excludeErrorLogs.split(DEFAULT_ENV_SEPARATOR);
 
   if (!['localhost', 'matic', 'base'].includes(hre.network.name)) {
     console.log('Unsupported network', hre.network.name);
@@ -112,8 +57,8 @@ async function main() {
   console.log('Config: ', configAddress);
   console.log('Reader: ', readerAddress);
 
-  const agg = argv.rebalanceDebtAgg;
-  const oneInchProtocols = argv.rebalanceDebt1InchProtocols;
+  const agg = EnvSetup.getEnv().rebalanceDebtAgg;
+  const oneInchProtocols = EnvSetup.getEnv().rebalanceDebt1InchProtocols;
 
   const provider = ethers.provider;
   const signer = (await ethers.getSigners())[0];
@@ -219,7 +164,7 @@ async function main() {
 
                 await RunHelper.runAndWait2(strategy.populateTransaction.rebalanceNoSwaps(true));
                 console.log('NSR success!', strategyName, strategyAddress);
-                if (argv.nsrMsgSuccess) {
+                if (EnvSetup.getEnv().nsrMsgSuccess) {
                   await sendMessageToTelegram(`NSR success! ${strategyName} ${strategyAddress}`);
                 }
 
@@ -258,6 +203,7 @@ async function main() {
               if (result.canExec) {
                 console.log('Rebalance call', strategyName, result);
                 if (typeof result.callData === 'string') {
+                  // noinspection ExceptionCaughtLocallyJS
                   throw Error('wrong callData for ' + strategyName);
                 }
                 const tp = await txParams2();
@@ -283,7 +229,7 @@ async function main() {
                     true, true,
                   );
                   console.log('Rebalance success!', strategyName, strategyAddress);
-                  if (argv.rebalanceDebtMsgSuccess) {
+                  if (EnvSetup.getEnv().rebalanceDebtMsgSuccess) {
                     await sendMessageToTelegram(`Rebalance success! ${strategyName} ${strategyAddress}`);
                   }
                 } catch (e) {
@@ -317,7 +263,7 @@ async function main() {
       );
     }
 
-    await sleep(argv.rebalanceDebtLoopDelay);
+    await sleep(EnvSetup.getEnv().rebalanceDebtLoopDelay);
   }
 }
 

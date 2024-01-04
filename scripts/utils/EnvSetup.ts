@@ -106,7 +106,7 @@ export class EnvSetup {
 
         /////// REBALANCE
 
-        rebalanceDebtAgg: {
+        rebalanceDebtAgg: { // TETU_REBALANCE_DEBT_AGG
           type: 'string',
           default: '',
         },
@@ -114,13 +114,17 @@ export class EnvSetup {
           type: 'string',
           default: '',
         },
-        rebalanceDebtMsgSuccess: {
-          type: 'boolean',
-          default: false,
-        },
         rebalanceDebtLoopDelay: {
           type: 'number',
           default: 60_000,
+        },
+        nsrMsgSuccess: {
+          type: 'boolean',
+          default: false,
+        },
+        rebalanceDebtMsgSuccess: {
+          type: 'boolean',
+          default: false,
         },
       }).argv;
   }
