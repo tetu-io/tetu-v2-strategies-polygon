@@ -681,9 +681,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   });
 
                   const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b, mockedSwapper.address);
+                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b.liquidatorPools, mockedSwapper.address);
                   await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: GAS_LIMIT});
-                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b, b.swapper);
+                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b.liquidatorPools, b.swapper);
                   const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
                   expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, PRECISION);
@@ -700,9 +700,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   });
 
                   const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b, mockedSwapper.address);
+                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b.liquidatorPools, mockedSwapper.address);
                   await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: GAS_LIMIT});
-                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b, b.swapper);
+                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b.liquidatorPools, b.swapper);
                   const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
                   expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, PRECISION);
@@ -720,9 +720,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   });
 
                   const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b, mockedSwapper.address);
+                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b.liquidatorPools, mockedSwapper.address);
                   await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: GAS_LIMIT});
-                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b, b.swapper);
+                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b.liquidatorPools, b.swapper);
                   const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
                   expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, PRECISION);
@@ -740,9 +740,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   });
 
                   const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b, mockedSwapper.address);
+                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b.liquidatorPools, mockedSwapper.address);
                   await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: GAS_LIMIT});
-                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b, b.swapper);
+                  await MockAggregatorUtils.injectSwapperToLiquidator(PlatformUtils.getTetuLiquidator(chainId), b.liquidatorPools, b.swapper);
                   const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
                   expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, PRECISION);

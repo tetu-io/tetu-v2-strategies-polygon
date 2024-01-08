@@ -108,7 +108,7 @@ export class PairWithdrawByAggUtils {
 
       if (p.mockSwapper) {
         console.log("------------------ temporary replace swapper by mocked one");
-        await MockAggregatorUtils.injectSwapperToLiquidator(p.tetuLiquidator, b, p.mockSwapper.address);
+        await MockAggregatorUtils.injectSwapperToLiquidator(p.tetuLiquidator, b.liquidatorPools, p.mockSwapper.address);
       }
 
       const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
