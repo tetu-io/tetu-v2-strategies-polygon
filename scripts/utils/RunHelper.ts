@@ -8,6 +8,7 @@ import { StaticJsonRpcProvider } from '@ethersproject/providers/src.ts/url-json-
 import { sendMessageToTelegram } from '../telegram/tg-sender';
 import { ethers } from 'hardhat';
 import {formatUnits} from "ethers/lib/utils";
+import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
 const log: Logger<undefined> = new Logger(logSettings);
 
@@ -159,6 +160,23 @@ export class RunHelper {
     console.log('prepare run and wait2')
     const tx = await txPopulated;
     const signer = (await ethers.getSigners())[0];
+    const gas = (await signer.estimateGas(tx)).toNumber()
+
+    const params = await RunHelper.txParams();
+    console.log('params', params)
+
+    tx.gasLimit = BigNumber.from(gas).mul(15).div(10);
+
+    if (params?.maxFeePerGas) tx.maxFeePerGas = BigNumber.from(params.maxFeePerGas);
+    if (params?.maxPriorityFeePerGas) tx.maxPriorityFeePerGas = BigNumber.from(params.maxPriorityFeePerGas);
+    if (params?.gasPrice) tx.gasPrice = BigNumber.from(params.gasPrice);
+
+    return RunHelper.runAndWait(() => signer.sendTransaction(tx), stopOnError, wait);
+  }
+
+  public static async runAndWait2ExplicitSigner(signer: SignerWithAddress, txPopulated: Promise<PopulatedTransaction>, stopOnError = true, wait = true) {
+    console.log('runAndWait2ExplicitSigner')
+    const tx = await txPopulated;
     const gas = (await signer.estimateGas(tx)).toNumber()
 
     const params = await RunHelper.txParams();

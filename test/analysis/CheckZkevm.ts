@@ -30,7 +30,7 @@ async function injectStrategy() {
 }
 
 describe("Check actions on zkEVM @skip-on-coverage", () => {
-  const BLOCK = 8859887;
+  const BLOCK = 9026807;
   const STRATEGY = "0x6A4436f1D062Ee73F7bE2ebE7395CE6346586101";
   const CONTROLLER = "0x33b27e0a2506a4a2fbc213a01c51d0451745343a";
   const SENDER = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
@@ -205,7 +205,9 @@ describe("Check actions on zkEVM @skip-on-coverage", () => {
     const asset = IERC20Metadata__factory.connect(ZkevmAddresses.USDC_TOKEN, signer);
     await asset.approve(VAULT, Misc.MAX_UINT);
     await TokenUtils.getToken(asset.address, signer.address, parseUnits('2000', 6));
-    await TetuVaultV2__factory.connect(VAULT, signer).deposit(parseUnits('1000', 6), signer.address);
+    const tx = await TetuVaultV2__factory.connect(VAULT, signer).deposit(parseUnits('0.1', 6), signer.address);
+    const cr = await tx.wait();
+    console.log("gasused", cr.gasUsed);
     console.log(await TetuVaultV2__factory.connect(VAULT, signer).maxWithdraw(signer.address));
   });
 });

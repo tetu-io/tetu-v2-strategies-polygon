@@ -4,7 +4,7 @@ import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
 import {
   ControllerV2__factory,
   ConverterStrategyBase__factory, IPairBasedStrategyReaderAccess__factory,
-  IRebalancingV2Strategy__factory, PairBasedStrategyReader__factory,
+  IRebalancingV2Strategy__factory, ISplitter__factory, PairBasedStrategyReader__factory,
   StrategySplitterV2__factory,
   TetuVaultV2__factory
 } from '../../typechain';
@@ -20,18 +20,14 @@ import {MockHelper} from '../baseUT/helpers/MockHelper';
 import {ethers} from "hardhat";
 import {Misc} from "../../scripts/utils/Misc";
 import {MaticAddresses} from "../../scripts/addresses/MaticAddresses";
-
-async function injectStrategy() {
-  // await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
-  // await InjectUtils.injectStrategy(signer, STRATEGY, "UniswapV3ConverterStrategy");
-}
+import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
 describe("Check actions on base @skip-on-coverage", () => {
-  const BLOCK = 51350575;
-  const STRATEGY = "0xCdc5560AB926Dca3d4989bF814469Af3f989Ab2C";
+  const BLOCK = 51974404; // 51918500;
+  const STRATEGY = "0xA8105284aA9C9A20A2081EEE1ceeF03d9719A5AD";
   const CONTROLLER = "0x33b27e0a2506a4a2fbc213a01c51d0451745343a";
-  const SENDER = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
-  // const SPLITTER = "";
+  const OPERATOR = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
+  const SPLITTER = "0xA31cE671A0069020F7c87ce23F9cAAA7274C794c";
 
   let snapshotBefore: string;
   beforeEach(async function () {
@@ -47,9 +43,14 @@ describe("Check actions on base @skip-on-coverage", () => {
     await TimeUtils.rollback(snapshotBefore);
   });
 
-  it("try to rebalance", async () => {
+  async function injectStrategy(signer: SignerWithAddress) {
+    // await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
+    await InjectUtils.injectStrategy(signer, STRATEGY, "AlgebraConverterStrategy");
+  }
+
+  it("try to rebalance no swap (NSR)", async () => {
     const pathOut = "./tmp/checkPolygon-rebalance.csv";
-    const signer = await DeployerUtilsLocal.impersonate(SENDER);
+    const signer = await DeployerUtilsLocal.impersonate(OPERATOR);
     const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, signer);
     const converterStrategyBase = ConverterStrategyBase__factory.connect(STRATEGY, signer);
     const vault = TetuVaultV2__factory.connect(
@@ -69,7 +70,7 @@ describe("Check actions on base @skip-on-coverage", () => {
       StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, {mainAssetSymbol: MaticAddresses.USDC_TOKEN});
     };
 
-    await injectStrategy();
+    await injectStrategy(signer);
 
     await saver("b");
     if (await strategyAsOperator.needRebalance()) {
@@ -83,7 +84,7 @@ describe("Check actions on base @skip-on-coverage", () => {
 
   it("try withdrawByAgg 1inch", async () => {
     const pathOut = "./tmp/checkPolygon-withdrawByAgg.csv";
-    const signer = await DeployerUtilsLocal.impersonate(SENDER);
+    const signer = await DeployerUtilsLocal.impersonate(OPERATOR);
 
     const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, signer);
     const converterStrategyBase = ConverterStrategyBase__factory.connect(STRATEGY, signer);
@@ -105,7 +106,7 @@ describe("Check actions on base @skip-on-coverage", () => {
       return states[states.length - 1];
     };
 
-    await injectStrategy();
+    await injectStrategy(signer);
 
     const state = await PackedData.getDefaultState(strategyAsOperator);
     const reader = await MockHelper.createPairBasedStrategyReader(signer);
@@ -149,7 +150,7 @@ describe("Check actions on base @skip-on-coverage", () => {
 
   it("try withdrawByAgg OpenOcean", async () => {
     const pathOut = "./tmp/checkPolygon-withdrawByAgg.csv";
-    const signer = await DeployerUtilsLocal.impersonate(SENDER);
+    const signer = await DeployerUtilsLocal.impersonate(OPERATOR);
 
     const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, signer);
     const converterStrategyBase = ConverterStrategyBase__factory.connect(STRATEGY, signer);
@@ -171,7 +172,7 @@ describe("Check actions on base @skip-on-coverage", () => {
       return states[states.length - 1];
     };
 
-    await injectStrategy();
+    await injectStrategy(signer);
 
     const state = await PackedData.getDefaultState(strategyAsOperator);
     const reader = await MockHelper.createPairBasedStrategyReader(signer);
@@ -245,7 +246,7 @@ describe("Check actions on base @skip-on-coverage", () => {
 
 
     console.log("-------------------------------- inject strategy");
-    await injectStrategy();
+    await injectStrategy(signer);
 
 
     console.log("-------------------------------- make hardwork");
@@ -259,5 +260,47 @@ describe("Check actions on base @skip-on-coverage", () => {
     console.log("makeHardwork");
     const eventsSet = await CaptureEvents.makeHardwork(strategyAsSplitter);
     await saver("a", eventsSet);
+  });
+
+  it.skip("try to rebalance in splitter", async () => {
+    const pathOut = "./tmp/checkPolygon-rebalance-splitter.csv";
+    const signer = await DeployerUtilsLocal.impersonate(OPERATOR);
+    const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, signer);
+    const converterStrategyBase = ConverterStrategyBase__factory.connect(STRATEGY, signer);
+    const vault = TetuVaultV2__factory.connect(
+      await (await StrategySplitterV2__factory.connect(await converterStrategyBase.splitter(), signer)).vault(),
+      signer
+    );
+    const splitter = ISplitter__factory.connect(await converterStrategyBase.splitter(), signer);
+
+    const states: IStateNum[] = [];
+
+    if (fs.existsSync(pathOut)) {
+      fs.rmSync(pathOut);
+    }
+
+    const saver = async (title: string, e?: IEventsSet) => {
+      const state = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, title, {eventsSet: e});
+      states.push(state);
+      StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, {mainAssetSymbol: MaticAddresses.USDC_TOKEN});
+    };
+
+    await saver("1");
+    // await injectStrategy(signer);
+    // console.log("setFuseStatus");
+    // await strategyAsOperator.setFuseStatus(2);
+    // await saver("2");
+    console.log("rebalanceNoSwaps");
+    // const univ3AsOperator = IRebalancingV2Strategy__factory.connect("0xCdc5560AB926Dca3d4989bF814469Af3f989Ab2C", signer);
+    // await univ3AsOperator.rebalanceNoSwaps(true);
+
+    // await strategyAsOperator.rebalanceNoSwaps(true);
+    await saver("3");
+    // console.log("setFuseStatus.2");
+    // await strategyAsOperator.setFuseStatus(2);
+    // await saver("4");
+    console.log("rebalance");
+    await splitter.rebalance(100, 500);
+    await saver("5");
   });
 });

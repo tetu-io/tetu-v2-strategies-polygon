@@ -17,6 +17,7 @@ import "../interfaces/IConverterStrategyBase.sol";
 // 3.0.1 refactoring of emergency exit
 // 3.1.0 use bookkeeper, new set of events
 // 3.1.2 scb-867
+// 3.1.3 scb-900
 
 /// @title Abstract contract for base Converter strategy functionality
 /// @notice All depositor assets must be correlated (ie USDC/USDT/DAI)
@@ -43,7 +44,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   //region -------------------------------------------------------- CONSTANTS
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant CONVERTER_STRATEGY_BASE_VERSION = "3.1.2";
+  string public constant CONVERTER_STRATEGY_BASE_VERSION = "3.1.3";
 
   /// @notice 1% gap to cover possible liquidation inefficiency
   /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
@@ -96,7 +97,8 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     uint lostHandleRewards,
     uint earnedDeposit,
     uint lostDeposit,
-    uint paidDebtToInsurance
+    uint paidDebtToInsurance,
+    uint amountPerf
   );
   //endregion -------------------------------------------------------- Events
 
@@ -142,7 +144,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     uint strategyLoss
   ){
     (uint updatedInvestedAssets, uint earnedByPrices) = _fixPriceChanges(updateTotalAssetsBeforeInvest_);
-    (strategyLoss,) = _depositToPoolUniversal(amount_, earnedByPrices, updatedInvestedAssets);
+    (strategyLoss,) = _depositToPoolUniversal(amount_, earnedByPrices, updatedInvestedAssets, false);
   }
 
   /// @notice Deposit {amount_} to the pool, send {earnedByPrices_} to insurance.
@@ -151,9 +153,15 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   /// @param amount_ Amount of underlying to be deposited
   /// @param earnedByPrices_ Profit received because of price changing
   /// @param investedAssets_ Invested assets value calculated with updated prices
+  /// @param updateInvestedAssetsInAnyCase_ _csbs.investedAssets must be updated even if a deposit is not needed
   /// @return strategyLoss Loss happened on the depositing. It doesn't include any price-changing losses
   /// @return amountSentToInsurance Price-changing-profit that was sent to the insurance
-  function _depositToPoolUniversal(uint amount_, uint earnedByPrices_, uint investedAssets_) internal virtual returns (
+  function _depositToPoolUniversal(
+    uint amount_,
+    uint earnedByPrices_,
+    uint investedAssets_,
+    bool updateInvestedAssetsInAnyCase_
+  ) internal virtual returns (
     uint strategyLoss,
     uint amountSentToInsurance
   ){
@@ -206,6 +214,10 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
         investedAssets_ + balanceBefore,
         investedAssetsAfter + AppLib.balance(_asset) + amountSentToInsurance
       );
+    } else {
+      if (updateInvestedAssetsInAnyCase_) {
+        _csbs.investedAssets = investedAssets_;
+      }
     }
 
     return (strategyLoss, amountSentToInsurance);
@@ -410,11 +422,13 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   /// @dev Call recycle process and send tokens to forwarder.
   ///      Need to be separated from the claim process - the claim can be called by operator for other purposes.
   /// @return paidDebtToInsurance Earned amount spent on debt-to-insurance payment
+  /// @return amountPerf Total performance fee in terms of underlying
   function _rewardsLiquidation(address[] memory rewardTokens_, uint[] memory rewardAmounts_) internal returns (
-    uint paidDebtToInsurance
+    uint paidDebtToInsurance,
+    uint amountPerf
   ) {
     if (rewardTokens_.length != 0) {
-      paidDebtToInsurance = ConverterStrategyBaseLib.recycle(
+      (paidDebtToInsurance, amountPerf) = ConverterStrategyBaseLib.recycle(
         baseState,
         _csbs,
         _depositorPoolAssets(),
@@ -424,7 +438,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
         rewardAmounts_
       );
     }
-    return paidDebtToInsurance;
+    return (paidDebtToInsurance, amountPerf);
   }
   //endregion -------------------------------------------------------- Claim rewards
 
@@ -459,11 +473,13 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   /// @return lost The amount of lost rewards.
   /// @return assetBalanceAfterClaim The asset balance after claiming rewards.
   /// @return paidDebtToInsurance A part of {earned} spent on debt-to-insurance payment
+  /// @return amountPerf Performance fee in terms of underlying
   function _handleRewards() internal virtual returns (
     uint earned,
     uint lost,
     uint assetBalanceAfterClaim,
-    uint paidDebtToInsurance
+    uint paidDebtToInsurance,
+    uint amountPerf
   );
 
   /// @param reInvest Deposit to pool all available amount if it's greater than the threshold
@@ -474,10 +490,11 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
     if (!_preHardWork(reInvest)) {
       // claim rewards and get current asset balance
-      (uint earned1, uint lost1, uint assetBalance, uint paidDebtToInsurance) = _handleRewards();
+      (uint earned1, uint lost1, uint assetBalance, uint paidDebtToInsurance, uint amountPerf) = _handleRewards();
 
       // re-invest income
       (uint investedAssetsAfterHandleRewards,,) = _calcInvestedAssets();
+
       (, uint amountSentToInsurance) = _depositToPoolUniversal(
         reInvest
         && investedAssetsAfterHandleRewards != 0
@@ -485,18 +502,21 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
           ? assetBalance
           : 0,
         earnedByPrices,
-        investedAssetsAfterHandleRewards
+        investedAssetsAfterHandleRewards,
+        true
       );
 
       (earned, lost) = ConverterStrategyBaseLib2._registerIncome(
-        investedAssetsNewPrices + assetBalance, // assets in use before handling rewards
+        investedAssetsAfterHandleRewards + assetBalance, // assets in use before deposit
         _csbs.investedAssets + AppLib.balance(baseState.asset) + amountSentToInsurance // assets in use after deposit
       );
 
       _postHardWork();
-      emit OnHardWorkEarnedLost(investedAssetsNewPrices, earnedByPrices, earned1, lost1, earned, lost, paidDebtToInsurance);
+      emit OnHardWorkEarnedLost(investedAssetsNewPrices, earnedByPrices, earned1, lost1, earned, lost, paidDebtToInsurance, amountPerf);
 
-      earned = AppLib.sub0(earned + earned1, paidDebtToInsurance);
+      // Excluded from earned two values: performance fee and amount paid to cover debt before the insurance
+      // Amount sent to the forwarder is still included to the result earned amount.
+      earned = AppLib.sub0(earned + earned1, paidDebtToInsurance + amountPerf);
       lost += lost1;
     }
 

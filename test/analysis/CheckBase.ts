@@ -23,7 +23,8 @@ import {Misc} from "../../scripts/utils/Misc";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
 describe("Check actions on base @skip-on-coverage", () => {
-  const BLOCK = 8600481 - 63;
+  const BLOCK = 7981926;
+  // const BLOCK = 7981927 - 2;
   const STRATEGY = "0xAA43e2cc199DC946b3D528c6E00ebb3F4CC2fC0e";
   const CONTROLLER = "0x255707B70BF90aa112006E1b07B9AeA6De021424";
   const SENDER = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
@@ -246,8 +247,10 @@ describe("Check actions on base @skip-on-coverage", () => {
     const strategyAsSplitter = converterStrategyBase.connect(await DeployerUtilsLocal.impersonate(splitter));
     if (await strategyAsOperator.needRebalance()) {
       console.log("makeRebalanceNoSwap");
-      await CaptureEvents.makeRebalanceNoSwap(strategyAsOperator);
+      const eventsSet0 = await CaptureEvents.makeRebalanceNoSwap(strategyAsOperator);
+      await saver("nsr", eventsSet0);
     }
+
 
     console.log("makeHardwork");
     const eventsSet = await CaptureEvents.makeHardwork(strategyAsSplitter);

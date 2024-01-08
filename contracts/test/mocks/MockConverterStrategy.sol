@@ -168,7 +168,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   //endregion ------------------------------------------------------- Withdraw universal
 
   //region--------------------------------------- _handleRewards, mocked version + accessor
-  function _handleRewards() internal override returns (uint earned, uint lost, uint assetBalanceAfterClaim, uint paidDebtToInsurance) {
+  function _handleRewards() internal override returns (uint earned, uint lost, uint assetBalanceAfterClaim, uint paidDebtToInsurance, uint amountPerf) {
     address asset = baseState.asset;
     if (handleRewardsParams.initialized) {
       //      console.log("_handleRewards.mocked-version is called");
@@ -184,20 +184,26 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
           uint(- handleRewardsParams.assetBalanceChange)
         );
       }
-      return (handleRewardsParams.earned, handleRewardsParams.lost, AppLib.balance(asset), handleRewardsParams.paidDebtToInsurance);
+      return (handleRewardsParams.earned, handleRewardsParams.lost, AppLib.balance(asset), handleRewardsParams.paidDebtToInsurance, amountPerf);
     } else {
-      return __handleRewards();
+      return __handleRewardsImpl();
     }
   }
 
-  function __handleRewards() internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim, uint paidDebtToInsurance) {
+  function __handleRewardsImpl() internal returns (
+    uint earned,
+    uint lost,
+    uint assetBalanceAfterClaim,
+    uint paidDebtToInsurance,
+    uint amountPerf
+  ) {
     address asset = baseState.asset;
     uint assetBalanceBefore = AppLib.balance(asset);
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
-    paidDebtToInsurance = _rewardsLiquidation(rewardTokens, amounts);
+    (paidDebtToInsurance, amountPerf) = _rewardsLiquidation(rewardTokens, amounts);
     assetBalanceAfterClaim = AppLib.balance(asset);
     (uint earned2, uint lost2) = ConverterStrategyBaseLib2._registerIncome(assetBalanceBefore, assetBalanceAfterClaim);
-    return (earned + earned2, lost + lost2, assetBalanceAfterClaim, paidDebtToInsurance);
+    return (earned + earned2, lost + lost2, assetBalanceAfterClaim, paidDebtToInsurance, amountPerf);
   }
 
   struct MockedHandleRewardsParams {
@@ -247,14 +253,24 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   }
 
 
-  function depositToPoolUniAccess(uint amount_, uint earnedByPrices_, uint investedAssets_) external returns (
+  function depositToPoolUniAccess(
+    uint amount_,
+    uint earnedByPrices_,
+    uint investedAssets_,
+    bool updateInvestedAssetsInAnyCase_
+  ) external returns (
     uint strategyLoss,
     uint amountSentToInsurance
   ) {
-    return _depositToPoolUniversal(amount_, earnedByPrices_, investedAssets_);
+    return _depositToPoolUniversal(amount_, earnedByPrices_, investedAssets_, updateInvestedAssetsInAnyCase_);
   }
 
-  function _depositToPoolUniversal(uint amount_, uint earnedByPrices_, uint investedAssets_) override internal virtual returns (
+  function _depositToPoolUniversal(
+    uint amount_,
+    uint earnedByPrices_,
+    uint investedAssets_,
+    bool updateInvestedAssetsInAnyCase_
+  ) override internal virtual returns (
     uint strategyLoss,
     uint amountSentToInsurance
   ) {
@@ -275,7 +291,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
       }
       return (depositToPoolParams.loss, depositToPoolParams.amountSentToInsurance);
     } else {
-      return super._depositToPoolUniversal(amount_, earnedByPrices_, investedAssets_);
+      return super._depositToPoolUniversal(amount_, earnedByPrices_, investedAssets_, updateInvestedAssetsInAnyCase_);
     }
   }
 

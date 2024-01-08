@@ -12,7 +12,7 @@ import "../../libs/AppPlatforms.sol";
 contract BalancerBoostedStrategy is ConverterStrategyBase, BalancerBoostedDepositor {
   string public constant override NAME = "Balancer Boosted Strategy";
   string public constant override PLATFORM = AppPlatforms.BALANCER;
-  string public constant override STRATEGY_VERSION = "1.0.2";
+  string public constant override STRATEGY_VERSION = "1.0.3";
 
   function init(
     address controller_,
@@ -28,14 +28,20 @@ contract BalancerBoostedStrategy is ConverterStrategyBase, BalancerBoostedDeposi
     StrategyLib2._changeStrategySpecificName(baseState, BalancerLogicLib.createSpecificName(pool_));
   }
 
-  function _handleRewards() internal virtual override returns (uint earned, uint lost, uint assetBalanceAfterClaim, uint paidDebtToInsurance) {
+  function _handleRewards() override internal virtual returns (
+    uint earned,
+    uint lost,
+    uint assetBalanceAfterClaim,
+    uint paidDebtToInsurance,
+    uint amountPerf
+  ) {
     address asset = baseState.asset;
     uint assetBalanceBefore = AppLib.balance(asset);
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
-    paidDebtToInsurance = _rewardsLiquidation(rewardTokens, amounts);
+    (paidDebtToInsurance, amountPerf) = _rewardsLiquidation(rewardTokens, amounts);
     assetBalanceAfterClaim = AppLib.balance(asset);
     (uint earned2, uint lost2) = ConverterStrategyBaseLib2._registerIncome(assetBalanceBefore, assetBalanceAfterClaim);
-    return (earned + earned2, lost + lost2, assetBalanceAfterClaim, paidDebtToInsurance);
+    return (earned + earned2, lost + lost2, assetBalanceAfterClaim, paidDebtToInsurance, amountPerf);
   }
 
   function setGauge(address gauge_) external {
