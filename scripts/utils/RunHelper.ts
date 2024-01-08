@@ -71,7 +71,7 @@ export class RunHelper {
     wait: boolean = true,
   ) {
     try {
-      console.log('Start on-chain transaction');
+      console.log('Start wait and speed-up');
       const start = Date.now();
       const tr = await callback();
       if (!wait) {
@@ -158,6 +158,10 @@ export class RunHelper {
   public static async runAndWait2(txPopulated: Promise<PopulatedTransaction>, stopOnError = true, wait = true) {
     console.log('prepare run and wait2');
     const tx = await txPopulated;
+    return RunHelper.runAndWait3(tx, stopOnError, wait);
+  }
+
+  public static async runAndWait3(tx: PopulatedTransaction, stopOnError = true, wait = true) {
     const signer = (await ethers.getSigners())[0];
     const gas = (await signer.estimateGas(tx)).toNumber();
 

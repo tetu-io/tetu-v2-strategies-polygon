@@ -1,7 +1,6 @@
 import { IStrategyV2__factory, StrategySplitterV2__factory } from '../../typechain';
 import { ethers } from 'hardhat';
 import { RunHelper } from './RunHelper';
-import { txParams2 } from '../../deploy_constants/deploy-helpers';
 import { sendMessageToTelegram } from '../telegram/tg-sender';
 
 // make HW a bit early for avoid excess spendings on gelato
@@ -41,15 +40,7 @@ export async function splitterHardWork(splitterAdr: string) {
           console.log('>>> DO HARD WORK FOR STRATEGY', strategyName);
 
           try {
-            const gas = await splitter.estimateGas.doHardWorkForStrategy(strategyAdr, true);
-
-            const tp = await txParams2();
-            await RunHelper.runAndWaitAndSpeedUp(
-              provider,
-              () => splitter.doHardWorkForStrategy(strategyAdr, true, { ...tp, gasLimit: gas.mul(2) }),
-              false,
-              true,
-            );
+            await RunHelper.runAndWait2(splitter.populateTransaction.doHardWorkForStrategy(strategyAdr, true));
           } catch (e) {
             LAST_ERRORS.set(strategyAdr.toLowerCase(), now);
             throw e;

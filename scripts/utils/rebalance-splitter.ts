@@ -1,12 +1,6 @@
-import {
-  ISplitter__factory,
-  IStrategyV2__factory,
-  StrategySplitterV2__factory,
-  TetuVaultV2__factory,
-} from '../../typechain';
+import { IStrategyV2__factory, StrategySplitterV2__factory, TetuVaultV2__factory } from '../../typechain';
 import { ethers } from 'hardhat';
 import { formatUnits } from 'ethers/lib/utils';
-import { txParams2 } from '../../deploy_constants/deploy-helpers';
 import { RunHelper } from './RunHelper';
 
 const VAULT = '0x0d397f4515007ae4822703b74b9922508837a04e';
@@ -56,13 +50,7 @@ async function main() {
   console.log('lowestStrat', lowestStrat);
   console.log('lowestStratApr', lowestStratApr);
 
-  const gas = await splitter.estimateGas.rebalance(rebalancePerc, LOSS_TOLERANCE);
-
-  const txParam = await txParams2();
-  await RunHelper.runAndWaitAndSpeedUp(
-    ethers.provider,
-    () => splitter.rebalance(rebalancePerc, LOSS_TOLERANCE, { ...txParam, gasLimit: gas.mul(2) }),
-  );
+  await RunHelper.runAndWait2(splitter.populateTransaction.rebalance(rebalancePerc, LOSS_TOLERANCE));
 
 
   const totalAfter = await IStrategyV2__factory.connect(lowestStrat, signer).totalAssets();

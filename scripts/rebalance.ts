@@ -219,14 +219,11 @@ async function main() {
 
                   console.log('estimated gas', formatUnits(gas, 9));
 
-                  await RunHelper.runAndWaitAndSpeedUp(provider, () =>
-                      signer.sendTransaction({
-                        to: callData[0].to,
-                        data: callData[0].data,
-                        ...tp,
-                        gasLimit: 15_000_000,
-                      }),
-                    true, true,
+                  await RunHelper.runAndWait3(
+                    {
+                      to: callData[0].to,
+                      data: callData[0].data,
+                    },
                   );
                   console.log('Rebalance success!', strategyName, strategyAddress);
                   if (EnvSetup.getEnv().rebalanceDebtMsgSuccess) {
