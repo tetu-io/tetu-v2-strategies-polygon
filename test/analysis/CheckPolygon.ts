@@ -23,7 +23,7 @@ import {MaticAddresses} from "../../scripts/addresses/MaticAddresses";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
 describe("Check actions on base @skip-on-coverage", () => {
-  const BLOCK = 51974404; // 51918500;
+  const BLOCK = 52093660-1; // 51918500;
   const STRATEGY = "0xA8105284aA9C9A20A2081EEE1ceeF03d9719A5AD";
   const CONTROLLER = "0x33b27e0a2506a4a2fbc213a01c51d0451745343a";
   const OPERATOR = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";

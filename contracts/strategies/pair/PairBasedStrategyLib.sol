@@ -6,6 +6,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../ConverterStrategyBaseLib.sol";
 import "../../interfaces/IPoolProportionsProvider.sol";
 import "../../libs/BorrowLib.sol";
+import "hardhat/console.sol";
 
 /// @notice Library for the UniV3-like strategies with two tokens in the pool
 /// @dev The library contains quoteWithdrawStep/withdrawStep-related logic
@@ -410,10 +411,15 @@ library PairBasedStrategyLib {
       ];
 
     if (idxToSwap1 != 0 && actions[IDX_SWAP_1]) {
+      console.log("swap1.idxToSwap1", idxToSwap1);
+      console.log("swap1.amountToSwap", amountToSwap);
       (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
     }
+    console.log("_withdrawStep.1.balance0", IERC20(p.tokens[0]).balanceOf(address(this)));
+    console.log("_withdrawStep.1.balance1", IERC20(p.tokens[1]).balanceOf(address(this)));
 
     if (idxToRepay1 != 0 && actions[IDX_REPAY_1]) {
+      console.log("repay1.amount", IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this)));
       ConverterStrategyBaseLib._repayDebt(
         p.converter,
         p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET],
@@ -421,10 +427,16 @@ library PairBasedStrategyLib {
         IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this))
       );
     }
+    console.log("_withdrawStep.2.balance0", IERC20(p.tokens[0]).balanceOf(address(this)));
+    console.log("_withdrawStep.2.balance1", IERC20(p.tokens[1]).balanceOf(address(this)));
 
     if (idxToSwap1 != 0) {
       if (actions[IDX_SWAP_2]) {
         (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
+
+        console.log("_withdrawStep.swap2.amountToSwap", amountToSwap);
+        console.log("_withdrawStep.3.balance0", IERC20(p.tokens[0]).balanceOf(address(this)));
+        console.log("_withdrawStep.3.balance1", IERC20(p.tokens[1]).balanceOf(address(this)));
 
         if (actions[IDX_REPAY_2] && idxToRepay1 != 0) {
           // see calculations inside estimateSwapAmountForRepaySwapRepay
@@ -456,6 +468,9 @@ library PairBasedStrategyLib {
         }
       }
     }
+
+    console.log("_withdrawStep.4.balance0", IERC20(p.tokens[0]).balanceOf(address(this)));
+    console.log("_withdrawStep.4.balance1", IERC20(p.tokens[1]).balanceOf(address(this)));
 
     // Withdraw is completed on last iteration (no debts, swapping leftovers)
     return idxToRepay1 == 0;
@@ -594,13 +609,27 @@ library PairBasedStrategyLib {
     uint amountToRepay,
     bool borrowInsteadRepay
   ) {
+    console.log("_getAmountToRepay2.usePoolProportions", p.usePoolProportions);
+    console.log("_getAmountToRepay2.propNotUnderlying18", p.propNotUnderlying18);
+    console.log("_getAmountToRepay2.prices", p.prices[0], p.prices[1]);
+    console.log("_getAmountToRepay2.balanceAdditions", p.balanceAdditions[0], p.balanceAdditions[1]);
+    console.log("_getAmountToRepay2.tokens", p.tokens[0], p.tokens[1]);
+
     GetAmountToRepay2Local memory v;
     v.c0 = IERC20(p.tokens[indexCollateral]).balanceOf(address(this)) * p.prices[indexCollateral] / p.decs[indexCollateral];
     v.b0 = IERC20(p.tokens[indexBorrow]).balanceOf(address(this)) * p.prices[indexBorrow] / p.decs[indexBorrow];
+    console.log("_getAmountToRepay2.balance collateral", IERC20(p.tokens[indexCollateral]).balanceOf(address(this)));
+    console.log("_getAmountToRepay2.balance borrow", IERC20(p.tokens[indexBorrow]).balanceOf(address(this)));
+    console.log("_getAmountToRepay2.c0", v.c0);
+    console.log("_getAmountToRepay2.b0", v.b0);
 
     v.x = indexCollateral == IDX_ASSET ? 1e18 - p.propNotUnderlying18 : p.propNotUnderlying18;
     v.y = indexCollateral == IDX_ASSET ? p.propNotUnderlying18 : 1e18 - p.propNotUnderlying18;
     v.alpha = p.prices[indexCollateral] * p.decs[indexBorrow] * 1e18 / p.prices[indexBorrow] / p.decs[indexCollateral];
+
+    console.log("_getAmountToRepay2.x", v.x);
+    console.log("_getAmountToRepay2.y", v.y);
+    console.log("_getAmountToRepay2.alpha", v.alpha);
 
     (uint needToRepay, uint collateralAmountOut) = p.converter.getDebtAmountStored(
       address(this),
@@ -608,6 +637,8 @@ library PairBasedStrategyLib {
       p.tokens[indexBorrow],
       true
     );
+    console.log("_getAmountToRepay2.needToRepay", needToRepay);
+    console.log("_getAmountToRepay2.collateralAmountOut", collateralAmountOut);
 
     if (needToRepay == 0) {
       // check if we need to make reverse borrow to fit to proportions: borrow collateral-asset under borrow-asset
@@ -621,10 +652,14 @@ library PairBasedStrategyLib {
       // we should have x/y = (c0 + betta * b) / (b0 - b)
       // so b = (x * b0 - y * c0) / (betta * y + x)
       v.b = (int(v.x * v.b0) - int(v.y * v.c0)) / (int(v.y * v.alpha * collateralAmountOut / needToRepay / 1e18) + int(v.x));
+      console.log("_getAmountToRepay2.b");console.logInt(v.b);
       if (v.b > 0) {
         amountToRepay = uint(v.b);
+        console.log("_getAmountToRepay2.amountToRepay", amountToRepay);
       }
     }
+    console.log("amountToRepay * p.decs[indexBorrow] / p.prices[indexBorrow]", amountToRepay * p.decs[indexBorrow] / p.prices[indexBorrow]);
+    console.log("borrowInsteadRepay", borrowInsteadRepay);
 
     return (amountToRepay * p.decs[indexBorrow] / p.prices[indexBorrow], borrowInsteadRepay);
   }

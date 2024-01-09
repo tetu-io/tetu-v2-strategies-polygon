@@ -252,7 +252,7 @@ describe("Check actions on base @skip-on-coverage", () => {
       token0: BaseAddresses.USDC_TOKEN,
       token1: BaseAddresses.USDbC_TOKEN,
       converter: BaseAddresses.TETU_CONVERTER,
-      percentToIncrease: 0, // 114,
+      percentToIncrease: 114,
       increaseOutput: false
     });
     await MockAggregatorUtils.injectSwapperToLiquidator(
