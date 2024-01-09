@@ -8,25 +8,12 @@ import { StaticJsonRpcProvider } from '@ethersproject/providers/src.ts/url-json-
 import { sendMessageToTelegram } from '../telegram/tg-sender';
 import hre, { ethers } from 'hardhat';
 import { formatUnits, parseUnits } from 'ethers/lib/utils';
+import { txParams2 } from '../../deploy_constants/deploy-helpers';
 
 const log: Logger<undefined> = new Logger(logSettings);
 
 
 export class RunHelper {
-
-  public static async waitBlocks(provider: providers.Provider, blocks: number) {
-    const start = await provider.getBlockNumber();
-    while (true) {
-      if (Misc.isRealNetwork()) {
-        console.log('wait 1sec');
-        await Misc.delay(1000);
-      }
-      const bn = await provider.getBlockNumber();
-      if (bn >= start + blocks) {
-        break;
-      }
-    }
-  }
 
   public static async waitAndSpeedUp(
     provider: StaticJsonRpcProvider,
@@ -165,7 +152,7 @@ export class RunHelper {
     const signer = (await ethers.getSigners())[0];
     const gas = (await signer.estimateGas(tx)).toNumber();
 
-    const params = await RunHelper.txParams();
+    const params = await txParams2();
     console.log('params', params);
 
     tx.gasLimit = BigNumber.from(gas).mul(15).div(10);
@@ -182,48 +169,4 @@ export class RunHelper {
 
     return RunHelper.runAndWait(() => signer.sendTransaction(tx), stopOnError, wait);
   }
-
-  public static async txParams() {
-    const provider = ethers.provider;
-    const feeData = await provider.getFeeData();
-
-
-    console.log('maxPriorityFeePerGas', formatUnits(feeData.maxPriorityFeePerGas?.toString() ?? '0', 9));
-    console.log('maxFeePerGas', formatUnits(feeData.maxFeePerGas?.toString() ?? '0', 9));
-    console.log('lastBaseFeePerGas', formatUnits(feeData.lastBaseFeePerGas?.toString() ?? '0', 9));
-    console.log('gas price:', formatUnits(feeData.gasPrice?.toString() ?? '0', 9));
-
-    if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
-      const maxPriorityFeePerGas = Math.min(
-        Math.max(
-          // feeData.maxPriorityFeePerGas?.toNumber() ?? 1, // this value very high on base network for some reason
-          feeData.lastBaseFeePerGas?.toNumber() ?? 1,
-        ),
-        maxFeesPerNetwork(),
-      );
-      const maxFeePerGas = (feeData.maxFeePerGas?.toNumber() ?? 1) * 2;
-      return {
-        maxPriorityFeePerGas: maxPriorityFeePerGas.toFixed(0),
-        maxFeePerGas: maxFeePerGas.toFixed(0),
-      };
-    } else {
-      return {
-        gasPrice: ((feeData.gasPrice?.toNumber() ?? 1) * 1.2).toFixed(0),
-      };
-    }
-  }
-}
-
-function maxFeesPerNetwork() {
-  const network = hre.network.name;
-  let fee = 999_999;
-
-  if (network === 'base') {
-    fee = 0.00001;
-  }
-  if (network === 'matic' || network === 'polygon') {
-    fee = 100;
-  }
-
-  return parseUnits(fee.toFixed(9), 9).toNumber();
 }

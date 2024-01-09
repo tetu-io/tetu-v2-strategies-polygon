@@ -3,8 +3,9 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { Libraries } from 'hardhat-deploy/dist/types';
 import { Logger } from 'tslog';
 import logSettings from '../../log_settings';
-import { formatUnits, parseUnits } from 'ethers/lib/utils';
+import { formatUnits } from 'ethers/lib/utils';
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
+import { txParamsBasic } from '../utils/tx-params';
 
 const log: Logger<undefined> = new Logger(logSettings);
 
@@ -292,14 +293,5 @@ async function verifyWithArgs(hre: any, address: string, args: any[]) {
 }
 
 export async function txParams(hre: HardhatRuntimeEnvironment, provider: providers.Provider, silent = false) {
-  const gasPrice = (await provider.getGasPrice()).toNumber();
-  const maxFee = '0x' + Math.floor(gasPrice * 1.5).toString(16);
-  if (hre.network.name === 'hardhat') {
-    return {
-      maxPriorityFeePerGas: parseUnits('1', 9).toHexString(),
-      maxFeePerGas: maxFee,
-    };
-  } else {
-    throw Error('Use hardhat deploy!');
-  }
+  return txParamsBasic(provider, hre);
 }
