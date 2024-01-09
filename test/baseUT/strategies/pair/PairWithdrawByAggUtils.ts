@@ -138,7 +138,7 @@ export class PairWithdrawByAggUtils {
 
       if (p.mockSwapper) {
         console.log("------------------ restore original swapper");
-        await MockAggregatorUtils.injectSwapperToLiquidator(p.tetuLiquidator, b);
+        await MockAggregatorUtils.injectSwapperToLiquidator(p.tetuLiquidator, b.liquidatorPools);
       }
 
 

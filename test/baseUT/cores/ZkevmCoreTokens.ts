@@ -1,6 +1,7 @@
 import {ICoreTokens} from "./ICoreTokens";
 import {ZkevmAddresses} from "../../../scripts/addresses/ZkevmAddresses";
 import {ITetuLiquidator} from "../../../typechain";
+import {ITetuLiquidatorPoolInfo} from "../utils/TetuLiquidatorUtils";
 
 export class ZkevmCoreTokensUtils {
   static getCore(): ICoreTokens {
@@ -14,7 +15,7 @@ export class ZkevmCoreTokensUtils {
     }
   }
 
-  static getLiquidatorPools(): ITetuLiquidator.PoolDataStruct[] {
+  static getLiquidatorPools(): ITetuLiquidatorPoolInfo[] {
     return [
       {
         pool: ZkevmAddresses.ALGEBRA_POOL_USDT_USDC,

@@ -385,6 +385,8 @@ library PairBasedStrategyLib {
   function _withdrawStep(IterationPlanLib.SwapRepayPlanParams memory p, SwapByAggParams memory aggParams) internal returns (
     bool completed
   ) {
+    console.log("_withdrawStep.propNotUnderlying18", p.propNotUnderlying18);
+    console.log("_withdrawStep.usePoolProportions", p.usePoolProportions);
     (uint idxToSwap1, uint amountToSwap, uint idxToRepay1) = IterationPlanLib.buildIterationPlan(
       [address(p.converter), address(p.liquidator)],
       p.tokens,

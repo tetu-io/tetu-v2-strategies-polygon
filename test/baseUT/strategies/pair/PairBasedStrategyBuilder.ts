@@ -45,6 +45,7 @@ import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_PANCAKE, PLATFORM_UNIV3} from
 import {MockHelper} from "../../helpers/MockHelper";
 import {BaseAddresses} from "../../../../scripts/addresses/BaseAddresses";
 import {BASE_NETWORK_ID, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from "../../utils/HardhatUtils";
+import {ITetuLiquidatorPoolInfo, TetuLiquidatorUtils} from "../../utils/TetuLiquidatorUtils";
 
 /**
  * Kyber PID for most current block
@@ -85,7 +86,7 @@ export interface IBuilderParams extends IStrategyCustomizationParams {
   signer2: SignerWithAddress;
   swapper: string;
   profitHolderTokens: string[];
-  liquidatorPools: ITetuLiquidator.PoolDataStruct[];
+  liquidatorPools: ITetuLiquidatorPoolInfo[];
   quoter: string;
 
 }
@@ -114,7 +115,7 @@ export interface IBuilderResults extends IStrategyBasicInfo {
   converter: ITetuConverter;
 
   facadeLib2: ConverterStrategyBaseLibFacade2;
-  liquidatorPools: ITetuLiquidator.PoolDataStruct[]
+  liquidatorPools: ITetuLiquidatorPoolInfo[]
 }
 
 export class PairBasedStrategyBuilder {
@@ -167,8 +168,8 @@ export class PairBasedStrategyBuilder {
     // prices should be the same in the pool and in the liquidator
     const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
     const liquidatorOperator = await Misc.impersonate('0xbbbbb8C4364eC2ce52c59D2Ed3E56F307E529a94')
-    await tools.liquidator.connect(liquidatorOperator).addLargestPools(p.liquidatorPools, true);
-    await tools.liquidator.connect(liquidatorOperator).addBlueChipsPools(p.liquidatorPools, true);
+    await tools.liquidator.connect(liquidatorOperator).addLargestPools(TetuLiquidatorUtils.getLargePools(p.liquidatorPools), true);
+    await tools.liquidator.connect(liquidatorOperator).addBlueChipsPools(TetuLiquidatorUtils.getBlueChips(p.liquidatorPools), true);
 
     // approve asset to vault for both signers
     await IERC20__factory.connect(p.asset, signer).approve(vault.address, Misc.MAX_UINT);

@@ -15,6 +15,7 @@ import {Misc} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
+import {ITetuLiquidatorPoolInfo, TetuLiquidatorUtils} from "../../../baseUT/utils/TetuLiquidatorUtils";
 
 const block = 44151797
 
@@ -47,7 +48,7 @@ describe.skip(`AlgebraConverterStrategyHardworkOnSpecifiedBlockTest`, function()
     await strategyProxy.upgrade(newImpl.address)
     console.log('Upgraded strategy version', await strategy.STRATEGY_VERSION())
 
-    const pools = [
+    const pools: ITetuLiquidatorPoolInfo[] = [
       {
         pool: MaticAddresses.ALGEBRA_dQUICK_QUICK,
         swapper: MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
@@ -63,7 +64,7 @@ describe.skip(`AlgebraConverterStrategyHardworkOnSpecifiedBlockTest`, function()
     ]
     const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer)
     const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
-    await tools.liquidator.connect(operator).addLargestPools(pools, true);
+    await tools.liquidator.connect(operator).addLargestPools(TetuLiquidatorUtils.getLargePools(pools), true);
   })
 
   after(async function() {

@@ -48,6 +48,7 @@ import {BalancerStrategyUtils} from "../../../baseUT/strategies/BalancerStrategy
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {eq} from "lodash";
+import {ITetuLiquidatorPoolInfo, TetuLiquidatorUtils} from "../../../baseUT/utils/TetuLiquidatorUtils";
 
 chai.use(chaiAsPromised);
 
@@ -199,7 +200,7 @@ describe.skip('BalancerBoostedIntTest @skip-on-coverage', function() {
       stateBeforeDeposit = await StateUtils.getState(signer, user, strategy, vault);
 
       const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer)
-      const pools = [
+      const pools: ITetuLiquidatorPoolInfo[] = [
         {
           pool: MaticAddresses.UNISWAPV3_USDC_DAI_100,
           swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
@@ -213,8 +214,8 @@ describe.skip('BalancerBoostedIntTest @skip-on-coverage', function() {
           tokenOut: MaticAddresses.USDC_TOKEN,
         },
       ]
-      await tools.liquidator.connect(operator).addBlueChipsPools(pools, true)
-      await tools.liquidator.connect(operator).addLargestPools(pools, true);
+      await tools.liquidator.connect(operator).addBlueChipsPools(TetuLiquidatorUtils.getBlueChips(pools), true)
+      await tools.liquidator.connect(operator).addLargestPools(TetuLiquidatorUtils.getLargePools(pools), true);
     });
 
     after(async function() {
