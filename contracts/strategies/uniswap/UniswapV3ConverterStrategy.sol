@@ -195,13 +195,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     uint entryToPool
   ) external returns (bool completed) {
     // restriction "operator only" is checked inside UniswapV3ConverterStrategyLogicLib.withdrawByAggStep
-    console.log("balance.1.USDbC", IERC20(0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA).balanceOf(address(this)));
-    console.log("balance.1.USDC", IERC20(0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913).balanceOf(address(this)));
-
     // fix price changes, exit from the pool
     (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
-    console.log("balance.2.USDbC", IERC20(0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA).balanceOf(address(this)));
-    console.log("balance.2.USDC", IERC20(0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913).balanceOf(address(this)));
 
     // check "operator only", make withdraw step, cover-loss, send profit to cover, prepare to enter to the pool
     uint[] memory tokenAmounts;
@@ -215,14 +210,10 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       state.pair,
       liquidationThresholds
     );
-    console.log("balance.3.USDbC", IERC20(0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA).balanceOf(address(this)));
-    console.log("balance.3.USDC", IERC20(0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913).balanceOf(address(this)));
 
     // enter to the pool
     _rebalanceAfter(tokenAmounts);
     state.pair.lastRebalanceNoSwap = 0;
-    console.log("balance.4.USDbC", IERC20(0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA).balanceOf(address(this)));
-    console.log("balance.4.USDC", IERC20(0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913).balanceOf(address(this)));
 
     if (completed && _isFuseTriggeredOn()) {
       // full withdraw was completed, we can exclude next calls of withdrawByAggStep
