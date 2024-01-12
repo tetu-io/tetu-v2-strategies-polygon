@@ -300,11 +300,12 @@ describe('UniswapV3ConverterStrategyTests', function() {
       earnedTotal = earnedTotal.add(fees[0].add(fees[1].mul(price).div(parseUnits('1', 6))))
 
       expect(await strategy3.isReadyToHardWork()).eq(true);
+      const performanceFee = (await strategy3.performanceFee()).toNumber();
 
       const hwReturns = await strategy3.connect(splitterSigner).callStatic.doHardWork()
 
       // 1252818 ~ 1252796
-      expect(hwReturns[0]).approximately(earnedTotal, 1000);
+      expect(hwReturns[0]).approximately(earnedTotal.mul(100_000 - performanceFee).div(100_000), 100);
       // expect(hwReturns[0].div(100)).eq(earnedTotal.div(100))
       // expect(hwReturns[1].div(1000)).eq(specificState.rebalanceLost.div(1000))
 
