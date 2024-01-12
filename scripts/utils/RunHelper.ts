@@ -1,4 +1,4 @@
-import {BigNumber, ContractTransaction, PopulatedTransaction, providers} from 'ethers';
+import { BigNumber, ContractTransaction, PopulatedTransaction, providers } from 'ethers';
 import { Logger } from 'tslog';
 import logSettings from '../../log_settings';
 import { Misc } from './Misc';
@@ -6,28 +6,20 @@ import { TransactionResponse } from '@ethersproject/abstract-provider/src.ts';
 import { SpeedUp } from './SpeedUp';
 import { StaticJsonRpcProvider } from '@ethersproject/providers/src.ts/url-json-rpc-provider';
 import { sendMessageToTelegram } from '../telegram/tg-sender';
+<<<<<<< HEAD
 import { ethers } from 'hardhat';
 import {formatUnits} from "ethers/lib/utils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
+=======
+import hre, { ethers } from 'hardhat';
+import { formatUnits, parseUnits } from 'ethers/lib/utils';
+import { txParams2 } from '../../deploy_constants/deploy-helpers';
+>>>>>>> dev
 
 const log: Logger<undefined> = new Logger(logSettings);
 
 
 export class RunHelper {
-
-  public static async waitBlocks(provider: providers.Provider, blocks: number) {
-    const start = await provider.getBlockNumber();
-    while (true) {
-      if (Misc.isRealNetwork()) {
-        console.log('wait 1sec');
-        await Misc.delay(1000);
-      }
-      const bn = await provider.getBlockNumber();
-      if (bn >= start + blocks) {
-        break;
-      }
-    }
-  }
 
   public static async waitAndSpeedUp(
     provider: StaticJsonRpcProvider,
@@ -72,7 +64,7 @@ export class RunHelper {
     wait: boolean = true,
   ) {
     try {
-      console.log('Start on-chain transaction');
+      console.log('Start wait and speed-up');
       const start = Date.now();
       const tr = await callback();
       if (!wait) {
@@ -100,7 +92,7 @@ export class RunHelper {
       if (stopOnError) {
         throw e;
       } else {
-        await sendMessageToTelegram(`Run and wait error: ${e}`);
+        await sendMessageToTelegram(`Run and wait error`, (e as string).toString());
         log.error('Run and wait error: ', e);
       }
     }
@@ -157,19 +149,29 @@ export class RunHelper {
   }
 
   public static async runAndWait2(txPopulated: Promise<PopulatedTransaction>, stopOnError = true, wait = true) {
-    console.log('prepare run and wait2')
+    console.log('prepare run and wait2');
     const tx = await txPopulated;
-    const signer = (await ethers.getSigners())[0];
-    const gas = (await signer.estimateGas(tx)).toNumber()
+    return RunHelper.runAndWait3(tx, stopOnError, wait);
+  }
 
-    const params = await RunHelper.txParams();
-    console.log('params', params)
+  public static async runAndWait3(tx: PopulatedTransaction, stopOnError = true, wait = true) {
+    const signer = (await ethers.getSigners())[0];
+    const gas = (await signer.estimateGas(tx)).toNumber();
+
+    const params = await txParams2();
+    console.log('params', params);
 
     tx.gasLimit = BigNumber.from(gas).mul(15).div(10);
 
-    if (params?.maxFeePerGas) tx.maxFeePerGas = BigNumber.from(params.maxFeePerGas);
-    if (params?.maxPriorityFeePerGas) tx.maxPriorityFeePerGas = BigNumber.from(params.maxPriorityFeePerGas);
-    if (params?.gasPrice) tx.gasPrice = BigNumber.from(params.gasPrice);
+    if (params?.maxFeePerGas) {
+      tx.maxFeePerGas = BigNumber.from(params.maxFeePerGas);
+    }
+    if (params?.maxPriorityFeePerGas) {
+      tx.maxPriorityFeePerGas = BigNumber.from(params.maxPriorityFeePerGas);
+    }
+    if (params?.gasPrice) {
+      tx.gasPrice = BigNumber.from(params.gasPrice);
+    }
 
     return RunHelper.runAndWait(() => signer.sendTransaction(tx), stopOnError, wait);
   }

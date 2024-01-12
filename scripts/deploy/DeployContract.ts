@@ -3,8 +3,9 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { Libraries } from 'hardhat-deploy/dist/types';
 import { Logger } from 'tslog';
 import logSettings from '../../log_settings';
-import { formatUnits, parseUnits } from 'ethers/lib/utils';
+import { formatUnits } from 'ethers/lib/utils';
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
+import { txParamsBasic } from '../utils/tx-params';
 
 const log: Logger<undefined> = new Logger(logSettings);
 
@@ -34,29 +35,71 @@ const libraries = new Map<string, string[]>([
   // Uniswap V3
   [
     'UniswapV3ConverterStrategy',
-    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'UniswapV3ConverterStrategyLogicLib', 'PairBasedStrategyLib', 'PairBasedStrategyLogicLib'],
+    [
+      'ConverterStrategyBaseLib',
+      'ConverterStrategyBaseLib2',
+      'StrategyLib2',
+      'UniswapV3ConverterStrategyLogicLib',
+      'PairBasedStrategyLib',
+      'PairBasedStrategyLogicLib',
+    ],
   ],
-  ['UniswapV3ConverterStrategyLogicLib', ['UniswapV3Lib', 'UniswapV3DebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib', 'PairBasedStrategyLib']],
+  [
+    'UniswapV3ConverterStrategyLogicLib',
+    [
+      'UniswapV3Lib',
+      'UniswapV3DebtLib',
+      'ConverterStrategyBaseLib2',
+      'PairBasedStrategyLogicLib',
+      'PairBasedStrategyLib',
+    ],
+  ],
   ['UniswapV3DebtLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib2', 'BorrowLib', 'PairBasedStrategyLogicLib']],
   ['UniswapV3LibFacade', ['UniswapV3Lib']],
   ['UniswapV3ConverterStrategyLogicLibFacade', ['UniswapV3ConverterStrategyLogicLib']],
   // Algebra
   [
     'AlgebraConverterStrategy',
-    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'AlgebraConverterStrategyLogicLib', 'PairBasedStrategyLib', 'PairBasedStrategyLogicLib'],
+    [
+      'ConverterStrategyBaseLib',
+      'ConverterStrategyBaseLib2',
+      'StrategyLib2',
+      'AlgebraConverterStrategyLogicLib',
+      'PairBasedStrategyLib',
+      'PairBasedStrategyLogicLib',
+    ],
   ],
-  ['AlgebraConverterStrategyLogicLib', ['AlgebraLib', 'AlgebraDebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib', 'PairBasedStrategyLib']],
+  [
+    'AlgebraConverterStrategyLogicLib',
+    ['AlgebraLib', 'AlgebraDebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib', 'PairBasedStrategyLib'],
+  ],
   ['AlgebraDebtLib', ['AlgebraLib', 'ConverterStrategyBaseLib2', 'BorrowLib', 'PairBasedStrategyLogicLib']],
   // Kyber
   [
     'KyberConverterStrategy',
-    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'KyberConverterStrategyLogicLib', 'PairBasedStrategyLib', 'PairBasedStrategyLogicLib'],
+    [
+      'ConverterStrategyBaseLib',
+      'ConverterStrategyBaseLib2',
+      'StrategyLib2',
+      'KyberConverterStrategyLogicLib',
+      'PairBasedStrategyLib',
+      'PairBasedStrategyLogicLib',
+    ],
   ],
   [
     'KyberConverterStrategyEmergency',
-    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'KyberConverterStrategyLogicLib', 'PairBasedStrategyLogicLib'],
+    [
+      'ConverterStrategyBaseLib',
+      'ConverterStrategyBaseLib2',
+      'StrategyLib2',
+      'KyberConverterStrategyLogicLib',
+      'PairBasedStrategyLogicLib',
+    ],
   ],
-  ['KyberConverterStrategyLogicLib', ['KyberLib', 'KyberDebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib', 'PairBasedStrategyLib']],
+  [
+    'KyberConverterStrategyLogicLib',
+    ['KyberLib', 'KyberDebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib', 'PairBasedStrategyLib'],
+  ],
   ['KyberDebtLib', ['KyberLib', 'ConverterStrategyBaseLib2', 'BorrowLib', 'PairBasedStrategyLogicLib']],
 
   // Tetu converter (for debug)
@@ -64,9 +107,19 @@ const libraries = new Map<string, string[]>([
   // Pancake
   [
     'PancakeConverterStrategy',
-    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'PancakeConverterStrategyLogicLib', 'PairBasedStrategyLib', 'PairBasedStrategyLogicLib'],
+    [
+      'ConverterStrategyBaseLib',
+      'ConverterStrategyBaseLib2',
+      'StrategyLib2',
+      'PancakeConverterStrategyLogicLib',
+      'PairBasedStrategyLib',
+      'PairBasedStrategyLogicLib',
+    ],
   ],
-  ['PancakeConverterStrategyLogicLib', ['PancakeLib', 'PancakeDebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib', 'PairBasedStrategyLib']],
+  [
+    'PancakeConverterStrategyLogicLib',
+    ['PancakeLib', 'PancakeDebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib', 'PairBasedStrategyLib'],
+  ],
   ['PancakeDebtLib', ['PancakeLib', 'ConverterStrategyBaseLib2', 'BorrowLib', 'PairBasedStrategyLogicLib']],
   ['PancakeLibFacade', ['PancakeLib']],
   ['PancakeDebtLibFacade', ['PancakeLib']],
@@ -215,12 +268,12 @@ async function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-const VERIFY= 'verify1';
+const VERIFY = 'verify1';
 
 // tslint:disable-next-line:no-any
 async function verify(hre: any, address: string) {
   try {
-    await hre.run(VERIFY + ":verify", {
+    await hre.run(VERIFY + ':verify', {
       address,
     });
   } catch (e) {
@@ -231,7 +284,7 @@ async function verify(hre: any, address: string) {
 // tslint:disable-next-line:no-any
 async function verifyWithArgs(hre: any, address: string, args: any[]) {
   try {
-    await hre.run(VERIFY + ":verify", {
+    await hre.run(VERIFY + ':verify', {
       address, constructorArguments: args,
     });
   } catch (e) {
@@ -240,33 +293,5 @@ async function verifyWithArgs(hre: any, address: string, args: any[]) {
 }
 
 export async function txParams(hre: HardhatRuntimeEnvironment, provider: providers.Provider, silent = false) {
-
-  const gasPrice = (await provider.getGasPrice()).toNumber();
-  if (!silent) {
-    console.log('Gas price:', formatUnits(gasPrice, 9));
-  }
-  const maxFee = '0x' + Math.floor(gasPrice * 1.5).toString(16);
-  if (hre.network.name === 'hardhat') {
-    return {
-      maxPriorityFeePerGas: parseUnits('1', 9).toHexString(),
-      maxFeePerGas: maxFee,
-    };
-  } else if (hre.network.name === 'foundry') {
-    return {
-      gasPrice: '0x' + Math.floor(gasPrice * 1.1).toString(16),
-    };
-  } else if (hre.network.config.chainId === 137) {
-    return {
-      maxPriorityFeePerGas: parseUnits('31', 9).toHexString(),
-      maxFeePerGas: maxFee,
-    };
-  } else if (hre.network.config.chainId === 1) {
-    return {
-      maxPriorityFeePerGas: parseUnits('1', 9).toHexString(),
-      maxFeePerGas: maxFee,
-    };
-  }
-  return {
-    gasPrice: '0x' + Math.floor(gasPrice * 1.1).toString(16),
-  };
+  return txParamsBasic(provider, hre);
 }

@@ -14,13 +14,13 @@ import {
   StrategySplitterV2__factory,
   TetuVaultV2__factory,
 } from '../typechain';
-import { config as dotEnvConfig } from 'dotenv';
 import { subscribeTgBot } from './telegram/tg-subscribe';
 import { Misc } from './utils/Misc';
 import { NSRUtils } from './utils/NSRUtils';
 import { formatUnits } from 'ethers/lib/utils';
-import { splitterHardWork } from './utils/splitter-hardwork';
 import { BaseAddresses } from './addresses/BaseAddresses';
+import { splitterHardWork } from './utils/splitter-hardwork';
+import { EnvSetup } from './utils/EnvSetup';
 
 // test rebalance debt
 // NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtW3F.ts
@@ -30,7 +30,6 @@ import { BaseAddresses } from './addresses/BaseAddresses';
 // NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtFuseW3F.ts
 // TETU_REBALANCE_DEBT_STRATEGIES=<address> TETU_PAIR_BASED_STRATEGY_READER=<address> TETU_REBALANCE_DEBT_CONFIG=<address> hardhat run scripts/rebalanceDebt.ts --network localhost
 
-const MAX_ERROR_LENGTH = 1000;
 const DELAY_BETWEEN_NSRS = 60;
 const DELAY_AFTER_NSR = 10;
 // delay for NSR call
@@ -39,39 +38,13 @@ const DELAY_AFTER_NSR = 10;
 // prev value 300(5min) leaded to probably higher loss, move back to this value if 30min works bad
 const DELAY_NEED_NSR_CONFIRM = 1800;
 
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    nsrMsgSuccess: { //
-      type: 'boolean',
-      default: false,
-    },
-    rebalanceDebtAgg: {
-      type: 'string',
-      default: '',
-    },
-    rebalanceDebt1InchProtocols: {
-      type: 'string',
-      default: '',
-    },
-    rebalanceDebtMsgSuccess: {
-      type: 'boolean',
-      default: false,
-    },
-    rebalanceDebtLoopDelay: {
-      type: 'number',
-      default: 60_000,
-    },
-  }).argv;
 
 async function main() {
   console.log('Strategies NSR and debt rebalancer');
 
-  if (!['localhost', 'matic', 'base'].includes(hre.network.name)) {
+  if (!['localhost', 'matic', 'base', 'zkevm'].includes(hre.network.name)) {
     console.log('Unsupported network', hre.network.name);
-    console.log('Only localhost, matic and base networks supported');
+    console.log('Only localhost, matic, base, zkevm networks supported');
     process.exit(-1);
   }
 
@@ -84,8 +57,8 @@ async function main() {
   console.log('Config: ', configAddress);
   console.log('Reader: ', readerAddress);
 
-  const agg = argv.rebalanceDebtAgg;
-  const oneInchProtocols = argv.rebalanceDebt1InchProtocols;
+  const agg = EnvSetup.getEnv().rebalanceDebtAgg;
+  const oneInchProtocols = EnvSetup.getEnv().rebalanceDebt1InchProtocols;
 
   const provider = ethers.provider;
   const signer = (await ethers.getSigners())[0];
@@ -189,14 +162,9 @@ async function main() {
                 const gas = await strategy.estimateGas.rebalanceNoSwaps(true, { ...tp, gasLimit: 15_000_000 });
                 console.log('estimated gas', formatUnits(gas, 9));
 
-                await RunHelper.runAndWait(
-                  provider,
-                  () => strategy.rebalanceNoSwaps(true, { ...tp, gasLimit: 15_000_000 }),
-                  true,
-                  true,
-                );
+                await RunHelper.runAndWait2(strategy.populateTransaction.rebalanceNoSwaps(true));
                 console.log('NSR success!', strategyName, strategyAddress);
-                if (argv.nsrMsgSuccess) {
+                if (EnvSetup.getEnv().nsrMsgSuccess) {
                   await sendMessageToTelegram(`NSR success! ${strategyName} ${strategyAddress}`);
                 }
 
@@ -205,8 +173,10 @@ async function main() {
                 await sleep(DELAY_AFTER_NSR * 1000);
               } catch (e) {
                 console.log('Error NSR', strategyName, strategyAddress, e);
-                await sendMessageToTelegram(`Error NSR ${strategyName} ${strategyAddress} ${(e as string).toString()
-                  .substring(0, MAX_ERROR_LENGTH)}`);
+                await sendMessageToTelegram(
+                  `Error NSR ${strategyName} ${strategyAddress}`,
+                  (e as string).toString(),
+                );
               }
             } else {
               if (needNSRTimestamp[strategyAddress] !== 0) {
@@ -233,6 +203,7 @@ async function main() {
               if (result.canExec) {
                 console.log('Rebalance call', strategyName, result);
                 if (typeof result.callData === 'string') {
+                  // noinspection ExceptionCaughtLocallyJS
                   throw Error('wrong callData for ' + strategyName);
                 }
                 const tp = await txParams2();
@@ -248,23 +219,22 @@ async function main() {
 
                   console.log('estimated gas', formatUnits(gas, 9));
 
-                  await RunHelper.runAndWaitAndSpeedUp(provider, () =>
-                      signer.sendTransaction({
-                        to: callData[0].to,
-                        data: callData[0].data,
-                        ...tp,
-                        gasLimit: 15_000_000,
-                      }),
-                    true, true,
+                  await RunHelper.runAndWait3(
+                    {
+                      to: callData[0].to,
+                      data: callData[0].data,
+                    },
                   );
                   console.log('Rebalance success!', strategyName, strategyAddress);
-                  if (argv.rebalanceDebtMsgSuccess) {
+                  if (EnvSetup.getEnv().rebalanceDebtMsgSuccess) {
                     await sendMessageToTelegram(`Rebalance success! ${strategyName} ${strategyAddress}`);
                   }
                 } catch (e) {
                   console.log('Error EXECUTE', strategyName, strategyAddress, e);
-                  await sendMessageToTelegram(`Error EXECUTE ${strategyName} ${strategyAddress} ${(e as string).toString()
-                    .substring(0, MAX_ERROR_LENGTH)}`);
+                  await sendMessageToTelegram(
+                    `Error EXECUTE ${strategyName} ${strategyAddress}}`,
+                    (e as string).toString(),
+                  );
                 }
               } else {
                 console.log('Result can not be executed:', strategyName, result.message);
@@ -275,18 +245,22 @@ async function main() {
             }
           } catch (e) {
             console.log('Error inside strategy processing', strategyAddress, e);
-            await sendMessageToTelegram(`Error inside strategy processing ${strategyAddress} ${(e as string).toString()
-              .substring(0, MAX_ERROR_LENGTH)}`);
+            await sendMessageToTelegram(
+              `Error inside strategy processing ${strategyAddress}`,
+              (e as string).toString(),
+            );
           }
         }
       }
     } catch (e) {
       console.log('error in debt rebalance loop', e);
-      await sendMessageToTelegram(`error in debt rebalance loop ${(e as string).toString()
-        .substring(0, MAX_ERROR_LENGTH)}`);
+      await sendMessageToTelegram(
+        `error in debt rebalance loop`,
+        (e as string).toString(),
+      );
     }
 
-    await sleep(argv.rebalanceDebtLoopDelay);
+    await sleep(EnvSetup.getEnv().rebalanceDebtLoopDelay);
   }
 }
 
@@ -297,10 +271,14 @@ const fetchFuncAxios = async(url: string, headers: {}) => {
       return r.data;
     } else {
       console.log((`wrong response for fetch ${url} ${r.data}`));
-      await sendMessageToTelegram(`wrong response for fetch ${url} ${r.data}`);
+      await sendMessageToTelegram(`wrong fetching response`, `${url} ${r.data}`);
     }
   } catch (e) {
-    await sendMessageToTelegram(`error fetch ${url}`);
+    console.log(`error fetch ${url}`, e);
+    await sendMessageToTelegram(
+      `error fetch URL`,
+      url + ' ' + (e as string).toString(),
+    );
     throw e;
   }
 };
