@@ -236,6 +236,7 @@ interface IOnHardWorkEarnedLost {
   /** Lost in _depositToPoolUniversal */
   lostDeposit: number;
   paidDebtToInsurance: number;
+  amountPerf: number;
 }
 
 export interface IEventsSet {
@@ -520,6 +521,7 @@ export class CaptureEvents {
             earnedDeposit: +formatUnits(log.earnedDeposit, decimals),
             lostDeposit: +formatUnits(log.lostDeposit, decimals),
             paidDebtToInsurance: +formatUnits(log.paidDebtToInsurance, decimals),
+            amountPerf: +formatUnits(log.amountPerf, decimals),
           }
         }
 
@@ -881,7 +883,8 @@ export class CaptureEvents {
         earnedHandleRewards: 0,
         lostHandleRewards: 0,
         investedAssetsNewPrices: 0,
-        paidDebtToInsurance: 0
+        paidDebtToInsurance: 0,
+        amountPerf: 0,
       },
       hardwork: eventsSet?.hardwork ?? {
         tvl: 0,

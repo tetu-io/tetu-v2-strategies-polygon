@@ -12,19 +12,21 @@ Discord: https://discord.gg/DSUKVEYuax
 
 Twitter: https://twitter.com/tetu_io
 
-## Setup new UniswapV3 based strategy
+## Setup new ConverterStrategyBase-based strategy
+chain = ['matic', 'base', 'zkevm']
 
-* [operator] ```hardhat deploy --network matic```
-* [tetu governance] announce strategy for splitter
-* [tetu governance] converterController(0x2df21e2a115fcB3d850Fbc67237571bBfB566e99).setWhitelistValues([strategyAddress], true)
-* [tetu governance] check liquidator routes and add if it is needed
-* [operator] strategy.setLiquidationThreshold((asset, threshold) (for each 1000)
-* [operator] strategy.seReinvestThreholdPercent((thresholdPerc18) (10)
-* [operator] strategy.setStrategyProfitHolder(strategyAddress)
-* [tetu governance] change if need strategy.setupPerformanceFee(30000, treasury,0)
-* [operator] rebalanceDebtConfig.setConfig(strategyAddr, lockedPercentForDelayedRebalance, lockedPercentForForcedRebalance, rebalanceDebtDelay)
-* [tetu governance] Register RebalanceResolver as operator
-* [operator] add task for NSR with RebalanceResolver address, register task executer in the resolver
-* [operator] run locally ```set-settings:matic```
-* [operator] run on server ```npm run rebalance:matic``` with env vars set
-* [operator] after 18h add strategy to splitter
+1. [operator] ```npm run deploy-[chain]```
+1. [tetu governance] announce strategy for splitter
+1. [converter governance] whitelist strategy: converterController([TetuConverterAddress]).setWhitelistValues([strategyAddress], true)
+1. [tetu governance] check liquidator routes and add if it is needed
+1. [operator] strategy.setLiquidationThreshold((asset, threshold) [for each 1000]
+1. [operator] strategy.setReinvestThresholdPercent((thresholdPercent18) [10]
+1. [operator] strategy.setStrategyProfitHolder(strategyAddress)
+1. [tetu governance] change if need strategy.setupPerformanceFee(30000, treasury,0)
+1. [operator] rebalanceDebtConfig.setConfig(strategyAddr, lockedPercentForDelayedRebalance, lockedPercentForForcedRebalance, rebalanceDebtDelay) [3, 50, 600]
+1. ~~[tetu governance] Register RebalanceResolver as operator~~
+1. ~~[operator] add task for NSR with RebalanceResolver address, register task executer in the resolver~~
+1. [operator] run locally ```set-settings:[chain]```
+1. [operator] run on server ```npm run rebalance:[chain]``` with env vars set
+1. [operator] after 18h add strategy to splitter
+1. [converter governance] register keeper-resolver as operator in keeper: [Keeper].changeOperatorStatus([], 1) 

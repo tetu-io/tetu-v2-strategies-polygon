@@ -35,6 +35,7 @@ import {PackedData} from "../../../baseUT/utils/PackedData";
 import {KYBER_PID} from "../../../baseUT/strategies/pair/PairBasedStrategyBuilder";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
+import {ITetuLiquidatorPoolInfo, TetuLiquidatorUtils} from "../../../baseUT/utils/TetuLiquidatorUtils";
 
 /// Kyber is not used after security incident nov-2023
 describe.skip('KyberConverterStrategyDepegWithoutFuseTest', function() {
@@ -114,7 +115,7 @@ describe.skip('KyberConverterStrategyDepegWithoutFuseTest', function() {
     const platformVoter = await DeployerUtilsLocal.impersonate(await controller.platformVoter());
     await strategy.connect(platformVoter).setCompoundRatio(50000);
 
-    const pools = [
+    const pools: ITetuLiquidatorPoolInfo[] = [
       {
         pool: MaticAddresses.KYBER_KNC_USDC,
         swapper: MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
@@ -122,7 +123,7 @@ describe.skip('KyberConverterStrategyDepegWithoutFuseTest', function() {
         tokenOut: MaticAddresses.USDC_TOKEN,
       },
     ]
-    await tools.liquidator.connect(operator).addLargestPools(pools, true);
+    await tools.liquidator.connect(operator).addLargestPools(TetuLiquidatorUtils.getLargePools(pools), true);
 
     // prevent 'TC-4 zero price' because real oracles have a limited price lifetime
     // await PriceOracleImitatorUtils.uniswapV3(signer, MaticAddresses.UNISWAPV3_USDC_USDT_100, MaticAddresses.USDC_TOKEN)

@@ -36,6 +36,7 @@ import {BaseAddresses} from "../../../../scripts/addresses/BaseAddresses";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
+import {ITetuLiquidatorPoolInfo, TetuLiquidatorUtils} from "../../../baseUT/utils/TetuLiquidatorUtils";
 
 // const {expect} = chai;
 chai.use(chaiAsPromised);
@@ -70,7 +71,7 @@ describe('UniswapV3ConverterStrategyUniversalBaseTest', async () => {
     await InjectUtils.injectTetuConverterBeforeAnyTest(signer, core, tetuConverterAddress);
     await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
 
-    const pools = [
+    const pools: ITetuLiquidatorPoolInfo[] = [
       {
         pool: BaseAddresses.AERODROME_WETH_WELL_VOLATILE_AMM,
         swapper: BaseAddresses.TETU_LIQUIDATOR_DYSTOPIA_SWAPPER,
@@ -80,7 +81,7 @@ describe('UniswapV3ConverterStrategyUniversalBaseTest', async () => {
     ]
     const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
     const operator = await Misc.impersonate('0xbbbbb8C4364eC2ce52c59D2Ed3E56F307E529a94')
-    await tools.liquidator.connect(operator).addLargestPools(pools, true);
+    await tools.liquidator.connect(operator).addLargestPools(TetuLiquidatorUtils.getLargePools(pools), true);
 
     await StrategyTestUtils.deployAndSetCustomSplitter(signer, core);
     uniswapV3Lib = await DeployerUtils.deployContract(signer, 'UniswapV3Lib') as UniswapV3Lib;

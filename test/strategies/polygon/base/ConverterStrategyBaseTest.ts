@@ -2230,13 +2230,15 @@ describe('ConverterStrategyBaseTest', () => {
       const ret = await ms.strategy.callStatic.depositToPoolUniAccess(
         parseUnits(p.amount, 6),
         parseUnits(p.earnedByPrices, 6),
-        parseUnits(p.investedAssets, 6)
+        parseUnits(p.investedAssets, 6),
+        false
       );
 
       await ms.strategy.depositToPoolUniAccess(
         parseUnits(p.amount, 6),
         parseUnits(p.earnedByPrices, 6),
-        parseUnits(p.investedAssets, 6)
+        parseUnits(p.investedAssets, 6),
+        false
       );
 
       return {

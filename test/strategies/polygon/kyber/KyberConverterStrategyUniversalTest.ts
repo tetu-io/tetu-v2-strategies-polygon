@@ -28,6 +28,7 @@ import {
   KYBER_USDC_DAI_PID_DEFAULT_BLOCK
 } from '../../../baseUT/strategies/pair/PairBasedStrategyBuilder';
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
+import {ITetuLiquidatorPoolInfo, TetuLiquidatorUtils} from "../../../baseUT/utils/TetuLiquidatorUtils";
 
 // const {expect} = chai;
 chai.use(chaiAsPromised);
@@ -58,7 +59,7 @@ describe.skip('KyberConverterStrategyUniversalTest', async () => {
     // Disable DForce (as it reverts on repay after block advance)
     // await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
 
-    const pools = [
+    const pools: ITetuLiquidatorPoolInfo[] = [
       // for production
       {
         pool: MaticAddresses.KYBER_KNC_USDC,
@@ -77,8 +78,8 @@ describe.skip('KyberConverterStrategyUniversalTest', async () => {
     ]
     const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
     const operator = await Misc.impersonate('0xbbbbb8C4364eC2ce52c59D2Ed3E56F307E529a94')
-    await tools.liquidator.connect(operator).addLargestPools(pools, true);
-    await tools.liquidator.connect(operator).addBlueChipsPools(pools, true);
+    await tools.liquidator.connect(operator).addLargestPools(TetuLiquidatorUtils.getLargePools(pools), true);
+    await tools.liquidator.connect(operator).addBlueChipsPools(TetuLiquidatorUtils.getBlueChips(pools), true);
   });
 
   after(async function() {

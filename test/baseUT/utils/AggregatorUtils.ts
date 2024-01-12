@@ -134,7 +134,7 @@ export class AggregatorUtils {
     const r = await fetch(url, {});
     if (r && r.status === 200) {
       const json = await r.json();
-      console.log("JSON", json);
+      // console.log("JSON", json);
       const quote: IOpenOceanResponse = json as unknown as IOpenOceanResponse;
       if (quote && quote.data && quote.data.to && quote.data.data && quote.data.outAmount) {
         return quote.data.data;

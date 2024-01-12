@@ -194,8 +194,8 @@ contract KyberConverterStrategyEmergency is KyberDepositor, ConverterStrategyBas
     return new uint[](0);
   }
 
-  function _handleRewards() override internal virtual pure returns (uint, uint, uint, uint) {
-    return (0, 0, 0, 0);
+  function _handleRewards() override internal virtual pure returns (uint, uint, uint, uint, uint) {
+    return (0, 0, 0, 0, 0);
   }
 
   function _depositToPool(uint, bool) override internal virtual pure returns (

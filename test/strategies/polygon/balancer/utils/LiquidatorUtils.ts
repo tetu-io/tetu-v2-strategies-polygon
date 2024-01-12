@@ -3,6 +3,7 @@ import { BigNumber } from 'ethers';
 import { IERC20__factory, ITetuLiquidator__factory, ControllerV2__factory, ITetuLiquidator } from '../../../../../typechain';
 import { MaticAddresses } from '../../../../../scripts/addresses/MaticAddresses';
 import { Misc } from '../../../../../scripts/utils/Misc';
+import {ITetuLiquidatorPoolInfo, TetuLiquidatorUtils} from "../../../../baseUT/utils/TetuLiquidatorUtils";
 
 export interface ILiquidatorSwapResults {
   initialPrice: BigNumber;
@@ -102,7 +103,7 @@ export class LiquidatorUtils {
     const controller = ControllerV2__factory.connect(controllerAddress, signer)
     const operators = await controller.operatorsList();
     const operator = await Misc.impersonate(operators[0]);
-    const pools = [
+    const pools: ITetuLiquidatorPoolInfo[] = [
       {
         pool: MaticAddresses.UNISWAPV3_USDC_DAI_100,
         swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
@@ -116,6 +117,6 @@ export class LiquidatorUtils {
         tokenOut: MaticAddresses.USDC_TOKEN,
       },
     ]
-    await liquidator?.connect(operator).addBlueChipsPools(pools, true);
+    await liquidator?.connect(operator).addBlueChipsPools(TetuLiquidatorUtils.getBlueChips(pools), true);
   }
 }

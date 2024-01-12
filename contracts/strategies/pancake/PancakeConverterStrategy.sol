@@ -20,7 +20,7 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
 
   string public constant override NAME = "Pancake Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.PANCAKE;
-  string public constant override STRATEGY_VERSION = "1.0.0";
+  string public constant override STRATEGY_VERSION = "1.0.1";
 
   //endregion ------------------------------------------------- Constants
 
@@ -271,16 +271,18 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
   /// @return lost The amount of lost rewards
   /// @return assetBalanceAfterClaim The asset balance after claiming rewards.
   /// @return paidDebtToInsurance Earned amount spent on debt-to-insurance payment
+  /// @return amountPerf Total performance fee in terms of underlying
   function _handleRewards() override internal virtual returns (
     uint earned,
     uint lost,
     uint assetBalanceAfterClaim,
-    uint paidDebtToInsurance
+    uint paidDebtToInsurance,
+    uint amountPerf
   ) {
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
     address asset = baseState.asset;
     earned = PancakeConverterStrategyLogicLib.calcEarned(asset, controller(), rewardTokens, amounts);
-    paidDebtToInsurance = _rewardsLiquidation(rewardTokens, amounts);
+    (paidDebtToInsurance, amountPerf) = _rewardsLiquidation(rewardTokens, amounts);
     lost = 0; // hide warning
     assetBalanceAfterClaim = AppLib.balance(asset);
   }

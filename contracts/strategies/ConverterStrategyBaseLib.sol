@@ -139,8 +139,6 @@ library ConverterStrategyBaseLib {
     address asset;
     uint compoundRatio;
     uint performanceFee;
-    /// @notice // total amount for the performance receiver and insurance
-    uint amountPerf;
     uint toPerf;
     uint toInsurance;
     uint[] amountsToForward;
@@ -696,6 +694,7 @@ library ConverterStrategyBaseLib {
   /// @param rewardTokens_ Full list of reward tokens received from tetuConverter and depositor
   /// @param rewardAmounts_ Amounts of {rewardTokens_}; we assume, there are no zero amounts here
   /// @return paidDebtToInsurance Earned amount spent on debt-to-insurance payment
+  /// @return amountPerf Performance fee in terms of underlying
   function recycle(
     IStrategyV3.BaseState storage baseState,
     IConverterStrategyBase.ConverterStrategyBaseState storage csbs,
@@ -704,7 +703,7 @@ library ConverterStrategyBaseLib {
     mapping(address => uint) storage liquidationThresholds,
     address[] memory rewardTokens_,
     uint[] memory rewardAmounts_
-  ) external returns (uint paidDebtToInsurance) {
+  ) external returns (uint paidDebtToInsurance, uint amountPerf) {
     RecycleLocal memory v;
     v.asset = baseState.asset;
     v.compoundRatio = baseState.compoundRatio;
@@ -713,7 +712,7 @@ library ConverterStrategyBaseLib {
     v.debtToInsuranceCurrent = csbs.debtToInsurance;
     v.splitter = baseState.splitter;
 
-    (v.amountsToForward, v.amountPerf, v.debtToInsuranceUpdated) = _recycle(RecycleParams({
+    (v.amountsToForward, amountPerf, v.debtToInsuranceUpdated) = _recycle(RecycleParams({
       converter: csbs.converter,
       liquidator: AppLib._getLiquidator(controller),
       asset: v.asset,
@@ -739,7 +738,7 @@ library ConverterStrategyBaseLib {
     // send performance-part of the underlying to the performance receiver and insurance
     (v.toPerf, v.toInsurance) = _sendPerformanceFee(
       v.asset,
-      v.amountPerf,
+      amountPerf,
       v.splitter,
       baseState.performanceReceiver,
       baseState.performanceFeeRatio
@@ -749,12 +748,12 @@ library ConverterStrategyBaseLib {
     (rewardTokens_, v.amountsToForward) = _sendTokensToForwarder(controller, v.splitter, rewardTokens_, v.amountsToForward, v.thresholds);
 
     emit Recycle(rewardTokens_, v.amountsToForward, v.toPerf, v.toInsurance);
-    return paidDebtToInsurance;
+    return (paidDebtToInsurance, amountPerf);
   }
 
   /// @notice Send {amount_} of {asset_} to {receiver_} and insurance
   /// @param asset_ Underlying asset
-  /// @param amount_ Amount of underlying asset to be sent to
+  /// @param amount_ Amount of underlying asset to be sent to performance+insurance
   /// @param receiver_ Performance receiver
   /// @param ratio [0..100_000], 100_000 - send full amount to perf, 0 - send full amount to the insurance.
   function _sendPerformanceFee(address asset_, uint amount_, address splitter, address receiver_, uint ratio) internal returns (
@@ -884,6 +883,7 @@ library ConverterStrategyBaseLib {
       }
       amountsToForward[i] = v.amountFC - v.amountC;
     }
+
     return (amountsToForward, amountToPerformanceAndInsurance, p.debtToInsurance);
   }
 

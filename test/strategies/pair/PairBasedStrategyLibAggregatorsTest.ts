@@ -31,6 +31,7 @@ import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
 import {BaseAddresses} from "../../../scripts/addresses/BaseAddresses";
 import {ZkevmAddresses} from "../../../scripts/addresses/ZkevmAddresses";
 import {ZkevmCoreTokensUtils} from "../../baseUT/cores/ZkevmCoreTokens";
+import {ITetuLiquidatorPoolInfo, TetuLiquidatorUtils} from "../../baseUT/utils/TetuLiquidatorUtils";
 
 describe('PairBasedStrategyLibAggregatorsTest', () => {
   const CHAINS_IN_ORDER_EXECUTION: number[] = [ZKEVM_NETWORK_ID, BASE_NETWORK_ID, POLYGON_NETWORK_ID];
@@ -43,7 +44,7 @@ describe('PairBasedStrategyLibAggregatorsTest', () => {
     aggregatorType: AggregatorType;
     tokenIn: string;
     tokenOut: string;
-    liquidatorPools?: ITetuLiquidator.PoolDataStruct[];
+    liquidatorPools?: ITetuLiquidatorPoolInfo[];
   }
 
   const CHAINS: ITestSet[] = [
@@ -106,8 +107,8 @@ describe('PairBasedStrategyLibAggregatorsTest', () => {
             if (testSet.liquidatorPools) {
               const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
               const liquidatorOperator = await Misc.impersonate('0xbbbbb8C4364eC2ce52c59D2Ed3E56F307E529a94')
-              await tools.liquidator.connect(liquidatorOperator).addLargestPools(testSet.liquidatorPools, true);
-              await tools.liquidator.connect(liquidatorOperator).addBlueChipsPools(testSet.liquidatorPools, true);
+              await tools.liquidator.connect(liquidatorOperator).addLargestPools(TetuLiquidatorUtils.getLargePools(testSet.liquidatorPools), true);
+              await tools.liquidator.connect(liquidatorOperator).addBlueChipsPools(TetuLiquidatorUtils.getBlueChips(testSet.liquidatorPools), true);
             }
           });
           after(async function () {

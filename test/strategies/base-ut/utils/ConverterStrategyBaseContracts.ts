@@ -22,6 +22,7 @@ import {Provider} from "@ethersproject/providers";
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {parseUnits} from "ethers/lib/utils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
+import {ITetuLiquidatorPoolInfo, TetuLiquidatorUtils} from "../../../baseUT/utils/TetuLiquidatorUtils";
 
 const COMPOUND_RATIO = 50_000;
 const REINVEST_THRESHOLD_PERCENT = 1_000;
@@ -190,7 +191,7 @@ export class ConverterStrategyBaseContracts {
 
 
     const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer)
-    const pools = [
+    const pools: ITetuLiquidatorPoolInfo[] = [
       {
         pool: MaticAddresses.UNISWAPV3_USDC_DAI_100,
         swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
@@ -204,8 +205,8 @@ export class ConverterStrategyBaseContracts {
         tokenOut: MaticAddresses.USDC_TOKEN,
       },
     ]
-    await tools.liquidator.connect(operator).addBlueChipsPools(pools, true)
-    await tools.liquidator.connect(operator).addLargestPools(pools, true);
+    await tools.liquidator.connect(operator).addBlueChipsPools(TetuLiquidatorUtils.getBlueChips(pools), true)
+    await tools.liquidator.connect(operator).addLargestPools(TetuLiquidatorUtils.getLargePools(pools), true);
 
     return dest;
   }

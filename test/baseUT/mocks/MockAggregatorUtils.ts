@@ -12,6 +12,7 @@ import {
 } from "../../../typechain";
 import {Misc} from "../../../scripts/utils/Misc";
 import {IBuilderResults} from "../strategies/pair/PairBasedStrategyBuilder";
+import {ITetuLiquidatorPoolInfo, TetuLiquidatorUtils} from "../utils/TetuLiquidatorUtils";
 
 export interface IMockAggregatorParams {
   converter: string;
@@ -98,25 +99,27 @@ export class MockAggregatorUtils {
     return dest;
   }
 
-  static async injectSwapperToLiquidator(liquidatorAddress: string, b: IBuilderResults, swapper?: string) {
+  static async injectSwapperToLiquidator(liquidatorAddress: string, pools: ITetuLiquidatorPoolInfo[], swapper?: string) {
     const liquidatorOperator = await Misc.impersonate('0xbbbbb8C4364eC2ce52c59D2Ed3E56F307E529a94')
 
     // replace swapper in the pools by new one if necessary
     const liquidatorPools = swapper
-      ? b.liquidatorPools.map(
+      ? pools.map(
         x => {
-          const dest: ITetuLiquidator.PoolDataStruct = {
+          const dest: ITetuLiquidatorPoolInfo = {
             pool: x.pool,
             swapper,
             tokenIn: x.tokenIn,
-            tokenOut: x.tokenOut
+            tokenOut: x.tokenOut,
+            isBlueChip: x.isBlueChip,
+            isLargePool: x.isLargePool
           }
           return dest;
         }
       )
-      : b.liquidatorPools;
+      : pools;
     const liquidator = ITetuLiquidator__factory.connect(liquidatorAddress, liquidatorOperator);
-    await liquidator.connect(liquidatorOperator).addLargestPools(liquidatorPools, true);
-    await liquidator.connect(liquidatorOperator).addBlueChipsPools(liquidatorPools, true);
+    await liquidator.connect(liquidatorOperator).addLargestPools(TetuLiquidatorUtils.getLargePools(liquidatorPools), true);
+    await liquidator.connect(liquidatorOperator).addBlueChipsPools(TetuLiquidatorUtils.getBlueChips(liquidatorPools), true);
   }
 }

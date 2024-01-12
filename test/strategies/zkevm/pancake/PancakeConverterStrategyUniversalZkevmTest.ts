@@ -39,6 +39,7 @@ import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 import {ZkevmAddresses} from "../../../../scripts/addresses/ZkevmAddresses";
 import {KeomUtils} from "../../../baseUT/utils/protocols/KeomUtils";
 import {ZkevmCoreTokensUtils} from "../../../baseUT/cores/ZkevmCoreTokens";
+import {TetuLiquidatorUtils} from "../../../baseUT/utils/TetuLiquidatorUtils";
 
 // const {expect} = chai;
 chai.use(chaiAsPromised);
@@ -77,8 +78,8 @@ describe('PancakeConverterStrategyUniversalZkevmTest', async () => {
     const pools = ZkevmCoreTokensUtils.getLiquidatorPools();
     const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
     const operator = await Misc.impersonate('0xbbbbb8C4364eC2ce52c59D2Ed3E56F307E529a94')
-    await tools.liquidator.connect(operator).addLargestPools(pools, true);
-    await tools.liquidator.connect(operator).addBlueChipsPools(pools, true);
+    await tools.liquidator.connect(operator).addLargestPools(TetuLiquidatorUtils.getLargePools(pools), true);
+    await tools.liquidator.connect(operator).addBlueChipsPools(TetuLiquidatorUtils.getBlueChips(pools), true);
 
     await StrategyTestUtils.deployAndSetCustomSplitter(signer, core);
     pancakeLib = await DeployerUtils.deployContract(signer, 'PancakeLib') as PancakeLib;

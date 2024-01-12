@@ -271,8 +271,8 @@ export class StateUtilsNum {
       await IConverterController__factory.connect(await converter.controller(), signer).priceOracle(),
       signer
     );
-    console.log("StateUtilsNumb.converter", converter.address);
-    console.log("StateUtilsNumb.priceOracle", priceOracle.address);
+    // console.log("StateUtilsNum.converter", converter.address);
+    // console.log("StateUtilsNum.priceOracle", priceOracle.address);
     const borrowManager = await IBorrowManager__factory.connect(
       await IConverterController__factory.connect(await converter.controller(), signer).borrowManager(),
       signer
@@ -745,6 +745,7 @@ export class StateUtilsNum {
       "hw.earnedHandleRewards",
       "hw.lostHandleRewards",
       "hw.paidDebtToInsurance",
+      "hw.amountPerf",
 
       "hardwork.sender",
       "hardwork.strategy",
@@ -907,6 +908,7 @@ export class StateUtilsNum {
       item.events?.onHardWorkEarnedLost?.earnedHandleRewards,
       item.events?.onHardWorkEarnedLost?.lostHandleRewards,
       item.events?.onHardWorkEarnedLost?.paidDebtToInsurance,
+      item.events?.onHardWorkEarnedLost?.amountPerf,
 
       item.events?.hardwork?.sender,
       item.events?.hardwork?.strategy,

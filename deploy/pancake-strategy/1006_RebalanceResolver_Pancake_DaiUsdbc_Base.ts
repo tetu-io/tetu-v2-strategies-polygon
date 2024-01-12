@@ -17,4 +17,4 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
 export default func;
 func.tags = ['RebalanceResolver_Pancake_DaiUsdbc'];
 func.dependencies = ['Strategy_PancakeConverterStrategy_DaiUsdbc'];
-func.skip = async hre => (await hre.getChainId()) !== '8453';
+func.skip = async hre => true;
