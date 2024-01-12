@@ -6,15 +6,10 @@ import { TransactionResponse } from '@ethersproject/abstract-provider/src.ts';
 import { SpeedUp } from './SpeedUp';
 import { StaticJsonRpcProvider } from '@ethersproject/providers/src.ts/url-json-rpc-provider';
 import { sendMessageToTelegram } from '../telegram/tg-sender';
-<<<<<<< HEAD
-import { ethers } from 'hardhat';
 import {formatUnits} from "ethers/lib/utils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-=======
 import hre, { ethers } from 'hardhat';
-import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { txParams2 } from '../../deploy_constants/deploy-helpers';
->>>>>>> dev
 
 const log: Logger<undefined> = new Logger(logSettings);
 
