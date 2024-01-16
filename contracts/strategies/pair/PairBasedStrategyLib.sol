@@ -667,7 +667,7 @@ library PairBasedStrategyLib {
       uint balanceTokenOutBefore = AppLib.balance(p.tokens[indexOut]);
 
       if (aggParams.useLiquidator) {
-
+        amountIn = Math.min(amountIn, aggParams.amountToSwap);
         (spentAmountIn,) = ConverterStrategyBaseLib._liquidate(
           p.converter,
           ITetuLiquidator(aggregator),

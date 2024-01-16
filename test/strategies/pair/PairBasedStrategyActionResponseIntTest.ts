@@ -794,16 +794,16 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                     console.log('deposit...');
 
                     await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
-                    await TokenUtils.getToken(b.asset, signer.address, parseUnits('200000', 6));
-                    await b.vault.connect(signer).deposit(parseUnits('150000', 6), signer.address, {gasLimit: GAS_LIMIT});
+                    await TokenUtils.getToken(b.asset, signer.address, parseUnits('400000', 6));
+                    await b.vault.connect(signer).deposit(parseUnits('300000', 6), signer.address, {gasLimit: GAS_LIMIT});
 
                     return b;
                   }
 
-                  it("should withdrawByAgg sucessfully", async () => {
+                  it("should withdrawByAgg successfully", async () => {
                     const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
                     const states: IStateNum[] = [];
-                    const pathOut = `./tmp/${strategyInfo.chainId}-largeDeposit-withdrawByAgg.csv`;
+                    const pathOut = `./tmp/${strategyInfo.name}-${strategyInfo.chainId}-largeDeposit-withdrawByAgg.csv`;
 
                     const saver = async (title: string, eventsSet?: IEventsSet): Promise<IStateNum> => {
                       states.push(await StateUtilsNum.getState(signer, signer2, converterStrategyBase, b.vault, title, {eventsSet}));
@@ -814,17 +814,27 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                     const planEntryData = buildEntryData1();
                     const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
-                    saver("b");
-                    await b.strategy.withdrawByAggStep(
+                    await saver("b");
+                    const eventsSet = await CaptureEvents.makeWithdrawByAggStep(b.strategy,
                       quote.tokenToSwap,
                       Misc.ZERO_ADDRESS,
-                      quote.amountToSwap,
+                      quote.amountToSwap.div(1),
                       "0x",
                       planEntryData,
-                      ENTRY_TO_POOL_IS_ALLOWED,
-                      {gasLimit: GAS_LIMIT}
+                      ENTRY_TO_POOL_DISABLED,
                     );
-                    saver("a");
+                    await saver("a", eventsSet);
+
+                    // const quote2 = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
+                    // const eventsSet2 = await CaptureEvents.makeWithdrawByAggStep(b.strategy,
+                    //   quote2.tokenToSwap,
+                    //   Misc.ZERO_ADDRESS,
+                    //   quote2.amountToSwap,
+                    //   "0x",
+                    //   planEntryData,
+                    //   ENTRY_TO_POOL_IS_ALLOWED,
+                    // );
+                    // await saver("a2", eventsSet2);
                   });
                 });
               }
