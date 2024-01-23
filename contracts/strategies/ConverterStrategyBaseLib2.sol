@@ -17,6 +17,7 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../interfaces/IConverterStrategyBase.sol";
+import "hardhat/console.sol";
 
 /// @notice Continuation of ConverterStrategyBaseLib (workaround for size limits)
 library ConverterStrategyBaseLib2 {
@@ -290,8 +291,11 @@ library ConverterStrategyBaseLib2 {
     uint sentAmount,
     uint unsentAmount
   ) {
+    console.log("_sendToInsurance.amount", amount);
+    console.log("_sendToInsurance.balance", balance);
     uint amountToSend = Math.min(amount, balance);
     if (amountToSend != 0) {
+      console.log("_sendToInsurance.amountToSend", amountToSend);
       // max amount that can be send to insurance is limited by PRICE_CHANGE_PROFIT_TOLERANCE
 
       // Amount limitation should be implemented in the same way as in StrategySplitterV2._coverLoss
@@ -300,14 +304,19 @@ library ConverterStrategyBaseLib2 {
       require(totalAssets_ != 0, AppErrors.ZERO_BALANCE);
       amountToSend = Math.min(amountToSend, PRICE_CHANGE_PROFIT_TOLERANCE * totalAssets_ / 100_000);
       //require(amountToSend <= PRICE_CHANGE_PROFIT_TOLERANCE * strategyBalance / 100_000, AppErrors.EARNED_AMOUNT_TOO_HIGH);
+      console.log("_sendToInsurance.amountToSend.2", amountToSend);
+      console.log("_sendToInsurance.IERC20(asset).balance(address(this)).before", IERC20(asset).balanceOf(address(this)));
 
       IERC20(asset).safeTransfer(address(ITetuVaultV2(ISplitter(splitter).vault()).insurance()), amountToSend);
+      console.log("_sendToInsurance.IERC20(asset).balance(address(this)).after", IERC20(asset).balanceOf(address(this)));
     }
 
     sentAmount = amountToSend;
     unsentAmount = amount > amountToSend
       ? amount - amountToSend
       : 0;
+    console.log("_sendToInsurance.sentAmount", sentAmount);
+    console.log("_sendToInsurance.unsentAmount", unsentAmount);
 
     emit SendToInsurance(sentAmount, unsentAmount);
   }
@@ -506,6 +515,10 @@ library ConverterStrategyBaseLib2 {
     uint earnedByPrices_,
     uint updatedInvestedAssets_
   ) external returns (uint amountSentToInsurance, uint strategyLoss) {
+    console.log("calculateIncomeAfterWithdraw.investedAssets_", investedAssets_);
+    console.log("calculateIncomeAfterWithdraw.balanceBefore", balanceBefore);
+    console.log("calculateIncomeAfterWithdraw.earnedByPrices_", earnedByPrices_);
+    console.log("calculateIncomeAfterWithdraw.updatedInvestedAssets_", updatedInvestedAssets_);
     uint balanceAfterWithdraw = AppLib.balance(asset);
 
     // we need to compensate difference if during withdraw we lost some assets
@@ -520,6 +533,11 @@ library ConverterStrategyBaseLib2 {
       AppLib.sub0(investedAssets_ + balanceBefore, earnedByPrices_),
       updatedInvestedAssets_ + balanceAfterWithdraw
     );
+    console.log("calculateIncomeAfterWithdraw.AppLib.sub0(investedAssets_ + balanceBefore, earnedByPrices_)", AppLib.sub0(investedAssets_ + balanceBefore, earnedByPrices_));
+    console.log("calculateIncomeAfterWithdraw.balanceAfterWithdraw", balanceAfterWithdraw);
+
+    console.log("calculateIncomeAfterWithdraw.earned", earned);
+    console.log("calculateIncomeAfterWithdraw.strategyLoss", strategyLoss);
 
     if (earned != earnedByPrices_) {
       emit OnEarningOnWithdraw(earned, earnedByPrices_);
@@ -533,6 +551,7 @@ library ConverterStrategyBaseLib2 {
         investedAssets_ + balanceBefore,
         balanceAfterWithdraw
       );
+      console.log("calculateIncomeAfterWithdraw.amountSentToInsurance", amountSentToInsurance);
     }
 
     return (amountSentToInsurance, strategyLoss);

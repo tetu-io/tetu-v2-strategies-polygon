@@ -126,7 +126,8 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint expectedWithdrewUSD,
     uint assetPrice,
     uint strategyLoss,
-    uint amountSentToInsurance
+    uint amountSentToInsurance,
+    uint investedAssetsOut
   ) {
     return _withdrawUniversal(all ? type(uint).max : amount, earnedByPrices_, investedAssets_);
   }
@@ -136,7 +137,8 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint expectedWithdrewUSD,
     uint __assetPrice,
     uint strategyLoss,
-    uint amountSentToInsurance
+    uint amountSentToInsurance,
+    uint investedAssetsOut
   ) {
     bytes32 key = keccak256(abi.encodePacked(amount, earnedByPrices_, investedAssets_));
     MockedWithdrawUniversalParams memory data = _mockedWithdrawParams[key];
@@ -159,7 +161,8 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
         data.expectedWithdrewUSD,
         data.assetPrice,
         data.strategyLoss,
-        data.amountSentToInsurance
+        data.amountSentToInsurance,
+        data.investedAssets
       );
     } else {
       return super._withdrawUniversal(amount, earnedByPrices_, investedAssets_);
