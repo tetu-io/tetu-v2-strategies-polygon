@@ -18,7 +18,7 @@ import "hardhat/console.sol";
 // 3.0.1 refactoring of emergency exit
 // 3.1.0 use bookkeeper, new set of events
 // 3.1.2 scb-867
-// 3.1.3 scb-900
+// 3.1.3,4 scb-900, scb-914
 
 /// @title Abstract contract for base Converter strategy functionality
 /// @notice All depositor assets must be correlated (ie USDC/USDT/DAI)
@@ -45,7 +45,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   //region -------------------------------------------------------- CONSTANTS
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant CONVERTER_STRATEGY_BASE_VERSION = "3.1.3";
+  string public constant CONVERTER_STRATEGY_BASE_VERSION = "3.1.4";
 
   /// @notice 1% gap to cover possible liquidation inefficiency
   /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
@@ -145,7 +145,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     uint strategyLoss
   ){
     (uint updatedInvestedAssets, uint earnedByPrices) = _fixPriceChanges(updateTotalAssetsBeforeInvest_);
-    (strategyLoss,) = _depositToPoolUniversal(amount_, earnedByPrices, updatedInvestedAssets, false);
+    (strategyLoss,,,) = _depositToPoolUniversal(amount_, earnedByPrices, updatedInvestedAssets);
   }
 
   /// @notice Deposit {amount_} to the pool, send {earnedByPrices_} to insurance.
@@ -154,17 +154,15 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   /// @param amount_ Amount of underlying to be deposited
   /// @param earnedByPrices_ Profit received because of price changing
   /// @param investedAssets_ Invested assets value calculated with updated prices
-  /// @param updateInvestedAssetsInAnyCase_ _csbs.investedAssets must be updated even if a deposit is not needed
   /// @return strategyLoss Loss happened on the depositing. It doesn't include any price-changing losses
   /// @return amountSentToInsurance Price-changing-profit that was sent to the insurance
-  function _depositToPoolUniversal(
-    uint amount_,
-    uint earnedByPrices_,
-    uint investedAssets_,
-    bool updateInvestedAssetsInAnyCase_
-  ) internal virtual returns (
+  /// @return investedAssetsAfter Value of csbs.investedAssets after the call of the function
+  /// @return balanceAfter Balance of the underlying after the call of the function
+  function _depositToPoolUniversal(uint amount_, uint earnedByPrices_, uint investedAssets_) internal virtual returns (
     uint strategyLoss,
-    uint amountSentToInsurance
+    uint amountSentToInsurance,
+    uint investedAssetsAfter,
+    uint balanceAfter
   ){
     console.log("_depositToPoolUniversal.amount_", amount_);
     console.log("_depositToPoolUniversal.earnedByPrices_", earnedByPrices_);
@@ -195,7 +193,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
         console.log("_depositToPoolUniversal.amountSentToInsurance.1", amountSentToInsurance);
       } else {
         // needToDeposit is false and we don't have enough amount to cover earned-by-prices, we need to withdraw
-        (/* expectedWithdrewUSD */,, strategyLoss, amountSentToInsurance, investedAssets_) = _withdrawUniversal(0, earnedByPrices_, investedAssets_);
+        (,, strategyLoss, amountSentToInsurance) = _withdrawUniversal(0, earnedByPrices_, investedAssets_);
         console.log("_depositToPoolUniversal.amountSentToInsurance.2", amountSentToInsurance);
         console.log("_depositToPoolUniversal.strategyLoss.2", strategyLoss);
         console.log("_depositToPoolUniversal.2._csbs.investedAssets", _csbs.investedAssets);
@@ -218,26 +216,21 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
         emit OnDepositorEnter(amounts, consumedAmounts);
         console.log("_depositToPoolUniversal.consumedAmounts", consumedAmounts[0], consumedAmounts[1]);
       }
-
-      // update _investedAssets with new deposited amount
-      uint investedAssetsAfter = _updateInvestedAssets();
-      console.log("_depositToPoolUniversal.investedAssetsAfter", investedAssetsAfter);
-
-      // we need to compensate difference if during deposit we lost some assets
-      (,strategyLoss) = ConverterStrategyBaseLib2._registerIncome(
-        investedAssets_ + balanceBefore,
-        investedAssetsAfter + AppLib.balance(_asset) + amountSentToInsurance
-      );
-      console.log("_depositToPoolUniversal.strategyLoss", strategyLoss);
-    } else {
-      if (updateInvestedAssetsInAnyCase_) {
-        console.log("_depositToPoolUniversal._csbs.investedAssets.update.to", investedAssets_);
-        _csbs.investedAssets = investedAssets_;
-        console.log("_depositToPoolUniversal._csbs.investedAssets ", _csbs.investedAssets);
-      }
     }
 
-    return (strategyLoss, amountSentToInsurance);
+    // update _investedAssets with new deposited amount
+    investedAssetsAfter = _updateInvestedAssets();
+    balanceAfter = AppLib.balance(_asset);
+    console.log("_depositToPoolUniversal.investedAssetsAfter", investedAssetsAfter);
+
+    // we need to compensate difference if during deposit we lost some assets
+    (,strategyLoss) = ConverterStrategyBaseLib2._registerIncome(
+      investedAssets_ + balanceBefore,
+      investedAssetsAfter + balanceAfter + amountSentToInsurance
+    );
+    console.log("_depositToPoolUniversal.strategyLoss", strategyLoss);
+
+    return (strategyLoss, amountSentToInsurance, investedAssetsAfter, balanceAfter);
   }
   //endregion -------------------------------------------------------- Deposit to the pool
 
@@ -349,7 +342,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   ) {
     // calculate profit/loss because of price changes, try to compensate the loss from the insurance
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
-    (expectedWithdrewUSD, assetPrice, strategyLoss,,) = _withdrawUniversal(amount, earnedByPrices, investedAssetsNewPrices);
+    (expectedWithdrewUSD, assetPrice, strategyLoss,) = _withdrawUniversal(amount, earnedByPrices, investedAssetsNewPrices);
   }
 
   /// @notice Withdraw all from the pool.
@@ -376,8 +369,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     uint expectedWithdrewUSD,
     uint assetPrice,
     uint strategyLoss,
-    uint amountSentToInsurance,
-    uint investedAssetsOut
+    uint amountSentToInsurance
   ) {
     console.log("_withdrawUniversal.amount_", amount_);
     console.log("_withdrawUniversal.earnedByPrices_", earnedByPrices_);
@@ -399,29 +391,25 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       console.log("_withdrawUniversal.expectedWithdrewUSD", expectedWithdrewUSD);
       console.log("_withdrawUniversal.balance", IERC20(baseState.asset).balanceOf(address(this)));
 
-      investedAssetsOut = _updateInvestedAssets();
       (amountSentToInsurance, strategyLoss) = ConverterStrategyBaseLib2.calculateIncomeAfterWithdraw(
         baseState.splitter,
         v.theAsset,
         investedAssets_,
         v.balanceBefore,
         earnedByPrices_,
-        investedAssetsOut
+        _updateInvestedAssets()
       );
       console.log("_withdrawUniversal.amountSentToInsurance", amountSentToInsurance);
       console.log("_withdrawUniversal.strategyLoss", strategyLoss);
       console.log("_withdrawUniversal.balance.final", IERC20(baseState.asset).balanceOf(address(this)));
       console.log("_withdrawUniversal._csbs.investedAssets", _csbs.investedAssets);
-    } else {
-      investedAssetsOut = investedAssets_;
     }
 
     return (
       expectedWithdrewUSD,
       assetPrice,
       strategyLoss,
-      amountSentToInsurance,
-      investedAssetsOut
+      amountSentToInsurance
     );
   }
 
@@ -537,30 +525,33 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       (uint investedAssetsAfterHandleRewards,,) = _calcInvestedAssets();
       console.log("_doHardWork.investedAssetsAfterHandleRewards", investedAssetsAfterHandleRewards);
 
-      (, uint amountSentToInsurance) = _depositToPoolUniversal(
-        reInvest
-        && investedAssetsAfterHandleRewards != 0
-        && assetBalance > _csbs.reinvestThresholdPercent * investedAssetsAfterHandleRewards / DENOMINATOR
-          ? assetBalance
-          : 0,
-        earnedByPrices,
-        investedAssetsAfterHandleRewards,
-        true
-      );
-      console.log("_doHardWork.amountSentToInsurance", amountSentToInsurance);
+      {
+        (, uint amountSentToInsurance, uint investedAssetsAfterDeposit, uint balanceAfterDeposit) = _depositToPoolUniversal(
+          reInvest
+          && investedAssetsAfterHandleRewards != 0
+          && assetBalance > _csbs.reinvestThresholdPercent * investedAssetsAfterHandleRewards / DENOMINATOR
+            ? assetBalance
+            : 0,
+          earnedByPrices,
+          investedAssetsAfterHandleRewards
+        );
+        console.log("_doHardWork.amountSentToInsurance", amountSentToInsurance);
 
-      (earned, lost) = ConverterStrategyBaseLib2._registerIncome(
-        investedAssetsAfterHandleRewards + assetBalance, // assets in use before deposit
-        _csbs.investedAssets + AppLib.balance(baseState.asset) + amountSentToInsurance // assets in use after deposit
-      );
-      console.log("_doHardWork.investedAssetsAfterHandleRewards", investedAssetsAfterHandleRewards);
-      console.log("_doHardWork.assetBalance", assetBalance);
-      console.log("_doHardWork._csbs.investedAssets", _csbs.investedAssets);
-      console.log("_doHardWork.AppLib.balance(baseState.asset)", AppLib.balance(baseState.asset));
-      console.log("_doHardWork.amountSentToInsurance", amountSentToInsurance);
+        (earned, lost) = ConverterStrategyBaseLib2._registerIncome(
+          investedAssetsAfterHandleRewards + assetBalance, // assets in use before deposit
+          investedAssetsAfterDeposit + balanceAfterDeposit + amountSentToInsurance // assets in use after deposit
+        );
+        console.log("_doHardWork.investedAssetsAfterHandleRewards", investedAssetsAfterHandleRewards);
+        console.log("_doHardWork.assetBalance", assetBalance);
+        console.log("_doHardWork._csbs.investedAssets", _csbs.investedAssets);
+        console.log("_doHardWork.AppLib.balance(baseState.asset)", AppLib.balance(baseState.asset));
+        console.log("_doHardWork.balanceAfterDeposit", balanceAfterDeposit);
+        console.log("_doHardWork.investedAssetsAfterDeposit", investedAssetsAfterDeposit);
+        console.log("_doHardWork.amountSentToInsurance", amountSentToInsurance);
 
-      console.log("_doHardWork.earned", earned);
-      console.log("_doHardWork.lost", lost);
+        console.log("_doHardWork.earned", earned);
+        console.log("_doHardWork.lost", lost);
+      }
 
       _postHardWork();
       emit OnHardWorkEarnedLost(investedAssetsNewPrices, earnedByPrices, earned1, lost1, earned, lost, paidDebtToInsurance, amountPerf);

@@ -126,8 +126,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint expectedWithdrewUSD,
     uint assetPrice,
     uint strategyLoss,
-    uint amountSentToInsurance,
-    uint investedAssetsOut
+    uint amountSentToInsurance
   ) {
     return _withdrawUniversal(all ? type(uint).max : amount, earnedByPrices_, investedAssets_);
   }
@@ -137,8 +136,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint expectedWithdrewUSD,
     uint __assetPrice,
     uint strategyLoss,
-    uint amountSentToInsurance,
-    uint investedAssetsOut
+    uint amountSentToInsurance
   ) {
     bytes32 key = keccak256(abi.encodePacked(amount, earnedByPrices_, investedAssets_));
     MockedWithdrawUniversalParams memory data = _mockedWithdrawParams[key];
@@ -161,8 +159,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
         data.expectedWithdrewUSD,
         data.assetPrice,
         data.strategyLoss,
-        data.amountSentToInsurance,
-        data.investedAssets
+        data.amountSentToInsurance
       );
     } else {
       return super._withdrawUniversal(amount, earnedByPrices_, investedAssets_);
@@ -259,23 +256,25 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   function depositToPoolUniAccess(
     uint amount_,
     uint earnedByPrices_,
-    uint investedAssets_,
-    bool updateInvestedAssetsInAnyCase_
+    uint investedAssets_
   ) external returns (
     uint strategyLoss,
-    uint amountSentToInsurance
+    uint amountSentToInsurance,
+    uint investedAssetsAfter,
+    uint balanceAfter
   ) {
-    return _depositToPoolUniversal(amount_, earnedByPrices_, investedAssets_, updateInvestedAssetsInAnyCase_);
+    return _depositToPoolUniversal(amount_, earnedByPrices_, investedAssets_);
   }
 
   function _depositToPoolUniversal(
     uint amount_,
     uint earnedByPrices_,
-    uint investedAssets_,
-    bool updateInvestedAssetsInAnyCase_
+    uint investedAssets_
   ) override internal virtual returns (
     uint strategyLoss,
-    uint amountSentToInsurance
+    uint amountSentToInsurance,
+    uint investedAssetsAfter,
+    uint balanceAfter
   ) {
     address asset = baseState.asset;
     if (depositToPoolParams.initialized) {
@@ -292,9 +291,9 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
           uint(- depositToPoolParams.balanceChange)
         );
       }
-      return (depositToPoolParams.loss, depositToPoolParams.amountSentToInsurance);
+      return (depositToPoolParams.loss, depositToPoolParams.amountSentToInsurance, _csbs.investedAssets, AppLib.balance(asset));
     } else {
-      return super._depositToPoolUniversal(amount_, earnedByPrices_, investedAssets_, updateInvestedAssetsInAnyCase_);
+      return super._depositToPoolUniversal(amount_, earnedByPrices_, investedAssets_);
     }
   }
 
