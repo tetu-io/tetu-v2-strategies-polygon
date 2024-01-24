@@ -20,7 +20,7 @@ contract PancakeConverterStrategy is PancakeDepositor, ConverterStrategyBase, IR
 
   string public constant override NAME = "Pancake Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.PANCAKE;
-  string public constant override STRATEGY_VERSION = "1.0.1";
+  string public constant override STRATEGY_VERSION = "1.0.2";
 
   //endregion ------------------------------------------------- Constants
 
