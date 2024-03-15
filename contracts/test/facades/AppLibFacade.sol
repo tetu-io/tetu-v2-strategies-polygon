@@ -16,4 +16,12 @@ contract AppLibFacade {
   function getDefaultLiquidationThresholdConstant() external pure returns (uint) {
     return AppLib.DEFAULT_LIQUIDATION_THRESHOLD;
   }
+
+  function approveIfNeeded(address token, uint amount, address spender) external {
+    AppLib.approveIfNeeded(token, amount, spender);
+  }
+
+  function approveForced(address token, uint amount, address spender) external {
+    AppLib.approveForced(token, amount, spender);
+  }
 }

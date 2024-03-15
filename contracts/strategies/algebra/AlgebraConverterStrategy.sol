@@ -16,7 +16,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
   string public constant override NAME = "Algebra Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.ALGEBRA;
-  string public constant override STRATEGY_VERSION = "3.1.5";
+  string public constant override STRATEGY_VERSION = "3.1.6";
 
   //endregion ------------------------------------------------- Constants
 
