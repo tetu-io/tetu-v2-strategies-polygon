@@ -4,6 +4,7 @@ import { EnvSetup } from '../../../scripts/utils/EnvSetup';
 import {formatUnits} from "ethers/lib/utils";
 import {IERC20Metadata__factory} from "../../../typechain";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
+import axios from "axios";
 
 /**
  *   function liquidate(
@@ -44,6 +45,22 @@ export type IOpenOceanResponse = {
     outAmount?: string
   }
 }
+
+export interface IOneInchProtocolInfo {
+  id: string,
+  title: string,
+  img: string,
+  img_color: string
+}
+
+export type IOneInchProtocols = {
+  protocols: IOneInchProtocolInfo[];
+}
+
+export type IOneInchResponse = {
+  toAmount: string;
+}
+
 
 const argv = EnvSetup.getEnv();
 
@@ -201,6 +218,48 @@ export class AggregatorUtils {
     console.log('Transaction for swap: ', swapTransaction);
 
     return swapTransaction.data;
+  }
+
+  static async getLiquiditySources(chain: number): Promise<IOneInchProtocols> {
+    const axios = require("axios");
+    const url = `https://api.1inch.dev/swap/v5.2/${chain}/liquidity-sources`;
+
+    const config = {
+      headers: {
+        "Authorization": `Bearer ${argv.oneInchApiKey}`
+      },
+      params: {}
+    };
+
+
+    const response = await axios.get(url, config);
+    return response.data as unknown as IOneInchProtocols;
+  }
+
+  static async getQuoteForGivenProtocol(chainId: number, tokenIn: string, tokenOut: string, amount: BigNumber, from: string, protocols: string): Promise<IOneInchResponse> {
+    const axios = require("axios");
+
+    const url = `https://api.1inch.dev/swap/v5.2/${chainId}/quote`;
+
+    const config = {
+      headers: {
+        "Authorization": `Bearer ${argv.oneInchApiKey}`,
+      },
+      params: {
+        fromTokenAddress: tokenIn,
+        toTokenAddress: tokenOut,
+        amount: amount.toString(),
+        fromAddress: from,
+        slippage: 1,
+        disableEstimate: true,
+        allowPartialFill: false,
+        protocols
+      }
+    };
+
+
+    const response = await axios.get(url, config);
+    return response.data as unknown as IOneInchResponse;
   }
 //endregion OneInch v50
 

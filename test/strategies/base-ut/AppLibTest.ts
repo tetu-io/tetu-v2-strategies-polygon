@@ -7,8 +7,12 @@ import {expect} from 'chai';
 import {MockHelper} from '../../baseUT/helpers/MockHelper';
 import {Misc} from "../../../scripts/utils/Misc";
 import { HARDHAT_NETWORK_ID, HardhatUtils } from '../../baseUT/utils/HardhatUtils';
+import {BigNumber} from "ethers";
+import { parseUnits } from 'ethers/lib/utils';
 
 describe('AppLibTest', () => {
+  const INFINITE_APPROVE = BigNumber.from(2).pow(255);
+
   //region Variables
   let snapshotBefore: string;
   let signer: SignerWithAddress;
@@ -100,6 +104,64 @@ describe('AppLibTest', () => {
       const ret = (await facade._getLiquidationThreshold(0)).toNumber();
       const defaultValue = (await facade.getDefaultLiquidationThresholdConstant()).toNumber();
       expect(ret).eq(defaultValue);
+    });
+  });
+
+  describe("approveForced", () => {
+    let snapshot: string;
+    beforeEach(async function() {
+      snapshot = await TimeUtils.snapshot();
+    });
+    afterEach(async function() {
+      await TimeUtils.rollback(snapshot);
+    });
+
+    const SPENDER = ethers.Wallet.createRandom().address;
+    it("should set initial approve", async () => {
+      await facade.approveForced(usdc.address, parseUnits("1.2", 6), SPENDER);
+      const allowance = await usdc.allowance(facade.address, SPENDER);
+      expect(allowance).eq(parseUnits("1.2", 6));
+    });
+    it("should increase approve", async () => {
+      await facade.approveForced(usdc.address, parseUnits("1.2", 6), SPENDER);
+      await facade.approveForced(usdc.address, parseUnits("2.3", 6), SPENDER);
+      const allowance = await usdc.allowance(facade.address, SPENDER);
+      expect(allowance).eq(parseUnits("2.3", 6));
+    });
+    it("should decrease approve", async () => {
+      await facade.approveForced(usdc.address, parseUnits("1.2", 6), SPENDER);
+      await facade.approveForced(usdc.address, parseUnits("0.1", 6), SPENDER);
+      const allowance = await usdc.allowance(facade.address, SPENDER);
+      expect(allowance).eq(parseUnits("0.1", 6));
+    });
+  });
+
+  describe("approveIfNeeded", () => {
+    let snapshot: string;
+    beforeEach(async function() {
+      snapshot = await TimeUtils.snapshot();
+    });
+    afterEach(async function() {
+      await TimeUtils.rollback(snapshot);
+    });
+
+    const SPENDER = ethers.Wallet.createRandom().address;
+    it("should set initial approve", async () => {
+      await facade.approveIfNeeded(usdc.address, parseUnits("1.2", 6), SPENDER);
+      const allowance = await usdc.allowance(facade.address, SPENDER);
+      expect(allowance).eq(INFINITE_APPROVE);
+    });
+    it("should increase approve", async () => {
+      await facade.approveIfNeeded(usdc.address, parseUnits("1.2", 6), SPENDER);
+      await facade.approveIfNeeded(usdc.address, parseUnits("2.3", 6), SPENDER);
+      const allowance = await usdc.allowance(facade.address, SPENDER);
+      expect(allowance).eq(INFINITE_APPROVE);
+    });
+    it("should decrease approve", async () => {
+      await facade.approveIfNeeded(usdc.address, parseUnits("1.2", 6), SPENDER);
+      await facade.approveIfNeeded(usdc.address, parseUnits("0.1", 6), SPENDER);
+      const allowance = await usdc.allowance(facade.address, SPENDER);
+      expect(allowance).eq(INFINITE_APPROVE);
     });
   });
 

@@ -57,7 +57,7 @@ import {AGGREGATOR_TETU_LIQUIDATOR, AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR} fr
 describe('PairBasedStrategyActionResponseIntTest', function() {
   const SWAP_AMOUNT_DEFAULT = 1.1;
   const SWAP_AMOUNT_ALGEBRA = 0.25;
-  const CHAINS_IN_ORDER_EXECUTION: number[] = [ZKEVM_NETWORK_ID, BASE_NETWORK_ID, POLYGON_NETWORK_ID];
+  const CHAINS_IN_ORDER_EXECUTION: number[] = [POLYGON_NETWORK_ID, BASE_NETWORK_ID, ZKEVM_NETWORK_ID];
 
 //region Variables
   let snapshotBefore: string;
@@ -124,8 +124,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         const strategies: IStrategyInfo[] = [
           {chainId: ZKEVM_NETWORK_ID, name: PLATFORM_PANCAKE, notUnderlyingToken: ZkevmAddresses.USDT_TOKEN},
           {chainId: BASE_NETWORK_ID, name: PLATFORM_PANCAKE, notUnderlyingToken: BaseAddresses.USDbC_TOKEN},
-          {chainId: POLYGON_NETWORK_ID, name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
           {chainId: POLYGON_NETWORK_ID, name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+          {chainId: POLYGON_NETWORK_ID, name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
           // {chainId: POLYGON_NETWORK_ID, name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN}, /// Kyber is not used after security incident nov-2023
           // todo Uncomment when volatile pairs will be used  {chainId: POLYGON_NETWORK_ID, name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
           // todo Uncomment when volatile pairs will be used {chainId: POLYGON_NETWORK_ID, name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN},
@@ -778,6 +778,66 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   expect(states[states.length - 1].user.assetBalance).approximately(initialUserBalance + maxWithdraw, 0.1);
                 });
               });
+
+              if (chainId === POLYGON_NETWORK_ID) {
+                describe("Study scb-908: make large deposit @skip-on-coverage", function () {
+                  let snapshotLevel0: string;
+                  before(async function () {
+                    snapshotLevel0 = await TimeUtils.snapshot();
+                    await makeLargeDeposit();
+                  });
+                  after(async function () {
+                    await TimeUtils.rollback(snapshotLevel0);
+                  });
+
+                  async function makeLargeDeposit() {
+                    console.log('deposit...');
+
+                    await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
+                    await TokenUtils.getToken(b.asset, signer.address, parseUnits('400000', 6));
+                    await b.vault.connect(signer).deposit(parseUnits('300000', 6), signer.address, {gasLimit: GAS_LIMIT});
+
+                    return b;
+                  }
+
+                  it("should withdrawByAgg successfully", async () => {
+                    const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+                    const states: IStateNum[] = [];
+                    const pathOut = `./tmp/${strategyInfo.name}-${strategyInfo.chainId}-largeDeposit-withdrawByAgg.csv`;
+
+                    const saver = async (title: string, eventsSet?: IEventsSet): Promise<IStateNum> => {
+                      states.push(await StateUtilsNum.getState(signer, signer2, converterStrategyBase, b.vault, title, {eventsSet}));
+                      StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+                      return states[states.length - 1];
+                    }
+
+                    const planEntryData = buildEntryData1();
+                    const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
+
+                    await saver("b");
+                    const eventsSet = await CaptureEvents.makeWithdrawByAggStep(b.strategy,
+                      quote.tokenToSwap,
+                      Misc.ZERO_ADDRESS,
+                      quote.amountToSwap.div(1),
+                      "0x",
+                      planEntryData,
+                      ENTRY_TO_POOL_DISABLED,
+                    );
+                    await saver("a", eventsSet);
+
+                    // const quote2 = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
+                    // const eventsSet2 = await CaptureEvents.makeWithdrawByAggStep(b.strategy,
+                    //   quote2.tokenToSwap,
+                    //   Misc.ZERO_ADDRESS,
+                    //   quote2.amountToSwap,
+                    //   "0x",
+                    //   planEntryData,
+                    //   ENTRY_TO_POOL_IS_ALLOWED,
+                    // );
+                    // await saver("a2", eventsSet2);
+                  });
+                });
+              }
             });
             describe("State: empty strategy", () => {
               describe("No deposits", () => {

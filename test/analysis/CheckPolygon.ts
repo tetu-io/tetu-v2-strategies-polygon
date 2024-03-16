@@ -22,9 +22,9 @@ import {Misc} from "../../scripts/utils/Misc";
 import {MaticAddresses} from "../../scripts/addresses/MaticAddresses";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
-describe("Check actions on base @skip-on-coverage", () => {
-  const BLOCK = 52093660-1; // 51918500;
-  const STRATEGY = "0xA8105284aA9C9A20A2081EEE1ceeF03d9719A5AD";
+describe("Check actions on Polygon @skip-on-coverage", () => {
+  const BLOCK = 52600760; // 51918500;
+  const STRATEGY = "0xCdc5560AB926Dca3d4989bF814469Af3f989Ab2C";
   const CONTROLLER = "0x33b27e0a2506a4a2fbc213a01c51d0451745343a";
   const OPERATOR = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
   const SPLITTER = "0xA31cE671A0069020F7c87ce23F9cAAA7274C794c";
@@ -45,7 +45,7 @@ describe("Check actions on base @skip-on-coverage", () => {
 
   async function injectStrategy(signer: SignerWithAddress) {
     // await InjectUtils.injectTetuConverterBeforeAnyTest(signer);
-    await InjectUtils.injectStrategy(signer, STRATEGY, "AlgebraConverterStrategy");
+    await InjectUtils.injectStrategy(signer, STRATEGY, "UniswapV3ConverterStrategy");
   }
 
   it("try to rebalance no swap (NSR)", async () => {

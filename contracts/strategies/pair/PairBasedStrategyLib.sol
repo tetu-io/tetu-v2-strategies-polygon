@@ -662,12 +662,13 @@ library PairBasedStrategyLib {
     require(aggParams.tokenToSwap == p.tokens[indexIn], AppErrors.INCORRECT_SWAP_BY_AGG_PARAM);
 
     if (amountIn > p.liquidationThresholds[indexIn]) {
-      AppLib.approveIfNeeded(p.tokens[indexIn], amountIn, aggregator);
+      // infinite approve for aggregator is unsafe
+      AppLib.approveForced(p.tokens[indexIn], amountIn, aggregator);
 
       uint balanceTokenOutBefore = AppLib.balance(p.tokens[indexOut]);
 
       if (aggParams.useLiquidator) {
-
+        amountIn = Math.min(amountIn, aggParams.amountToSwap);
         (spentAmountIn,) = ConverterStrategyBaseLib._liquidate(
           p.converter,
           ITetuLiquidator(aggregator),

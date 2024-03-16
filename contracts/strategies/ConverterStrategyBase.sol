@@ -17,7 +17,8 @@ import "../interfaces/IConverterStrategyBase.sol";
 // 3.0.1 refactoring of emergency exit
 // 3.1.0 use bookkeeper, new set of events
 // 3.1.2 scb-867
-// 3.1.3 scb-900
+// 3.1.3,4 scb-900, scb-914
+// 3.1.5 use approveForced for aggregators
 
 /// @title Abstract contract for base Converter strategy functionality
 /// @notice All depositor assets must be correlated (ie USDC/USDT/DAI)
@@ -44,7 +45,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   //region -------------------------------------------------------- CONSTANTS
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant CONVERTER_STRATEGY_BASE_VERSION = "3.1.3";
+  string public constant CONVERTER_STRATEGY_BASE_VERSION = "3.1.5";
 
   /// @notice 1% gap to cover possible liquidation inefficiency
   /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
@@ -144,7 +145,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     uint strategyLoss
   ){
     (uint updatedInvestedAssets, uint earnedByPrices) = _fixPriceChanges(updateTotalAssetsBeforeInvest_);
-    (strategyLoss,) = _depositToPoolUniversal(amount_, earnedByPrices, updatedInvestedAssets, false);
+    (strategyLoss,,,) = _depositToPoolUniversal(amount_, earnedByPrices, updatedInvestedAssets);
   }
 
   /// @notice Deposit {amount_} to the pool, send {earnedByPrices_} to insurance.
@@ -153,17 +154,15 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   /// @param amount_ Amount of underlying to be deposited
   /// @param earnedByPrices_ Profit received because of price changing
   /// @param investedAssets_ Invested assets value calculated with updated prices
-  /// @param updateInvestedAssetsInAnyCase_ _csbs.investedAssets must be updated even if a deposit is not needed
   /// @return strategyLoss Loss happened on the depositing. It doesn't include any price-changing losses
   /// @return amountSentToInsurance Price-changing-profit that was sent to the insurance
-  function _depositToPoolUniversal(
-    uint amount_,
-    uint earnedByPrices_,
-    uint investedAssets_,
-    bool updateInvestedAssetsInAnyCase_
-  ) internal virtual returns (
+  /// @return investedAssetsAfter Value of csbs.investedAssets after the call of the function
+  /// @return balanceAfter Balance of the underlying after the call of the function
+  function _depositToPoolUniversal(uint amount_, uint earnedByPrices_, uint investedAssets_) internal virtual returns (
     uint strategyLoss,
-    uint amountSentToInsurance
+    uint amountSentToInsurance,
+    uint investedAssetsAfter,
+    uint balanceAfter
   ){
     address _asset = baseState.asset;
 
@@ -187,7 +186,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
         );
       } else {
         // needToDeposit is false and we don't have enough amount to cover earned-by-prices, we need to withdraw
-        (/* expectedWithdrewUSD */,, strategyLoss, amountSentToInsurance) = _withdrawUniversal(0, earnedByPrices_, investedAssets_);
+        (,, strategyLoss, amountSentToInsurance) = _withdrawUniversal(0, earnedByPrices_, investedAssets_);
       }
     }
 
@@ -205,22 +204,19 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
         (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
         emit OnDepositorEnter(amounts, consumedAmounts);
       }
-
-      // update _investedAssets with new deposited amount
-      uint investedAssetsAfter = _updateInvestedAssets();
-
-      // we need to compensate difference if during deposit we lost some assets
-      (,strategyLoss) = ConverterStrategyBaseLib2._registerIncome(
-        investedAssets_ + balanceBefore,
-        investedAssetsAfter + AppLib.balance(_asset) + amountSentToInsurance
-      );
-    } else {
-      if (updateInvestedAssetsInAnyCase_) {
-        _csbs.investedAssets = investedAssets_;
-      }
     }
 
-    return (strategyLoss, amountSentToInsurance);
+    // update _investedAssets with new deposited amount
+    investedAssetsAfter = _updateInvestedAssets();
+    balanceAfter = AppLib.balance(_asset);
+
+    // we need to compensate difference if during deposit we lost some assets
+    (,strategyLoss) = ConverterStrategyBaseLib2._registerIncome(
+      investedAssets_ + balanceBefore,
+      investedAssetsAfter + balanceAfter + amountSentToInsurance
+    );
+
+    return (strategyLoss, amountSentToInsurance, investedAssetsAfter, balanceAfter);
   }
   //endregion -------------------------------------------------------- Deposit to the pool
 
@@ -488,6 +484,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
     // ATTENTION! splitter will not cover the loss if it is lower than profit
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
+
     if (!_preHardWork(reInvest)) {
       // claim rewards and get current asset balance
       (uint earned1, uint lost1, uint assetBalance, uint paidDebtToInsurance, uint amountPerf) = _handleRewards();
@@ -495,21 +492,22 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       // re-invest income
       (uint investedAssetsAfterHandleRewards,,) = _calcInvestedAssets();
 
-      (, uint amountSentToInsurance) = _depositToPoolUniversal(
-        reInvest
-        && investedAssetsAfterHandleRewards != 0
-        && assetBalance > _csbs.reinvestThresholdPercent * investedAssetsAfterHandleRewards / DENOMINATOR
-          ? assetBalance
-          : 0,
-        earnedByPrices,
-        investedAssetsAfterHandleRewards,
-        true
-      );
+      { // send earnedByPrices to the insurance, optionally make deposit (and even withdraw if necessary)
+        (, uint amountSentToInsurance, uint investedAssetsAfterDeposit, uint balanceAfterDeposit) = _depositToPoolUniversal(
+          reInvest
+          && investedAssetsAfterHandleRewards != 0
+          && assetBalance > _csbs.reinvestThresholdPercent * investedAssetsAfterHandleRewards / DENOMINATOR
+            ? assetBalance
+            : 0,
+          earnedByPrices,
+          investedAssetsAfterHandleRewards
+        );
 
-      (earned, lost) = ConverterStrategyBaseLib2._registerIncome(
-        investedAssetsAfterHandleRewards + assetBalance, // assets in use before deposit
-        _csbs.investedAssets + AppLib.balance(baseState.asset) + amountSentToInsurance // assets in use after deposit
-      );
+        (earned, lost) = ConverterStrategyBaseLib2._registerIncome(
+          investedAssetsAfterHandleRewards + assetBalance, // assets in use before deposit
+          investedAssetsAfterDeposit + balanceAfterDeposit + amountSentToInsurance // assets in use after deposit
+        );
+      }
 
       _postHardWork();
       emit OnHardWorkEarnedLost(investedAssetsNewPrices, earnedByPrices, earned1, lost1, earned, lost, paidDebtToInsurance, amountPerf);

@@ -35,10 +35,14 @@ library AppLib {
   /// @dev Should NOT be used for third-party pools
   function approveIfNeeded(address token, uint amount, address spender) internal {
     if (IERC20(token).allowance(address(this), spender) < amount) {
-      IERC20(token).safeApprove(spender, 0);
       // infinite approve, 2*255 is more gas efficient then type(uint).max
-      IERC20(token).safeApprove(spender, 2 ** 255);
+      IERC20(token).approve(spender, 2 ** 255);
     }
+  }
+
+  /// @notice Make approve of {token} to unsafe {spender} (like an aggregator) for fixed {amount}
+  function approveForced(address token, uint amount, address spender) internal {
+    IERC20(token).approve(spender, amount);
   }
 
   function balance(address token) internal view returns (uint) {
