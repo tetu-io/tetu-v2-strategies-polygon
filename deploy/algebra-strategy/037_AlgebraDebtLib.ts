@@ -14,4 +14,4 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
 export default func;
 func.tags = ['AlgebraDebtLib'];
 func.dependencies = ['AlgebraLib', 'ConverterStrategyBaseLib2', 'BorrowLib', 'PairBasedStrategyLogicLib',];
-func.skip = async hre => (await hre.getChainId()) !== '137'
+func.skip = async hre => true // (await hre.getChainId()) !== '137'
