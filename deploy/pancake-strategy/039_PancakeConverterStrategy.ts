@@ -23,4 +23,4 @@ func.dependencies = [
   'PairBasedStrategyLib',
   'PairBasedStrategyLogicLib',
 ];
-func.skip = async hre => (await hre.getChainId()) !== '1101' && (await hre.getChainId()) !== '8453';
+func.skip = async hre => true // (await hre.getChainId()) !== '1101' && (await hre.getChainId()) !== '8453';

@@ -22,4 +22,4 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
 export default func;
 func.tags = ['StrategyProfitHolder_Pancake_UsdcUsdt'];
 func.dependencies = ['Strategy_PancakeConverterStrategy_UsdcUsdt'];
-func.skip = async hre => (await hre.getChainId()) !== '1101';
+func.skip = async hre => true // (await hre.getChainId()) !== '1101';
