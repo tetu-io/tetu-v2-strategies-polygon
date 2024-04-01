@@ -1727,6 +1727,8 @@ describe('ConverterStrategyBaseLibTest', () => {
       performanceFee: number;
 
       debtToInsurance?: string; // 0 by default
+      insuranceBalance?: string;
+      totalAssets?: string; // 1000 by default
     }
 
     interface IResults {
@@ -1753,11 +1755,14 @@ describe('ConverterStrategyBaseLibTest', () => {
 
       // set up insurance
       const insurance = ethers.Wallet.createRandom().address;
+      await p.tokens[p.assetIndex].mint(insurance, parseUnits(p.insuranceBalance ?? "0", decimalsTokens[p.assetIndex]));
+
       const vault = await MockHelper.createMockVault(signer);
       await vault.setInsurance(insurance);
 
       const splitter = await MockHelper.createMockSplitter(signer);
       await splitter.setVault(vault.address);
+      // await splitter.set
 
       // set up thresholds
       const thresholds = p.rewardTokens.map(x => "0");
@@ -1800,8 +1805,7 @@ describe('ConverterStrategyBaseLibTest', () => {
         }
       }
 
-      // make test
-      const {amountsToForward, amountToPerformanceAndInsurance, debtToInsuranceOut} = await facade.callStatic._recycle({
+      const recycleParams = {
         converter: converter.address,
         asset: p.tokens[p.assetIndex].address,
         compoundRatio: p.compoundRatio,
@@ -1811,26 +1815,16 @@ describe('ConverterStrategyBaseLibTest', () => {
         rewardTokens: p.rewardTokens.map(x => x.address),
         rewardAmounts: await p.rewardAmounts.map((amount, index) => parseUnits(amount, decimalsRewardTokens[index])),
         performanceFee: p.performanceFee,
-        splitter: splitter.address,
+        insurance,
         assetThreshold: parseUnits(p.assetThreshold ?? "0", await p.tokens[p.assetIndex].decimals()),
         debtToInsurance: parseUnits(p.debtToInsurance ?? "0", await p.tokens[p.assetIndex].decimals()),
-      });
+      };
+
+      // make test
+      const {amountsToForward, amountToPerformanceAndInsurance, debtToInsuranceOut} = await facade.callStatic._recycle(recycleParams);
       console.log(amountsToForward, amountToPerformanceAndInsurance);
 
-      const tx = await facade._recycle({
-        converter: converter.address,
-        asset: p.tokens[p.assetIndex].address,
-        compoundRatio: p.compoundRatio,
-        tokens: p.tokens.map(x => x.address),
-        liquidator: liquidator.address,
-        thresholds: thresholds.map((x, index) => parseUnits(x, decimalsRewardTokens[index])),
-        rewardTokens: p.rewardTokens.map(x => x.address),
-        rewardAmounts: await p.rewardAmounts.map((amount, index) => parseUnits(amount, decimalsRewardTokens[index])),
-        performanceFee: p.performanceFee,
-        splitter: splitter.address,
-        assetThreshold: parseUnits(p.assetThreshold ?? "0", await p.tokens[p.assetIndex].decimals()),
-        debtToInsurance: parseUnits(p.debtToInsurance ?? "0", await p.tokens[p.assetIndex].decimals()),
-      });
+      const tx = await facade._recycle(recycleParams);
       const gasUsed = (await tx.wait()).gasUsed;
 
       return {
@@ -1881,6 +1875,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
               it("should not exceed gas limits", async () => {
                 const r = await loadFixture(makeRecycleTest);
+                console.log("Gas use", r.gasUsed);
                 expect(r.gasUsed).lt(40_000); // 32570
               });
               it("should return expected amounts for the forwarder", async () => {
@@ -2457,7 +2452,13 @@ describe('ConverterStrategyBaseLibTest', () => {
                 performanceFee: 0,
 
                 // Following isConversionValid check shouldn't be called because TETU is not depositor asset
-                isConversionValidDetailed: [{tokenIn: tetu, tokenOut: usdc, amountIn: "90", amountOut: "97", result: 2}]
+                isConversionValidDetailed: [{
+                  tokenIn: tetu,
+                  tokenOut: usdc,
+                  amountIn: "90",
+                  amountOut: "97",
+                  result: 2
+                }]
               });
             }
 
@@ -3012,6 +3013,110 @@ describe('ConverterStrategyBaseLibTest', () => {
           ).revertedWith("TS-4 wrong lengths"); // WRONG_LENGTHS
         });
       });
+    });
+  });
+
+  describe("_getEffectivePerformanceFee", () => {
+    interface IParams {
+      performanceFee: string;
+      performanceFeeRatio: string;
+      insuranceBalance: string;
+      tvl: string;
+    }
+    interface IResults {
+      gasUsed: number;
+      effectivePerformanceFee: number;
+      effectivePerformanceFeeRatio: number;
+    }
+    async function makeTest(p: IParams): Promise<IResults> {
+      const insurance = ethers.Wallet.createRandom().address;
+      await usdc.mint(insurance, parseUnits(p.insuranceBalance, 6));
+
+      const gasUsed = await facade.estimateGas._getEffectivePerformanceFee(
+        parseUnits(p.performanceFee, 3),
+        parseUnits(p.performanceFeeRatio, 3),
+        parseUnits(p.tvl, 6),
+        usdc.address,
+        insurance
+      );
+
+      const ret = await facade._getEffectivePerformanceFee(
+        parseUnits(p.performanceFee, 3),
+        parseUnits(p.performanceFeeRatio, 3),
+        parseUnits(p.tvl, 6),
+        usdc.address,
+        insurance
+      );
+
+      return {
+        gasUsed: gasUsed.toNumber(),
+        effectivePerformanceFee: +formatUnits(ret.effectivePerformanceFee, 3),
+        effectivePerformanceFeeRatio: +formatUnits(ret.effectivePerformanceFeeRatio, 3),
+      }
+    }
+
+    const NORMAL_CASE: IParams = {
+      tvl: "1000",
+      performanceFee: "20",
+      performanceFeeRatio: "40", // 40% to perf, 60% to insurance
+      insuranceBalance: "25"
+    }
+
+    it("should return expected values in normal case", async () => {
+      const ret = await makeTest(NORMAL_CASE);
+      // 20 * 0.4 = 8% toPerf
+      // 20 * 0.6 * (1000*0.03 - 25)/(1000*0.03) = 2% toInsurance
+      // effectivePerformanceFeeRatio = 8 / (2 + 8) = 80%
+      expect(ret.effectivePerformanceFee).eq(20 * (0.4 + 0.6 * (1000*0.03 - 25)/(1000*0.03)));
+      expect(ret.effectivePerformanceFeeRatio).eq(80);
+    });
+
+
+    it("should use max performance fee if insurance balance is 0", async () => {
+      const ret = await makeTest({
+        ...NORMAL_CASE,
+        insuranceBalance: "0"
+      });
+      expect(ret.effectivePerformanceFee).eq(20);
+      expect(ret.effectivePerformanceFeeRatio).eq(40);
+    });
+
+    it("should return toPerf=100% if tvl is zero", async () => {
+      const ret = await makeTest({
+        ...NORMAL_CASE,
+        tvl: "0"
+      });
+      expect(ret.effectivePerformanceFee).eq(20*0.4, "20% * 40%");
+      expect(ret.effectivePerformanceFeeRatio).eq(100);
+    });
+
+    it("should return toPerf=100% if insurance is full", async () => {
+      const ret = await makeTest({
+        ...NORMAL_CASE,
+        insuranceBalance: "30" // 3% of $1000
+      });
+      expect(ret.effectivePerformanceFee).eq(20*0.4, "20% * 40%");
+      expect(ret.effectivePerformanceFeeRatio).eq(100);
+    });
+
+    it("should return toPerf=100% if max percent toInsurance is 0", async () => {
+      const ret = await makeTest({
+        ...NORMAL_CASE,
+        insuranceBalance: "0",
+        performanceFeeRatio: "100"
+      });
+      expect(ret.effectivePerformanceFee).eq(20);
+      expect(ret.effectivePerformanceFeeRatio).eq(100);
+    });
+
+    it("should return 0 if toPerf is 0 and the insurance is too high", async () => {
+      const ret = await makeTest({
+        ...NORMAL_CASE,
+        insuranceBalance: "5000",
+        performanceFeeRatio: "0"
+      });
+      expect(ret.effectivePerformanceFee).eq(0);
+      expect(ret.effectivePerformanceFeeRatio).eq(100);
     });
   });
 
@@ -3838,6 +3943,8 @@ describe('ConverterStrategyBaseLibTest', () => {
     interface ISendPerformanceFeeParams {
       asset: MockToken;
       amount: string;
+      ratio: string;
+      threshold?: string;
     }
 
     interface ISendPerformanceFeeResults {
@@ -3861,20 +3968,26 @@ describe('ConverterStrategyBaseLibTest', () => {
       const splitter = await MockHelper.createMockSplitter(signer);
       await splitter.setVault(vault.address);
 
+      const threshold = p.threshold
+        ? parseUnits(p.threshold, decimalsAsset)
+        : parseUnits("0", decimalsAsset);
+
       const r = await facade.callStatic.sendPerformanceFee(
         p.asset.address,
         parseUnits(p.amount, decimalsAsset),
         splitter.address,
         receiver,
-        50_000
+        parseUnits(p.ratio, 3),
+        threshold
       );
 
       const tx = await facade.sendPerformanceFee(
         p.asset.address,
         parseUnits(p.amount, decimalsAsset),
-        splitter.address,
+        insurance,
         receiver,
-        50_000
+        parseUnits(p.ratio, 3),
+        threshold
       );
       const gasUsed = (await tx.wait()).gasUsed;
 
@@ -3905,7 +4018,8 @@ describe('ConverterStrategyBaseLibTest', () => {
         async function makeSendPerformanceFeeTest(): Promise<ISendPerformanceFeeResults> {
           return makeSendPerformanceFee({
             asset: usdc,
-            amount: "100"
+            amount: "100",
+            ratio: "50"
           });
         }
 
@@ -3942,7 +4056,8 @@ describe('ConverterStrategyBaseLibTest', () => {
         async function makeSendPerformanceFeeTest(): Promise<ISendPerformanceFeeResults> {
           return makeSendPerformanceFee({
             asset: usdc,
-            amount: "0"
+            amount: "0",
+            ratio: "50"
           });
         }
 
@@ -3957,6 +4072,123 @@ describe('ConverterStrategyBaseLibTest', () => {
         it('should set expected facade balances', async () => {
           const results = await loadFixture(makeSendPerformanceFeeTest);
           expect(results.facadeBalance).eq(0);
+        });
+        it('should return receiver balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.receiverBalance).eq(0);
+        });
+        it('should return insurance balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.insuranceBalance).eq(0);
+        });
+      });
+      describe('toPerf < threshold', () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeSendPerformanceFeeTest(): Promise<ISendPerformanceFeeResults> {
+          return makeSendPerformanceFee({
+            asset: usdc,
+            amount: "100",
+            ratio: "20",
+            threshold: "21"
+          });
+        }
+
+        it('should return expected toPerf', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.toPerf).eq(0);
+        });
+        it('should return expected toInsurance', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.toInsurance).eq(80);
+        });
+        it('should set expected facade balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.facadeBalance).eq(20);
+        });
+        it('should return receiver balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.receiverBalance).eq(0);
+        });
+        it('should return insurance balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.insuranceBalance).eq(80);
+        });
+      });
+      describe('toInsurance < threshold', () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeSendPerformanceFeeTest(): Promise<ISendPerformanceFeeResults> {
+          return makeSendPerformanceFee({
+            asset: usdc,
+            amount: "100",
+            ratio: "80",
+            threshold: "21"
+          });
+        }
+
+        it('should return expected toPerf', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.toPerf).eq(80);
+        });
+        it('should return expected toInsurance', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.toInsurance).eq(0);
+        });
+        it('should set expected facade balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.facadeBalance).eq(20);
+        });
+        it('should return receiver balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.receiverBalance).eq(80);
+        });
+        it('should return insurance balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.insuranceBalance).eq(0);
+        });
+      });
+      describe('toPerf < threshold and toInsurance < threshold', () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeSendPerformanceFeeTest(): Promise<ISendPerformanceFeeResults> {
+          return makeSendPerformanceFee({
+            asset: usdc,
+            amount: "100",
+            ratio: "50",
+            threshold: "101"
+          });
+        }
+
+        it('should return expected toPerf', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.toPerf).eq(0);
+        });
+        it('should return expected toInsurance', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.toInsurance).eq(0);
+        });
+        it('should set expected facade balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.facadeBalance).eq(100);
         });
         it('should return receiver balances', async () => {
           const results = await loadFixture(makeSendPerformanceFeeTest);
@@ -6155,7 +6387,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           thresholds: thresholds.map((x, index) => parseUnits(x, decimalsRewardTokens[index])),
           rewardTokens: p.rewardTokens.map(x => x.address),
           rewardAmounts: await p.rewardAmounts.map((amount, index) => parseUnits(amount, decimalsRewardTokens[index])),
-          splitter: splitter.address,
+          insurance,
           assetThreshold: parseUnits(p.assetThreshold, decimalsAsset),
 
           performanceFee: 0, // not used here
@@ -6174,7 +6406,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           thresholds: thresholds.map((x, index) => parseUnits(x, decimalsRewardTokens[index])),
           rewardTokens: p.rewardTokens.map(x => x.address),
           rewardAmounts: await p.rewardAmounts.map((amount, index) => parseUnits(amount, decimalsRewardTokens[index])),
-          splitter: splitter.address,
+          insurance,
           assetThreshold: parseUnits(p.assetThreshold, decimalsAsset),
 
           performanceFee: 0, // not used here

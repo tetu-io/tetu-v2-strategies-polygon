@@ -11,6 +11,7 @@ contract ConverterStrategyBaseLibFacade2 {
   IStrategyV3.BaseState private baseState;
   IConverterStrategyBase.ConverterStrategyBaseState private _csbs;
 
+  //region --------------------------------- For tests
   function setLiquidationThreshold(address asset, uint values) external {
     liquidationThresholds[asset] = values;
   }
@@ -26,6 +27,25 @@ contract ConverterStrategyBaseLibFacade2 {
     _csbs.reinvestThresholdPercent = reinvestThresholdPercent;
     _csbs.debtToInsurance = debtToInsurance;
   }
+
+  function setBaseState(
+    address asset,
+    address splitter,
+    address performanceReceiver,
+    uint performanceFee,
+    uint performanceFeeRatio,
+    uint compoundRatio,
+    string memory strategySpecificName
+  ) external {
+    baseState.asset = asset;
+    baseState.splitter = splitter;
+    baseState.performanceFee = performanceFee;
+    baseState.performanceReceiver = performanceReceiver;
+    baseState.performanceFeeRatio = performanceFeeRatio;
+    baseState.compoundRatio = compoundRatio;
+    baseState.strategySpecificName = strategySpecificName;
+  }
+  //endregion --------------------------------- For tests
 
   function setDebtToInsurance(int debtToInsurance_) external {
     _csbs.debtToInsurance = debtToInsurance_;
@@ -167,24 +187,6 @@ contract ConverterStrategyBaseLibFacade2 {
     uint lossUncovered
   ) {
     return ConverterStrategyBaseLib2._getSafeLossToCover(loss, totalAssets_);
-  }
-
-  function setBaseState(
-    address asset,
-    address splitter,
-    address performanceReceiver,
-    uint performanceFee,
-    uint performanceFeeRatio,
-    uint compoundRatio,
-    string memory strategySpecificName
-  ) external {
-    baseState.asset = asset;
-    baseState.splitter = splitter;
-    baseState.performanceFee = performanceFee;
-    baseState.performanceReceiver = performanceReceiver;
-    baseState.performanceFeeRatio = performanceFeeRatio;
-    baseState.compoundRatio = compoundRatio;
-    baseState.strategySpecificName = strategySpecificName;
   }
 
   function getHardworkLossToleranceValue() external pure returns (uint) {

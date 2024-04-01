@@ -127,11 +127,11 @@ const TASKS: ITask[] = [
     vault: "0x68f0a05FDc8773d9a5Fd1304ca411ACc234ce22c",
     strategies: ["0xAA43e2cc199DC946b3D528c6E00ebb3F4CC2fC0e"]
   },
-  // {
-  //   chain: POLYGON_NETWORK_ID,
-  //   vault: "0x0D397F4515007AE4822703b74b9922508837A04E",
-  //   strategies: ["0xCdc5560AB926Dca3d4989bF814469Af3f989Ab2C"]
-  // }
+  {
+    chain: POLYGON_NETWORK_ID,
+    vault: "0x0D397F4515007AE4822703b74b9922508837A04E",
+    strategies: ["0xCdc5560AB926Dca3d4989bF814469Af3f989Ab2C"]
+  }
 ];
 
 describe("base", () => {
