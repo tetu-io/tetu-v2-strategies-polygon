@@ -1707,7 +1707,7 @@ describe('ConverterStrategyBaseLibTest', () => {
   });
 
   describe("_recycle", () => {
-    interface IRecycleTestParams {
+    interface IParams {
       compoundRatio: number;
 
       tokens: MockToken[];
@@ -1729,7 +1729,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       debtToInsurance?: string; // 0 by default
     }
 
-    interface IRecycleTestResults {
+    interface IResults {
       gasUsed: BigNumber;
 
       amountsToForward: string[];
@@ -1740,7 +1740,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       debtToInsurance: number;
     }
 
-    async function makeRecycle(p: IRecycleTestParams): Promise<IRecycleTestResults> {
+    async function makeRecycle(p: IParams): Promise<IResults> {
       // read decimals
       const decimalsRewardTokens: number[] = [];
       for (let i = 0; i < p.rewardTokens.length; ++i) {
@@ -1862,7 +1862,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -1879,6 +1879,10 @@ describe('ConverterStrategyBaseLibTest', () => {
                 });
               }
 
+              it("should not exceed gas limits", async () => {
+                const r = await loadFixture(makeRecycleTest);
+                expect(r.gasUsed).lt(40_000); // 32570
+              });
               it("should return expected amounts for the forwarder", async () => {
                 const r = await loadFixture(makeRecycleTest);
                 expect(r.amountsToForward.join()).eq(["10"].join());
@@ -1901,7 +1905,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -1940,7 +1944,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -1982,7 +1986,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2026,7 +2030,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2067,7 +2071,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2115,7 +2119,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2158,7 +2162,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2201,7 +2205,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2251,7 +2255,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2301,7 +2305,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2351,7 +2355,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2404,7 +2408,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               await TimeUtils.rollback(snapshot);
             });
 
-            async function makeRecycleTest(): Promise<IRecycleTestResults> {
+            async function makeRecycleTest(): Promise<IResults> {
               return makeRecycle({
                 assetIndex: 1,
                 tokens: [usdt, usdc, dai],
@@ -2436,7 +2440,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               await TimeUtils.rollback(snapshot);
             });
 
-            async function makeRecycleTest(): Promise<IRecycleTestResults> {
+            async function makeRecycleTest(): Promise<IResults> {
               return makeRecycle({
                 assetIndex: 1,
                 tokens: [usdt, usdc, dai],
@@ -2476,7 +2480,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2522,7 +2526,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2570,7 +2574,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2628,7 +2632,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+          async function makeRecycleTest(): Promise<IResults> {
             return makeRecycle({
               assetIndex: 1,
               tokens: [usdt, usdc, dai],
@@ -2671,7 +2675,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+          async function makeRecycleTest(): Promise<IResults> {
             return makeRecycle({
               assetIndex: 1,
               tokens: [usdt, usdc, dai],
@@ -2717,7 +2721,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+          async function makeRecycleTest(): Promise<IResults> {
             return makeRecycle({
               assetIndex: 0,
               tokens: [usdc, dai],
@@ -2761,7 +2765,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+          async function makeRecycleTest(): Promise<IResults> {
             return makeRecycle({
               assetIndex: 1,
               tokens: [usdt, usdc, dai],
@@ -2804,7 +2808,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+          async function makeRecycleTest(): Promise<IResults> {
             return makeRecycle({
               assetIndex: 1,
               tokens: [usdt, usdc, dai],
@@ -2849,7 +2853,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+          async function makeRecycleTest(): Promise<IResults> {
             return makeRecycle({
               assetIndex: 1,
               tokens: [usdt, usdc, dai],
@@ -2895,7 +2899,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+          async function makeRecycleTest(): Promise<IResults> {
             return makeRecycle({
               assetIndex: 1,
               tokens: [usdt, usdc, dai],
@@ -2945,7 +2949,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+          async function makeRecycleTest(): Promise<IResults> {
             return makeRecycle({
               assetIndex: 0,
               tokens: [usdc, usdt],

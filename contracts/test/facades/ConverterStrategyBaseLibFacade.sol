@@ -187,6 +187,19 @@ contract ConverterStrategyBaseLibFacade {
     return ConverterStrategyBaseLib._recycle(p);
   }
 
+  function _getEffectivePerformanceFee(
+    uint performanceFee,
+    uint performanceFeeRatio,
+    uint tvl,
+    address asset,
+    address insurance
+  ) internal view returns (
+    uint effectivePerformanceFee,
+    uint effectivePerformanceFeeRatio
+  ) {
+    return ConverterStrategyBaseLib._getEffectivePerformanceFee(performanceFee, performanceFeeRatio, tvl, asset, insurance);
+  }
+
   function getTokenAmounts(
     ITetuConverter tetuConverter_,
     address[] memory tokens_,

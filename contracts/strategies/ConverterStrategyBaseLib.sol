@@ -137,15 +137,13 @@ library ConverterStrategyBaseLib {
 
   struct RecycleLocal {
     address asset;
-    uint compoundRatio;
-    uint performanceFee;
+    uint performanceFeeRatio;
     uint toPerf;
     uint toInsurance;
     uint[] amountsToForward;
     uint[] thresholds;
     int debtToInsuranceCurrent;
     int debtToInsuranceUpdated;
-    address splitter;
   }
 
   /// @notice Input params for _recycle
@@ -153,17 +151,16 @@ library ConverterStrategyBaseLib {
     ITetuConverter converter;
     ITetuLiquidator liquidator;
     address splitter;
-
     /// @notice Underlying asset
     address asset;
-    /// @notice Compound ration in the range [0...COMPOUND_DENOMINATOR]
-    uint compoundRatio;
     /// @notice tokens received from {_depositorPoolAssets}
     address[] tokens;
-    /// @notice Liquidation thresholds for rewards tokens
-    uint[] thresholds;
     /// @notice Full list of reward tokens received from tetuConverter and depositor
     address[] rewardTokens;
+    /// @notice Liquidation thresholds for rewards tokens
+    uint[] thresholds;
+    /// @notice Compound ration in the range [0...COMPOUND_DENOMINATOR]
+    uint compoundRatio;
     /// @notice Amounts of {rewardTokens_}; we assume, there are no zero amounts here
     uint[] rewardAmounts;
     /// @notice Performance fee in the range [0...FEE_DENOMINATOR]
@@ -192,6 +189,9 @@ library ConverterStrategyBaseLib {
   ///         But we should prevent situation "zero balance, not zero debts".
   ///         So, it worth to request amount higher (on the given gap) than it's really requested.
   uint internal constant REQUESTED_BALANCE_GAP = 5_000; // 5%
+
+  /// @notice Normally insurance should be equal to 3% of TVL (AppLib.DENOMINATOR is used)
+  uint internal constant INSURANCE_TVL_PART = 3_000;
 //endregion--------------------------------------------------- Constants
 
 //region--------------------------------------------------- Events
@@ -681,6 +681,44 @@ library ConverterStrategyBaseLib {
 
 //region--------------------------------------------------- Recycle rewards
 
+  /// @notice Calculate effective values of performance fee and performance fee ratio depending on TVK and insurance balance.
+  /// Terms:
+  /// P1 - percent of rewards that should be sent to performance receiver
+  /// P2 - max percent of rewards that can be sent to the insurance.
+  /// P2' - effective value of P2 = percent of rewards that should be sent to the insurance.
+  /// @param performanceFee Performance fee from configuration, decimals = AppLib.DENOMINATOR
+  /// Performance fee = P1 + P2
+  /// Actual (effective) value of P2 depends on current TVL and insurance balance.
+  /// Insurance balance should be equal 3% of TVL. If required balance is reached, P2' = 0.
+  /// In other case P2' ~ difference of (3% of TVL - insurance balance).
+  /// @param performanceFeeRatio Ratio between P1 and P2. 100_000 means P2 = 0, 0 means P1 = 0
+  /// @param tvl Current TVL of the vault
+  /// @param insurance Address of the insurance contract
+  /// @return effectivePerformanceFee Effective percent of performance fee = P1 + P2', where P2' is actual percent
+  /// of rewards that should be sent to the insurance.
+  /// @return effectivePerformanceFeeRatio Ratio between P1 and P2'.
+  function _getEffectivePerformanceFee(
+    uint performanceFee,
+    uint performanceFeeRatio,
+    uint tvl,
+    address asset,
+    address insurance
+  ) internal view returns (
+    uint effectivePerformanceFee,
+    uint effectivePerformanceFeeRatio
+  ) {
+    uint targetBalance = tvl * INSURANCE_TVL_PART / COMPOUND_DENOMINATOR;
+    uint insuranceBalance = IERC20(asset).balanceOf(insurance);
+    uint toPerf = performanceFee * performanceFeeRatio / AppLib.DENOMINATOR;
+    if (insuranceBalance >= targetBalance || targetBalance == 0) {
+      // 100% to performance fee, 0% to insurance
+      return (toPerf, AppLib.DENOMINATOR);
+    } else {
+      uint toInsurance = (targetBalance - insuranceBalance) * performanceFee * (AppLib.DENOMINATOR - performanceFeeRatio) / targetBalance;
+      return (toPerf + toInsurance, toPerf * AppLib.DENOMINATOR / (toPerf + toInsurance));
+    }
+  }
+
   /// @notice Recycle the amounts: liquidate a part of each amount, send the other part to the forwarder.
   /// We have two kinds of rewards:
   /// 1) rewards in depositor's assets (the assets returned by _depositorPoolAssets)
@@ -706,26 +744,23 @@ library ConverterStrategyBaseLib {
   ) external returns (uint paidDebtToInsurance, uint amountPerf) {
     RecycleLocal memory v;
     v.asset = baseState.asset;
-    v.compoundRatio = baseState.compoundRatio;
-    v.performanceFee = baseState.performanceFee;
-    v.thresholds = _getLiquidationThresholds(liquidationThresholds, rewardTokens_, rewardTokens_.length);
-    v.debtToInsuranceCurrent = csbs.debtToInsurance;
-    v.splitter = baseState.splitter;
 
-    (v.amountsToForward, amountPerf, v.debtToInsuranceUpdated) = _recycle(RecycleParams({
+    RecycleParams memory rp = RecycleParams({
       converter: csbs.converter,
       liquidator: AppLib._getLiquidator(controller),
       asset: v.asset,
-      compoundRatio: v.compoundRatio,
+      compoundRatio: baseState.compoundRatio,
       tokens: tokens,
-      thresholds: v.thresholds,
+      thresholds: _getLiquidationThresholds(liquidationThresholds, rewardTokens_, rewardTokens_.length),
       rewardTokens: rewardTokens_,
       rewardAmounts: rewardAmounts_,
-      performanceFee: v.performanceFee,
-      debtToInsurance: v.debtToInsuranceCurrent,
-      splitter: v.splitter,
+      performanceFee: baseState.performanceFee,
+      debtToInsurance: csbs.debtToInsurance,
+      splitter: baseState.splitter,
       assetThreshold: AppLib._getLiquidationThreshold(liquidationThresholds[v.asset])
-    }));
+    });
+
+    (v.amountsToForward, amountPerf, v.debtToInsuranceUpdated) = _recycle(rp);
 
     if (v.debtToInsuranceCurrent != v.debtToInsuranceUpdated) {
       csbs.debtToInsurance = v.debtToInsuranceUpdated;
@@ -737,15 +772,15 @@ library ConverterStrategyBaseLib {
 
     // send performance-part of the underlying to the performance receiver and insurance
     (v.toPerf, v.toInsurance) = _sendPerformanceFee(
-      v.asset,
+      rp.asset,
       amountPerf,
-      v.splitter,
+      rp.splitter,
       baseState.performanceReceiver,
-      baseState.performanceFeeRatio
+      v.performanceFeeRatio
     );
 
-    // override rewardTokens_, v.amountsToForward by the values actually sent to the forwarder
-    (rewardTokens_, v.amountsToForward) = _sendTokensToForwarder(controller, v.splitter, rewardTokens_, v.amountsToForward, v.thresholds);
+    // overwrite rewardTokens_, v.amountsToForward by the values actually sent to the forwarder
+    (rewardTokens_, v.amountsToForward) = _sendTokensToForwarder(controller, rp.splitter, rewardTokens_, v.amountsToForward, v.thresholds);
 
     emit Recycle(rewardTokens_, v.amountsToForward, v.toPerf, v.toInsurance);
     return (paidDebtToInsurance, amountPerf);
