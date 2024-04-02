@@ -3016,6 +3016,342 @@ describe('ConverterStrategyBaseLibTest', () => {
     });
   });
 
+  describe("recycle", () => {
+    interface IParams {
+      totalAssets: string;
+      baseState: {
+        performanceFee: string;
+        performanceFeeRatio: string;
+        compoundRatio: string;
+      }
+
+      tokens: MockToken[];
+      assetIndex: number;
+
+      liquidations: ILiquidationParams[];
+      thresholds?: ITokenAmountNum[];
+      initialBalances: ITokenAmountNum[];
+
+      rewardTokens: MockToken[];
+      rewardAmounts: string[];
+
+      isConversionValid?: boolean;
+      isConversionValidDetailed?: IConversionValidationParams[];
+
+      debtToInsurance?: string; // 0 by default
+      insuranceBalance?: string;
+    }
+
+    interface IResults {
+      gasUsed: number;
+
+      paidDebtToInsurance: number;
+      amountPerf: number;
+
+      performanceReceiverBalance: number;
+      insuranceBalance: number;
+
+      tokenBalances: string[];
+      rewardTokenBalances: string[];
+      debtToInsurance: number;
+
+      forwarder: {
+        tokens: string[];
+        amounts: number[];
+        vault: string;
+        isDistribute: boolean;
+      }
+    }
+
+    async function makeTest(p: IParams): Promise<IResults> {
+      const performanceReceiver = ethers.Wallet.createRandom().address;
+      const forwarder = await MockHelper.createMockForwarder(signer);
+
+      // read decimals
+      const decimalsRewardTokens: number[] = [];
+      for (let i = 0; i < p.rewardTokens.length; ++i) {
+        decimalsRewardTokens.push(await p.rewardTokens[i].decimals());
+      }
+      const decimalsTokens: number[] = [];
+      for (let i = 0; i < p.tokens.length; ++i) {
+        decimalsTokens.push(await p.tokens[i].decimals());
+      }
+
+      // set up insurance
+      const insurance = ethers.Wallet.createRandom().address;
+      await p.tokens[p.assetIndex].mint(insurance, parseUnits(p.insuranceBalance ?? "0", decimalsTokens[p.assetIndex]));
+
+      const vault = await MockHelper.createMockVault(signer);
+      await vault.setInsurance(insurance);
+
+      const splitter = await MockHelper.createMockSplitter(signer);
+      await splitter.setVault(vault.address);
+      await splitter.setTotalAssets(parseUnits(p.totalAssets, decimalsTokens[p.assetIndex]));
+      // await splitter.set
+
+      // set up thresholds
+      const thresholds = p.rewardTokens.map(x => "0");
+      if (p.thresholds) {
+        for (const thresholdInfo of p.thresholds) {
+          for (let i = 0; i < p.rewardTokens.length; ++i) {
+            if (p.rewardTokens[i] === thresholdInfo.token) {
+              thresholds[i] = thresholdInfo.amount;
+            }
+          }
+        }
+      }
+
+      // set up initial balances
+      for (const b of p.initialBalances) {
+        await b.token.mint(facade.address, parseUnits(b.amount, await b.token.decimals()));
+      }
+
+      // set up TetuConverter, controller and priceOracle
+      const priceOracle = await MockHelper.createPriceOracle(signer, [], [],);
+      const converter = await MockHelper.createMockTetuConverter(signer);
+
+      // set up expected liquidations
+      const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
+      for (const liquidation of p.liquidations) {
+        await setupMockedLiquidation(liquidator, liquidation);
+        if (!p.isConversionValidDetailed) {
+          await setupIsConversionValid(
+            converter,
+            liquidation,
+            p.isConversionValid === undefined
+              ? true
+              : p.isConversionValid
+          )
+        }
+      }
+
+      // set up controller
+      const controller = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
+      await converter.setController(controller.address);
+      await controller.setLiquidator(liquidator.address);
+      await controller.setForwarder(forwarder.address);
+
+      if (p.isConversionValidDetailed) {
+        for (const cv of p.isConversionValidDetailed) {
+          await setupIsConversionValidDetailed(converter, cv);
+        }
+      }
+
+      await facade.setCsbs(
+        0, // not used in the test
+        converter.address,
+        0,
+        parseUnits(p.debtToInsurance ?? "0", await p.tokens[p.assetIndex].decimals())
+      );
+
+      await facade.setBaseState(
+        p.tokens[p.assetIndex].address,
+        splitter.address,
+        performanceReceiver,
+        parseUnits(p.baseState.performanceFee, 3),
+        parseUnits(p.baseState.performanceFeeRatio, 3),
+        parseUnits(p.baseState.compoundRatio, 3),
+        "specific-name"
+      )
+
+      // make test
+      const ret = await facade.callStatic.recycle(
+        p.tokens.map(x => x.address),
+        controller.address,
+        p.rewardTokens.map(x => x.address),
+        p.rewardAmounts.map((s, index) => parseUnits(s, decimalsRewardTokens[index]))
+      );
+      const tx = await facade.recycle(
+        p.tokens.map(x => x.address),
+        controller.address,
+        p.rewardTokens.map(x => x.address),
+        p.rewardAmounts.map((s, index) => parseUnits(s, decimalsRewardTokens[index]))
+      );
+      const cr = await tx.wait();
+      const gasUsed = cr.gasUsed;
+
+      const csbsAfter = await facade.getCsbs();
+
+      const forwarderResults = await forwarder.getLastRegisterIncomeResults();
+
+      return {
+        gasUsed: gasUsed.toNumber(),
+        paidDebtToInsurance: +formatUnits(ret.paidDebtToInsurance, decimalsTokens[p.assetIndex]),
+        amountPerf: +formatUnits(ret.amountPerf, decimalsTokens[p.assetIndex]),
+        performanceReceiverBalance: +formatUnits(await p.tokens[p.assetIndex].balanceOf(performanceReceiver), decimalsTokens[p.assetIndex]),
+        insuranceBalance: +formatUnits(await p.tokens[p.assetIndex].balanceOf(insurance), decimalsTokens[p.assetIndex]),
+
+        tokenBalances: await Promise.all(p.tokens.map(
+          async t => (+formatUnits(await t.balanceOf(facade.address), await t.decimals())).toString()
+        )),
+        rewardTokenBalances: await Promise.all(p.rewardTokens.map(
+          async t => (+formatUnits(await t.balanceOf(facade.address), await t.decimals())).toString()
+        )),
+        debtToInsurance: +formatUnits(csbsAfter.debtToInsurance, decimalsTokens[p.assetIndex]),
+        forwarder: {
+          tokens: forwarderResults.tokens,
+          amounts: await Promise.all(forwarderResults.amounts.map(
+            async (amount, index) => +formatUnits(
+              amount,
+              await IERC20Metadata__factory.connect(forwarderResults.tokens[index], signer).decimals()
+            )
+          )),
+          vault: forwarderResults.vault,
+          isDistribute: forwarderResults.isDistribute
+        }
+      }
+    }
+
+    function getNormalCase(): IParams {
+      return {
+        totalAssets: "1000000",
+        assetIndex: 0,
+        tokens: [usdc, dai],
+        baseState: {
+          compoundRatio: "50",
+          performanceFeeRatio: "40",
+          performanceFee: "10",
+        },
+        rewardTokens: [usdt],
+        rewardAmounts: ["100"],
+        isConversionValid: true,
+
+        initialBalances: [
+          {token: usdc, amount: "500"},
+          {token: usdt, amount: "400"},
+          {token: dai, amount: "300"},
+        ],
+        liquidations: [
+          {tokenIn: usdt, tokenOut: usdc, amountIn: "55", amountOut: "56"},
+        ]
+      }
+    }
+    describe("Good paths", () => {
+      describe("Normal case, insurance is empty", () => {
+        let snapshot: string;
+        let ret: IResults;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+          ret = await makeTest(getNormalCase());
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should not exceed gas limits @skip-on-coverage", async () => {
+          console.log("gasUsed", ret.gasUsed);
+          expect(ret.gasUsed).lt(450_000); // 446908
+        });
+        it("should return expected perf amount", async () => {
+          expect(ret.amountPerf).eq(ret.performanceReceiverBalance + ret.insuranceBalance);
+          expect(ret.amountPerf).approximately(56 * 10/55, 0.1);
+        });
+        it("should return expected token balances", async () => {
+          expect(Number(ret.tokenBalances[1])).eq(400 - 100);
+          expect(Number(ret.tokenBalances[0])).approximately(545, 1);
+        });
+        it("should not change debt to insurance", async () => {
+          expect(ret.paidDebtToInsurance).eq(0);
+          expect(ret.debtToInsurance).eq(0, "no changes");
+        });
+        it("should send expected amounts to the forwarder", async () => {
+          // amountFC = 90, amountsToForward = 45
+          expect(ret.forwarder.tokens.join().toLowerCase()).eq([usdt.address].join().toLowerCase());
+          expect(ret.forwarder.amounts.join()).eq([45].join());
+        });
+      });
+      describe("Insurance is full", () => {
+        let snapshot: string;
+        let ret: IResults;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+          ret = await makeTest({
+            ...getNormalCase(),
+            totalAssets: "10000",
+            insuranceBalance: "300", // (!) 3% of totalAsset, no need to increase
+            liquidations: [
+              {tokenIn: usdt, tokenOut: usdc, amountIn: "52", amountOut: "54"},
+            ]
+          });
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should not exceed gas limits @skip-on-coverage", async () => {
+          console.log("gasUsed", ret.gasUsed);
+          expect(ret.gasUsed).lt(430_000); // 421639
+        });
+        it("should return expected perf amount", async () => {
+          // console.log(ret);
+          expect(ret.amountPerf).eq(ret.performanceReceiverBalance);
+          // performanceFeeEffective = 4%, effectivePerformanceFeeRatio = 100%
+          // amountFC = 96, amountC = 48, amountP = 40, amountCP = 52, receivedAmountOut = 54
+          expect(ret.amountPerf).approximately(54 * 4/52, 0.1);
+        });
+        it("should return expected token balances", async () => {
+          expect(Number(ret.tokenBalances[1])).eq(400 - 100);
+          expect(Number(ret.tokenBalances[0])).approximately(550, 1);
+        });
+        it("should not change insurance", async () => {
+          expect(ret.insuranceBalance).eq(300);
+        });
+        it("should not change debt to insurance", async () => {
+          expect(ret.paidDebtToInsurance).eq(0);
+          expect(ret.debtToInsurance).eq(0, "no changes");
+        });
+        it("should send expected amounts to the forwarder", async () => {
+          // amountFC = 96, amountsToForward = 48
+          expect(ret.forwarder.tokens.join().toLowerCase()).eq([usdt.address].join().toLowerCase());
+          expect(ret.forwarder.amounts.join()).eq([48].join());
+        });
+      });
+      describe("Debt to insurance is high", () => {
+        let snapshot: string;
+        let ret: IResults;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+          ret = await makeTest({
+            ...getNormalCase(),
+            totalAssets: "10000",
+            insuranceBalance: "300", // 3% of totalAsset, no need to increase
+            liquidations: [
+              {tokenIn: usdt, tokenOut: usdc, amountIn: "100", amountOut: "101"},
+            ],
+            debtToInsurance: "1000" // (!) all rewards are not enough to cover it
+          });
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should not exceed gas limits @skip-on-coverage", async () => {
+          console.log("gasUsed", ret.gasUsed);
+          expect(ret.gasUsed).lt(250_000); // 243985
+        });
+        it("should return expected perf amount", async () => {
+          // console.log(ret);
+          expect(ret.amountPerf).eq(0);
+          expect(ret.performanceReceiverBalance).eq(0);
+        });
+        it("should not change token balances", async () => {
+          expect(Number(ret.tokenBalances[0])).eq(500);
+          expect(Number(ret.tokenBalances[1])).eq(300);
+        });
+        it("should increase the insurance", async () => {
+          expect(ret.insuranceBalance).eq(300 + 101);
+        });
+        it("should reduce debt to insurance", async () => {
+          expect(ret.paidDebtToInsurance).eq(101);
+          expect(ret.debtToInsurance).eq(1000 - 101);
+        });
+        it("should NOT send any amounts to the forwarder", async () => {
+          expect(ret.forwarder.amounts.length).eq(0);
+        });
+      });
+    });
+  });
+
   describe("_getEffectivePerformanceFee", () => {
     interface IParams {
       performanceFee: string;
@@ -5154,7 +5490,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               },
             );
 
-            console.log('results', r);
+            // console.log('results', r);
 
             const totalAmountInTermsCollateral = r.collateralAmountOut.add(
               r.borrowedAmountOut

@@ -102,7 +102,6 @@ library ConverterStrategyBaseLib {
     uint performanceFeeEffective;
     uint effectivePerformanceFeeRatio;
     uint[] amountsToForward;
-    uint[] thresholds;
   }
 
   /// @notice Input params for _recycle
@@ -706,6 +705,7 @@ library ConverterStrategyBaseLib {
     v.splitter = baseState.splitter;
     v.vault = ISplitter(v.splitter).vault();
     v.insurance = address(ITetuVaultV2(v.vault).insurance());
+    v.debtToInsuranceCurrent = csbs.debtToInsurance;
 
     // calculate effective performance fee in the range [0...baseState.performanceFee] depending on the insurance balance
     (v.performanceFeeEffective, v.effectivePerformanceFeeRatio) = _getEffectivePerformanceFee(
@@ -726,11 +726,10 @@ library ConverterStrategyBaseLib {
       rewardTokens: rewardTokens_,
       rewardAmounts: rewardAmounts_,
       performanceFee: v.performanceFeeEffective,
-      debtToInsurance: csbs.debtToInsurance,
+      debtToInsurance: v.debtToInsuranceCurrent,
       insurance: address(v.insurance),
       assetThreshold: AppLib._getLiquidationThreshold(liquidationThresholds[v.asset])
     });
-
     (v.amountsToForward, amountPerf, v.debtToInsuranceUpdated) = _recycle(rp);
 
     if (v.debtToInsuranceCurrent != v.debtToInsuranceUpdated) {
@@ -752,7 +751,7 @@ library ConverterStrategyBaseLib {
     );
 
     // overwrite rewardTokens_, v.amountsToForward by the values actually sent to the forwarder
-    (rewardTokens_, v.amountsToForward) = _sendTokensToForwarder(controller, v.vault, rewardTokens_, v.amountsToForward, v.thresholds);
+    (rewardTokens_, v.amountsToForward) = _sendTokensToForwarder(controller, v.vault, rewardTokens_, v.amountsToForward, rp.thresholds);
 
     emit Recycle(rewardTokens_, v.amountsToForward, v.toPerf, v.toInsurance);
     return (paidDebtToInsurance, amountPerf);

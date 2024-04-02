@@ -16,6 +16,10 @@ contract ConverterStrategyBaseLibFacade {
     liquidationThresholds[asset] = values;
   }
 
+  function getCsbs() external view returns (IConverterStrategyBase.ConverterStrategyBaseState memory) {
+    return _csbs;
+  }
+
   function setCsbs(
     uint investedAssets,
     ITetuConverter converter,

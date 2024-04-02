@@ -10,6 +10,7 @@ contract MockSplitterVault {
   address private _asset;
   address private _insurance;
   bool private _coverFromInsurance;
+  uint private _totalAssets;
 
   function setVault(address vault_) external {
     _vault = vault_;
@@ -38,21 +39,25 @@ contract MockSplitterVault {
 
   /// @notice Emulate insurance. Cover possible amount of loss, leave leftovers uncovered
   function coverPossibleStrategyLoss(uint earned, uint lost) external {
-    console.log("MockSplitterVault.coverPossibleStrategyLoss.lost", lost);
-    console.log("MockSplitterVault.coverPossibleStrategyLoss.earned", earned);
     earned; // hide warning
     if (lost != 0) {
       require(_vault != address(0), "MockSplitterVault zero vault");
       require(_asset != address(0), "MockSplitterVault zero asset");
       if (_coverFromInsurance) {
         uint balance = IERC20(_asset).balanceOf(_insurance);
-        console.log("MockSplitterVault.coverPossibleStrategyLoss.balance.2", balance);
         IERC20(_asset).transferFrom(_insurance, _vault, Math.min(lost, balance));
       } else {
         uint balance = IERC20(_asset).balanceOf(address(this));
-        console.log("MockSplitterVault.coverPossibleStrategyLoss.balance.1", balance);
         IERC20(_asset).transfer(_vault, Math.min(lost, balance));
       }
     }
+  }
+
+  function totalAssets() external view returns (uint256) {
+    return _totalAssets;
+  }
+
+  function setTotalAssets(uint value) external {
+    _totalAssets = value;
   }
 }
