@@ -2091,15 +2091,18 @@ describe('ConverterStrategyBaseTest', () => {
           });
           it('should return expected performanceAmounts', async() => {
             const r = await loadFixture(makeRecycleTest);
-            expect(r.performanceAmounts).to.equal(18.07317);  // (12 + 20 + 40/328*34) / 2
+            // threshold 500 > 18.07317) = (12 + 20 + 40/328*34) / 2
+            expect(r.performanceAmounts).to.equal(0);
           });
           it('should return expected insuranceAmounts', async() => {
             const r = await loadFixture(makeRecycleTest);
-            expect(r.performanceAmounts).to.equal(18.07317); // (12 + 20 + 40/328*34) / 2
+            // threshold 500 > 18.07317) = (12 + 20 + 40/328*34) / 2
+            expect(r.performanceAmounts).to.equal(0);
           });
           it('should return expected final balances', async() => {
             const r = await loadFixture(makeRecycleTest);
-            expect(r.finalRewardTokenBalances.join()).to.equal([90-18, 209.853659, 72-72].join()); // 180+288*34/328, 400*0.9*0.2
+            // 400*0.9*0.2, 180+288*34/328 + 18.07317 * 2 = 209.853659 + 36.14634 = 246
+            expect(r.finalRewardTokenBalances.join()).to.equal([90-18, 246, 72-72].join());
           });
         });
       });

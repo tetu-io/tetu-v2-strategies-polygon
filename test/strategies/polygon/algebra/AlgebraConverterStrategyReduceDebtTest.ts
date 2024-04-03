@@ -30,7 +30,10 @@ import {PLAN_REPAY_SWAP_REPAY_1} from "../../../baseUT/AppConstants";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 import {buildEntryData1} from "../../../baseUT/utils/EntryDataUtils";
 
-describe('AlgebraConverterStrategy reduce debt by agg test', function() {
+/**
+ * Algebra is not used anymore
+ */
+describe.skip('AlgebraConverterStrategy reduce debt by agg test', function() {
 
   let snapshotBefore: string;
   let snapshot: string;

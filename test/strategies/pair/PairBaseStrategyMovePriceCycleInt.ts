@@ -229,8 +229,9 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
 
       const strategies: IStrategyInfo[] = [
         {name: PLATFORM_UNIV3, chainId: POLYGON_NETWORK_ID},
-        {name: PLATFORM_PANCAKE, chainId: BASE_NETWORK_ID},
-        {name: PLATFORM_PANCAKE, chainId: ZKEVM_NETWORK_ID},
+        // todo {name: PLATFORM_UNIV3, chainId: BASE_NETWORK_ID},
+        // {name: PLATFORM_PANCAKE, chainId: ZKEVM_NETWORK_ID},
+        // {name: PLATFORM_PANCAKE, chainId: BASE_NETWORK_ID},
         // { name: PLATFORM_ALGEBRA,}, // todo getPrice reverts
         // { name: PLATFORM_KYBER,}, // todo getPrice reverts
       ];

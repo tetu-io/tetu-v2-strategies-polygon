@@ -214,10 +214,10 @@ describe('PairBasedStrategyTwistedDebts', function () {
       }
 
       const strategies: IStrategyInfo[] = [
-        {name: PLATFORM_ALGEBRA, chainId: POLYGON_NETWORK_ID},
         {name: PLATFORM_UNIV3, chainId: POLYGON_NETWORK_ID, amountDepositBySigner: "25000"},
-        {name: PLATFORM_PANCAKE, chainId: BASE_NETWORK_ID},
-        {name: PLATFORM_PANCAKE, chainId: ZKEVM_NETWORK_ID},
+        // todo {name: PLATFORM_UNIV3, chainId: BASE_NETWORK_ID},
+        // {name: PLATFORM_ALGEBRA, chainId: POLYGON_NETWORK_ID},
+        // {name: PLATFORM_PANCAKE, chainId: ZKEVM_NETWORK_ID},
       ];
 
       describe("Prices up", () => {

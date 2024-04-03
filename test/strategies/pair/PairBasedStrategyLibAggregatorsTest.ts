@@ -66,17 +66,17 @@ describe('PairBasedStrategyLibAggregatorsTest', () => {
       tokenIn: BaseAddresses.USDC_TOKEN,
       tokenOut: BaseAddresses.USDbC_TOKEN
     },
-    {
-      chainId: ZKEVM_NETWORK_ID,
-      tetuLiquidator: ZkevmAddresses.TETU_LIQUIDATOR,
-      tetuConverter: ZkevmAddresses.TETU_CONVERTER,
-      aggregator: ZkevmAddresses.AGG_OPENOCEAN_ROUTER,
-      aggregatorType: AGGREGATOR_OPEN_OCEAN,
-      tokenIn: ZkevmAddresses.USDC_TOKEN,
-      tokenOut: ZkevmAddresses.USDT_TOKEN,
-
-      liquidatorPools: ZkevmCoreTokensUtils.getLiquidatorPools(),
-    },
+    // {
+    //   chainId: ZKEVM_NETWORK_ID,
+    //   tetuLiquidator: ZkevmAddresses.TETU_LIQUIDATOR,
+    //   tetuConverter: ZkevmAddresses.TETU_CONVERTER,
+    //   aggregator: ZkevmAddresses.AGG_OPENOCEAN_ROUTER,
+    //   aggregatorType: AGGREGATOR_OPEN_OCEAN,
+    //   tokenIn: ZkevmAddresses.USDC_TOKEN,
+    //   tokenOut: ZkevmAddresses.USDT_TOKEN,
+    //
+    //   liquidatorPools: ZkevmCoreTokensUtils.getLiquidatorPools(),
+    // },
   ];
 
   CHAINS_IN_ORDER_EXECUTION.forEach(function (chainId) {

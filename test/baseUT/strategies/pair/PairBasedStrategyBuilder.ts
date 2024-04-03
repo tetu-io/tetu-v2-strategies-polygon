@@ -128,7 +128,13 @@ export class PairBasedStrategyBuilder {
   ){
     const platform = await ConverterStrategyBase__factory.connect(strategy.address, signer).PLATFORM();
     if (platform === PLATFORM_UNIV3) {
-      await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA);
+      if (chainId === POLYGON_NETWORK_ID) {
+        await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA);
+      } else if (chainId === BASE_NETWORK_ID) {
+        await PriceOracleImitatorUtils.uniswapV3BaseChain(signer, state.pool, state.tokenA);
+      } else {
+        throw Error("PairBasedStrategyBuilder: chain not supported");
+      }
     } else if (platform === PLATFORM_ALGEBRA) {
       await PriceOracleImitatorUtils.algebra(signer, state.pool, state.tokenA);
     } else if (platform === PLATFORM_KYBER) {

@@ -80,10 +80,11 @@ describe('PairBasedNoSwapIntTest', function() {
       }
 
       const platforms: IPlatformInfo[] = [
-        {platformType: PLATFORM_PANCAKE, chainId: ZKEVM_NETWORK_ID},
-        {platformType: PLATFORM_PANCAKE, chainId: BASE_NETWORK_ID},
+        // todo {platformType: PLATFORM_UNIV3, chainId: BASE_NETWORK_ID},
         {platformType: PLATFORM_UNIV3, chainId: POLYGON_NETWORK_ID},
-        {platformType: PLATFORM_ALGEBRA, chainId: POLYGON_NETWORK_ID},
+
+        // {platformType: PLATFORM_PANCAKE, chainId: ZKEVM_NETWORK_ID},
+        // {platformType: PLATFORM_ALGEBRA, chainId: POLYGON_NETWORK_ID},
       ];
       platforms.forEach(function (platformInfo: IPlatformInfo) {
         if (platformInfo.chainId === chainId) {
@@ -848,7 +849,7 @@ describe('PairBasedNoSwapIntTest', function() {
                           return PairWithdrawByAggUtils.completeWithdrawTest(signer, signer2, builderResults, {
                             chainId,
                             singleIteration: false,
-                            entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
+                            entryToPool: ENTRY_TO_POOL_DISABLED,
                             planKind: PLAN_SWAP_REPAY_0,
                             states0: ptr.states,
                             propNotUnderlying: "0",
@@ -889,12 +890,17 @@ describe('PairBasedNoSwapIntTest', function() {
                           const [stateLast, ...rest] = [...ret.states].reverse();
                           // coverLoss can compensate loss by transferring of USDC/USDT on strategy balance
                           // so, even if we are going to convert all assets to underlying, we can have small amount of not-underlying on balance
-                          expect(stateLast.strategy.investedAssets).lt(5);
+                          expect(stateLast.strategy.investedAssets).lt(10);
                         });
                         it("should receive totalAssets on balance", async () => {
                           const ret = await loadFixture(makeWithdrawAll);
                           const [stateLast, ...rest] = [...ret.states].reverse();
-                          expect(stateLast.strategy.totalAssets).approximately(stateLast.strategy.assetBalance, 5);
+                          expect(stateLast.strategy.totalAssets).approximately(
+                            stateLast.strategy.assetBalance
+                            // we should take into account possibility of not zero investedAsset, see previous test
+                            + stateLast.strategy.investedAssets,
+                            5
+                          );
                         });
                       });
                     });

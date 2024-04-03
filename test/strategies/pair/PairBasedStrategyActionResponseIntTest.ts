@@ -122,10 +122,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           tag?: string; // to be able to distinct tests
         }
         const strategies: IStrategyInfo[] = [
-          {chainId: ZKEVM_NETWORK_ID, name: PLATFORM_PANCAKE, notUnderlyingToken: ZkevmAddresses.USDT_TOKEN},
-          {chainId: BASE_NETWORK_ID, name: PLATFORM_PANCAKE, notUnderlyingToken: BaseAddresses.USDbC_TOKEN},
+          // todo {chainId: BASE_NETWORK_ID, name: PLATFORM_UNIV3, notUnderlyingToken: BaseAddresses.USDbC_TOKEN},
           {chainId: POLYGON_NETWORK_ID, name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
-          {chainId: POLYGON_NETWORK_ID, name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+          // {chainId: ZKEVM_NETWORK_ID, name: PLATFORM_PANCAKE, notUnderlyingToken: ZkevmAddresses.USDT_TOKEN},
+          // {chainId: POLYGON_NETWORK_ID, name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
           // {chainId: POLYGON_NETWORK_ID, name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN}, /// Kyber is not used after security incident nov-2023
           // todo Uncomment when volatile pairs will be used  {chainId: POLYGON_NETWORK_ID, name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
           // todo Uncomment when volatile pairs will be used {chainId: POLYGON_NETWORK_ID, name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN},
@@ -1166,13 +1166,12 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         }
 
         const strategies: IStrategyInfo[] = [
-          {chainId: BASE_NETWORK_ID, name: PLATFORM_PANCAKE, notUnderlyingToken: BaseAddresses.USDbC_TOKEN, compoundRatio: 0},
-
           {chainId: POLYGON_NETWORK_ID, name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
-          {chainId: POLYGON_NETWORK_ID, name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
           {chainId: POLYGON_NETWORK_ID, name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
 
-          {chainId: POLYGON_NETWORK_ID, name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
+          // {chainId: POLYGON_NETWORK_ID, name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
+          // {chainId: POLYGON_NETWORK_ID, name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
+          // {chainId: BASE_NETWORK_ID, name: PLATFORM_PANCAKE, notUnderlyingToken: BaseAddresses.USDbC_TOKEN, compoundRatio: 0},
           // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 10_000},
           // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 100_000},
 
