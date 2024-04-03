@@ -26,7 +26,10 @@ import {expect} from "chai";
 import {NumberUtils} from "../../../baseUT/utils/NumberUtils";
 import {BigNumber} from "ethers";
 
-describe('PancakeConverterStrategyLogicLibTest', function () {
+/**
+ * Currently PancakeConverterStrategy is not used
+ */
+describe.skip('PancakeConverterStrategyLogicLibTest', function () {
   let snapshotBefore: string;
   let signer: SignerWithAddress;
   let signer2: SignerWithAddress;

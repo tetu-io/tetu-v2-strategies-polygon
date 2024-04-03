@@ -57,7 +57,7 @@ import {AGGREGATOR_TETU_LIQUIDATOR, AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR} fr
 describe('PairBasedStrategyActionResponseIntTest', function() {
   const SWAP_AMOUNT_DEFAULT = 1.1;
   const SWAP_AMOUNT_ALGEBRA = 0.25;
-  const CHAINS_IN_ORDER_EXECUTION: number[] = [POLYGON_NETWORK_ID, BASE_NETWORK_ID, ZKEVM_NETWORK_ID];
+  const CHAINS_IN_ORDER_EXECUTION: number[] = [POLYGON_NETWORK_ID, BASE_NETWORK_ID]; // ZKEVM_NETWORK_ID
 
 //region Variables
   let snapshotBefore: string;

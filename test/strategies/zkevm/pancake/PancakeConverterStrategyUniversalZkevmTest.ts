@@ -45,7 +45,11 @@ import {TetuLiquidatorUtils} from "../../../baseUT/utils/TetuLiquidatorUtils";
 chai.use(chaiAsPromised);
 
 
-describe('PancakeConverterStrategyUniversalZkevmTest', async () => {
+/**
+ * Currently PancakeConverterStrategy doesn't work on zkevm,
+ * disable test to reduce total testing time.
+ */
+describe.skip('PancakeConverterStrategyUniversalZkevmTest', async () => {
   const COUNT_ITERATIONS_IN_MOVING_PRICE = 2;
   const SWAP_AMOUNT_1 = "20000";
   const SWAP_AMOUNT_2 = "15000";

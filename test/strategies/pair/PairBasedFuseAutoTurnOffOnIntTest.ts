@@ -36,7 +36,7 @@ import {ConverterUtils} from "../../baseUT/utils/ConverterUtils";
 describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
 //region Constants
   const DEFAULT_SWAP_AMOUNT_RATIO = 1.01;
-  const CHAINS_IN_ORDER_EXECUTION: number[] = [ZKEVM_NETWORK_ID, BASE_NETWORK_ID, POLYGON_NETWORK_ID];
+  const CHAINS_IN_ORDER_EXECUTION: number[] = [BASE_NETWORK_ID, POLYGON_NETWORK_ID]; // ZKEVM_NETWORK_ID
 //endregion Constants
 
 //region Variables

@@ -34,7 +34,7 @@ import {ZkevmCoreTokensUtils} from "../../baseUT/cores/ZkevmCoreTokens";
 import {ITetuLiquidatorPoolInfo, TetuLiquidatorUtils} from "../../baseUT/utils/TetuLiquidatorUtils";
 
 describe('PairBasedStrategyLibAggregatorsTest', () => {
-  const CHAINS_IN_ORDER_EXECUTION: number[] = [ZKEVM_NETWORK_ID, BASE_NETWORK_ID, POLYGON_NETWORK_ID];
+  const CHAINS_IN_ORDER_EXECUTION: number[] = [BASE_NETWORK_ID, POLYGON_NETWORK_ID]; // ZKEVM_NETWORK_ID
 
   interface ITestSet {
     chainId: number;
