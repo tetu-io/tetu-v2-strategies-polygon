@@ -234,6 +234,13 @@ describe('UniswapV3ConverterStrategyTests', function() {
     operator = await UniversalTestUtils.getAnOperator(strategy3.address, signer)
     await strategy3.connect(operator).setReinvestThresholdPercent(10) // 0.01%
 
+    // set 100% of performance ratio to disable dynamic insurance and be able to make final check of hwReturns
+    await strategy3.connect(gov).setupPerformanceFee(
+      await strategy3.performanceFee(),
+      await strategy3.performanceReceiver(),
+      100_000 // 100%
+    );
+
     await vault.connect(gov).setWithdrawRequestBlocks(0)
     await vault2.connect(gov).setWithdrawRequestBlocks(0)
     await vault3.connect(gov).setWithdrawRequestBlocks(0)
@@ -264,6 +271,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
   describe('UniswapV3 strategy tests', function() {
     it('Rebalance and hardwork with earned/lost checks for stable pool', async() => {
+
       const investAmount = _10_000;
       const swapAssetValueForPriceMove = parseUnits('500000', 6);
       let state = await PackedData.getDefaultState(strategy3);
