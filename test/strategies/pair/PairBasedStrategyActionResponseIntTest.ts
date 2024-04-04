@@ -522,17 +522,18 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                 it("should deposit but NOT invest", async () => {
                   const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-                  const amountToDeposit = parseUnits('1000', 6);
+                  const amountToDeposit = 1000;
                   const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-                  await b.vault.connect(signer).deposit(amountToDeposit, signer.address, {gasLimit: GAS_LIMIT});
+                  await b.vault.connect(signer).deposit(parseUnits(amountToDeposit.toString(), 6), signer.address, {gasLimit: GAS_LIMIT});
                   const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
                   expect(stateAfter.vault.totalAssets).gt(stateBefore.vault.totalAssets);
-                  expect(stateAfter.strategy.totalAssets).eq(stateBefore.strategy.totalAssets);
-                  expect(stateAfter.strategy.assetBalance).eq(stateBefore.strategy.assetBalance + amountToDeposit.toNumber());
-
+                  expect(stateAfter.strategy.totalAssets).approximately(stateBefore.strategy.totalAssets + amountToDeposit, 1);
+                  expect(stateAfter.strategy.assetBalance).eq(stateBefore.strategy.assetBalance + amountToDeposit);
+                  expect(stateAfter.strategy.investedAssets).approximately(stateBefore.strategy.investedAssets, 1);
                 });
-                it("should revert on withdraw", async () => {
+                /** 3.1.7 allows to withdraw when rebalance is required */
+                it.skip("should revert on withdraw", async () => {
                   const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
                   const platform = await converterStrategyBase.PLATFORM();
 
@@ -544,7 +545,17 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                     b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: GAS_LIMIT})
                   ).revertedWith(expectedErrorMessage);
                 });
-                it("should revert on withdraw-all", async () => {
+                it("should withdraw successfully", async () => {
+                  const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+                  const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+                  await b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: GAS_LIMIT});
+                  const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+                  expect(stateAfter.user.assetBalance).eq(stateBefore.user.assetBalance + 300);
+                });
+                /** 3.1.7 allows to withdraw when rebalance is required */
+                it.skip("should revert on withdraw-all", async () => {
                   const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
                   const platform = await converterStrategyBase.PLATFORM();
 
@@ -555,6 +566,17 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   await expect(
                     b.vault.connect(signer).withdrawAll({gasLimit: GAS_LIMIT})
                   ).revertedWith(expectedErrorMessage);
+                });
+                it("should withdraw-all successfully", async () => {
+                  const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+                  const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+                  await b.vault.connect(signer).withdrawAll({gasLimit: GAS_LIMIT});
+                  const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+                  expect(stateAfter.user.assetBalance).gt(stateBefore.user.assetBalance);
+                  expect(stateBefore.vault.userShares).gt(0);
+                  expect(stateAfter.vault.userShares).eq(0);
                 });
                 it("should revert on rebalance", async () => {
                   const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);

@@ -7,7 +7,6 @@ import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
 import "../interfaces/IConverterStrategyBase.sol";
-import "hardhat/console.sol";
 
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
@@ -166,24 +165,19 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     uint investedAssetsAfter,
     uint balanceAfter
   ){
-    console.log("_depositToPoolUniversal.amount_", amount_);
     address _asset = baseState.asset;
 
     uint amountToDeposit = amount_ > earnedByPrices_
       ? amount_ - earnedByPrices_
       : 0;
-    console.log("_depositToPoolUniversal.amountToDeposit", amountToDeposit);
 
     // skip deposit for small amounts
     bool needToDeposit = amountToDeposit > _csbs.reinvestThresholdPercent * investedAssets_ / DENOMINATOR;
     uint balanceBefore = AppLib.balance(_asset);
-    console.log("_depositToPoolUniversal.balanceBefore", balanceBefore);
 
     // send earned-by-prices to the insurance, ignore dust values
     if (earnedByPrices_ > AppLib._getLiquidationThreshold(liquidationThresholds[_asset])) {
-      console.log("_depositToPoolUniversal.2");
       if (needToDeposit || balanceBefore >= earnedByPrices_) {
-        console.log("_depositToPoolUniversal.3");
         (amountSentToInsurance,) = ConverterStrategyBaseLib2.sendToInsurance(
           _asset,
           earnedByPrices_,
@@ -192,7 +186,6 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
           balanceBefore
         );
       } else {
-        console.log("_depositToPoolUniversal.4");
         // needToDeposit is false and we don't have enough amount to cover earned-by-prices, we need to withdraw
         (,, strategyLoss, amountSentToInsurance) = _withdrawUniversal(0, earnedByPrices_, investedAssets_);
       }
@@ -200,7 +193,6 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
 
     // make deposit
     if (needToDeposit) {
-      console.log("_depositToPoolUniversal.5");
       (address[] memory tokens, uint indexAsset) = _getTokens(_asset);
 
       // prepare array of amounts ready to deposit, borrow missed amounts
@@ -208,7 +200,6 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
 
       // make deposit, actually consumed amounts can be different from the desired amounts
       if (!ConverterStrategyBaseLib2.findZeroAmount(amounts)) {
-        console.log("_depositToPoolUniversal.6");
 
         // we cannot enter to pool if at least one of amounts is zero
         // we check != 0 and don't use thresholds because some strategies allow to enter to the pool with amount < liquidation threshold
@@ -217,11 +208,9 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       }
     }
 
-    console.log("_depositToPoolUniversal.7");
     // update _investedAssets with new deposited amount
     investedAssetsAfter = _updateInvestedAssets();
     balanceAfter = AppLib.balance(_asset);
-    console.log("_depositToPoolUniversal.8.balanceAfter", balanceAfter);
 
     // we need to compensate difference if during deposit we lost some assets
     (,strategyLoss) = ConverterStrategyBaseLib2._registerIncome(

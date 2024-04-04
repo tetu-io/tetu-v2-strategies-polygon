@@ -242,7 +242,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   ) {
     if (needRebalance()) {
       // Rebalance is required, it's not allowed to enter to the pool
-      // So let's return zero amounts ready to invest
+      // So let's return zero ready-to-invest amounts
       tokenAmounts = new uint[](2);
     } else {
       (uint prop0, uint prop1) = UniswapV3ConverterStrategyLogicLib.getEntryDataProportions(
