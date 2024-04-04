@@ -200,6 +200,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
 
       // make deposit, actually consumed amounts can be different from the desired amounts
       if (!ConverterStrategyBaseLib2.findZeroAmount(amounts)) {
+
         // we cannot enter to pool if at least one of amounts is zero
         // we check != 0 and don't use thresholds because some strategies allow to enter to the pool with amount < liquidation threshold
         (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
