@@ -20,7 +20,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   string public constant override NAME = "UniswapV3 Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.UNIV3;
-  string public constant override STRATEGY_VERSION = "3.1.6";
+  string public constant override STRATEGY_VERSION = "3.1.7";
 
   //endregion ------------------------------------------------- Constants
 
@@ -240,28 +240,33 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   ) override internal virtual returns (
     uint[] memory tokenAmounts
   ) {
-    require(!needRebalance(), Uni3StrategyErrors.NEED_REBALANCE);
-    (uint prop0, uint prop1) = UniswapV3ConverterStrategyLogicLib.getEntryDataProportions(
-      IUniswapV3Pool(state.pair.pool),
-      state.pair.lowerTick,
-      state.pair.upperTick,
-      state.pair.depositorSwapTokens
-    );
+    if (needRebalance()) {
+      // Rebalance is required, it's not allowed to enter to the pool
+      // So let's return zero amounts ready to invest
+      tokenAmounts = new uint[](2);
+    } else {
+      (uint prop0, uint prop1) = UniswapV3ConverterStrategyLogicLib.getEntryDataProportions(
+        IUniswapV3Pool(state.pair.pool),
+        state.pair.lowerTick,
+        state.pair.upperTick,
+        state.pair.depositorSwapTokens
+      );
 
-    // get token amounts for token A, token B
-    address tokenA = state.pair.tokenA;
-    tokenAmounts = PairBasedStrategyLogicLib._beforeDeposit(
-      converter_,
-      amount_,
-      tokenA,
-      state.pair.tokenB,
-      prop0 * 1e18 / (prop0 + prop1),
-      liquidationThresholds
-    );
+      // get token amounts for token A, token B
+      address tokenA = state.pair.tokenA;
+      tokenAmounts = PairBasedStrategyLogicLib._beforeDeposit(
+        converter_,
+        amount_,
+        tokenA,
+        state.pair.tokenB,
+        prop0 * 1e18 / (prop0 + prop1),
+        liquidationThresholds
+      );
 
-    // take into account a possibility that tokens_ can contain [B, A]
-    if (tokens_[0] != tokenA) {
-      (tokenAmounts[0], tokenAmounts[1]) = (tokenAmounts[1], tokenAmounts[0]);
+      // take into account a possibility that tokens_ can contain [B, A]
+      if (tokens_[0] != tokenA) {
+        (tokenAmounts[0], tokenAmounts[1]) = (tokenAmounts[1], tokenAmounts[0]);
+      }
     }
   }
 
@@ -304,7 +309,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   }
 
   function _beforeWithdraw(uint /*amount*/) internal view override {
-    require(!needRebalance(), Uni3StrategyErrors.NEED_REBALANCE);
+    // 3.1.7: try to allow withdraw when rebalance is needed
+    // require(!needRebalance(), Uni3StrategyErrors.NEED_REBALANCE);
   }
 
   /// @notice Check need-rebalance and fuse-ON
