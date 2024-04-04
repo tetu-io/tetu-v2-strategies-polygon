@@ -8,14 +8,12 @@ import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyLib.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV3.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IBookkeeper.sol";
 import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
-import "../libs/ConverterEntryKinds.sol";
 import "../interfaces/IConverterStrategyBase.sol";
 
 /// @notice Continuation of ConverterStrategyBaseLib (workaround for size limits)
@@ -291,6 +289,7 @@ library ConverterStrategyBaseLib2 {
     uint unsentAmount
   ) {
     uint amountToSend = Math.min(amount, balance);
+    // TODO amountToSend > LIMIT
     if (amountToSend != 0) {
       // max amount that can be send to insurance is limited by PRICE_CHANGE_PROFIT_TOLERANCE
 

@@ -15,6 +15,7 @@ import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../libs/IterationPlanLib.sol";
 import "../interfaces/IConverterStrategyBase.sol";
+import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -34,6 +35,7 @@ library ConverterStrategyBaseLib {
     address rewardToken;
     uint len;
     uint receivedAmountOut;
+    uint toInsurance;
   }
 
   struct OpenPositionLocal {
@@ -99,6 +101,7 @@ library ConverterStrategyBaseLib {
     int debtToInsuranceUpdated;
     uint toPerf;
     uint toInsurance;
+    uint preparedToInsurance;
     uint performanceFeeEffective;
     uint effectivePerformanceFeeRatio;
     uint[] amountsToForward;
@@ -187,11 +190,17 @@ library ConverterStrategyBaseLib {
   /// @notice Recycle was made
   /// @param rewardTokens Full list of reward tokens received from tetuConverter and depositor
   /// @param amountsToForward Amounts to be sent to forwarder
+  /// @param toPerf Amount sent to performance receiver
+  /// @param toInsurance Total amount sent to the insurance = perf-part + cover-debt-part
+  /// @param preparedToInsurance Amount to cover debt to insurance prepared on balance = cover-debt-part.
+  /// toInsurance > 0: preparedToInsurance is sent to the insurance together with perf-part by 1 transfer.
+  /// toInsurance = 0: preparedToInsurance is NOT sent to the insurance because {toInsurance} is less threshold.
   event Recycle(
     address[] rewardTokens,
     uint[] amountsToForward,
     uint toPerf,
-    uint toInsurance
+    uint toInsurance,
+    uint preparedToInsurance
   );
 
   /// @notice Debt to insurance was paid by rewards
@@ -730,7 +739,7 @@ library ConverterStrategyBaseLib {
       insurance: address(v.insurance),
       assetThreshold: AppLib._getLiquidationThreshold(liquidationThresholds[v.asset])
     });
-    (v.amountsToForward, amountPerf, v.debtToInsuranceUpdated) = _recycle(rp);
+    (v.amountsToForward, amountPerf, v.debtToInsuranceUpdated, v.preparedToInsurance) = _recycle(rp);
 
     if (v.debtToInsuranceCurrent != v.debtToInsuranceUpdated) {
       csbs.debtToInsurance = v.debtToInsuranceUpdated;
@@ -747,13 +756,14 @@ library ConverterStrategyBaseLib {
       v.insurance,
       baseState.performanceReceiver,
       v.effectivePerformanceFeeRatio,
-      rp.assetThreshold
+      rp.assetThreshold,
+      v.preparedToInsurance
     );
 
     // overwrite rewardTokens_, v.amountsToForward by the values actually sent to the forwarder
     (rewardTokens_, v.amountsToForward) = _sendTokensToForwarder(controller, v.vault, rewardTokens_, v.amountsToForward, rp.thresholds);
 
-    emit Recycle(rewardTokens_, v.amountsToForward, v.toPerf, v.toInsurance);
+    emit Recycle(rewardTokens_, v.amountsToForward, v.toPerf, v.toInsurance, v.preparedToInsurance);
     return (paidDebtToInsurance, amountPerf);
   }
 
@@ -762,15 +772,24 @@ library ConverterStrategyBaseLib {
   /// @param amount Amount of underlying asset to be sent to performance+insurance
   /// @param receiver Performance receiver
   /// @param ratio [0..100_000], 100_000 - send full amount to perf, 0 - send full amount to the insurance.
+  /// @param preparedToInsurance Amount prepared to be sent to the insurance TOGETHER with {toInsurance}.
+  /// We need to combine that amounts to reduce number of transfers and reduce number of too small transfers.
   /// @return toPerf Amount sent to the {receiver}
   /// @return toInsurance Amount sent to the {insurance}
-  function _sendPerformanceFee(address asset, uint amount, address insurance, address receiver, uint ratio, uint threshold)
-  internal returns (
+  function _sendPerformanceFee(
+    address asset,
+    uint amount,
+    address insurance,
+    address receiver,
+    uint ratio,
+    uint threshold,
+    uint preparedToInsurance
+  ) internal returns (
     uint toPerf,
     uint toInsurance
   ) {
     toPerf = amount * ratio / AppLib.DENOMINATOR;
-    toInsurance = amount - toPerf;
+    toInsurance = amount - toPerf + preparedToInsurance;
 
     if (toPerf != 0) {
       if (toPerf < threshold) {
@@ -784,6 +803,7 @@ library ConverterStrategyBaseLib {
       if (toInsurance < threshold) {
         toInsurance = 0;
       } else {
+        console.log("_sendPerformanceFee.insurance", toInsurance);
         IERC20(asset).safeTransfer(insurance, toInsurance);
       }
     }
@@ -830,11 +850,13 @@ library ConverterStrategyBaseLib {
   ///   Performance amounts are liquidated, result amount of underlying is returned in {amountToPerformanceAndInsurance}
   /// @return amountsToForward Amounts of {rewardTokens} to be sent to forwarder, zero amounts are allowed here
   /// @return amountToPerformanceAndInsurance Amount of underlying to be sent to performance receiver and insurance
-  /// @return debtToInsuranceOut Remain debt to the insurance [in underlying]
+  /// @return debtToInsuranceOut Updated value of
+  /// @return toInsurance Remain debt to the insurance [in underlying]
   function _recycle(RecycleParams memory p) internal returns (
     uint[] memory amountsToForward,
     uint amountToPerformanceAndInsurance,
-    int debtToInsuranceOut
+    int debtToInsuranceOut,
+    uint toInsurance
   ) {
     RecycleLocalParams memory v;
 
@@ -842,13 +864,16 @@ library ConverterStrategyBaseLib {
     require(v.len == p.rewardAmounts.length, AppErrors.WRONG_LENGTHS);
 
     amountsToForward = new uint[](v.len);
+    debtToInsuranceOut = p.debtToInsurance;
 
     // rewardAmounts => P + F + C, where P - performance + insurance, F - forwarder, C - compound
     for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
       // if we have a debt-to-insurance we should firstly cover the debt using all available rewards
       // and only then we can use leftovers of the rewards for other needs
-      if (p.debtToInsurance > int(p.assetThreshold)) {
-        (p.rewardAmounts[i], p.debtToInsurance) = _coverDebtToInsuranceFromRewards(p, i, uint(p.debtToInsurance));
+      if (debtToInsuranceOut > int(p.assetThreshold)) {
+        console.log("_coverDebtToInsuranceFromRewards.i", i);
+        (p.rewardAmounts[i], debtToInsuranceOut, v.toInsurance) = _prepareToCoverDebtToInsuranceFromRewards(p, i, uint(debtToInsuranceOut));
+        toInsurance += v.toInsurance;
         if (p.rewardAmounts[i] < p.thresholds[i]) continue;
       }
 
@@ -899,25 +924,28 @@ library ConverterStrategyBaseLib {
       amountsToForward[i] = v.amountFC - v.amountC;
     }
 
-    return (amountsToForward, amountToPerformanceAndInsurance, p.debtToInsurance);
+    return (amountsToForward, amountToPerformanceAndInsurance, debtToInsuranceOut, toInsurance);
   }
 
-  /// @notice Try to cover {p.debtToInsurance} using available rewards of {p.rewardTokens[index]}
+  /// @notice Prepare amount on balance to cover {p.debtToInsurance} using available rewards of {p.rewardTokens[index]}
+  /// @dev Transfer is not called here to allow the caller to combine several small amounts and make 1 transfer.
+  ///      The caller is responsible to transfer prepared amount to the insurance.
   /// @param index Index of the reward token in {p.rewardTokens}
   /// @param debtAmount Debt to insurance that should be covered by the reward tokens
   /// @return rewardsLeftovers Amount of unused reward tokens (it can be used for other needs)
-  /// @return debtToInsuranceOut New value of the debt to the insurance
-  function _coverDebtToInsuranceFromRewards(RecycleParams memory p, uint index, uint debtAmount) internal returns (
+  /// @return debtToInsuranceOut New value of the debt to the insurance in assumption, that {toInsurance} is transferred
+  /// @return toInsurance Amount prepared on the balance to be sent to the insurance
+  function _prepareToCoverDebtToInsuranceFromRewards(RecycleParams memory p, uint index, uint debtAmount) internal returns (
     uint rewardsLeftovers,
-    int debtToInsuranceOut
+    int debtToInsuranceOut,
+    uint toInsurance
   ) {
     uint spentAmount;
-    uint amountToSend;
 
     if (p.asset == p.rewardTokens[index]) {
       // assume p.debtToInsurance > 0 here
       spentAmount = Math.min(debtAmount, p.rewardAmounts[index]);
-      amountToSend = spentAmount;
+      toInsurance = spentAmount;
     } else {
       // estimate amount of underlying that we can receive for the available amount of the reward tokens
       uint amountAsset = p.rewardAmounts[index] > p.assetThreshold
@@ -929,7 +957,7 @@ library ConverterStrategyBaseLib {
         // pay all available rewards to cover a part of the debt
         : p.rewardAmounts[index];
 
-      (spentAmount, amountToSend) = _liquidate(
+      (spentAmount, toInsurance) = _liquidate(
         p.converter,
         p.liquidator,
         p.rewardTokens[index],
@@ -941,11 +969,15 @@ library ConverterStrategyBaseLib {
       );
     }
 
-    IERC20(p.asset).safeTransfer(p.insurance, amountToSend);
+    console.log("_coverDebtToInsuranceFromRewards.transfer", toInsurance);
+    // IERC20(p.asset).safeTransfer(p.insurance, amountToSend);
 
     rewardsLeftovers = AppLib.sub0(p.rewardAmounts[index], spentAmount);
-    debtToInsuranceOut = int(debtAmount) - int(amountToSend);
 
+    // Amount {amountToSend} will be send to the insurance by caller in normal case.
+    // But if the amount is less than the threshold it can be NOT sent.
+    // We reduce debt-to-insurance and register event in any case in assumption that the threshold is small enough.
+    debtToInsuranceOut = int(debtAmount) - int(toInsurance);
     emit OnCoverDebtToInsurance(p.rewardTokens[index], spentAmount, debtAmount, debtToInsuranceOut);
   }
 //endregion----------------------------------------------- Recycle rewards

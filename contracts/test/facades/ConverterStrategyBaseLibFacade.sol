@@ -154,11 +154,12 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
-  function sendPerformanceFee(address asset, uint amount, address insurance, address receiver, uint ratio, uint threshold) external returns (
+  function sendPerformanceFee(address asset, uint amount, address insurance, address receiver, uint ratio, uint threshold, uint preparedToInsurance)
+  external returns (
     uint toPerf,
     uint toInsurance
   ) {
-    return ConverterStrategyBaseLib._sendPerformanceFee(asset, amount, insurance, receiver, ratio, threshold);
+    return ConverterStrategyBaseLib._sendPerformanceFee(asset, amount, insurance, receiver, ratio, threshold, preparedToInsurance);
   }
 
   function closePositionsToGetAmount(
@@ -230,7 +231,8 @@ contract ConverterStrategyBaseLibFacade {
   function _recycle(ConverterStrategyBaseLib.RecycleParams memory p) external returns (
     uint[] memory amountsToForward,
     uint amountToPerformanceAndInsurance,
-    int debtToInsuranceOut
+    int debtToInsuranceOut,
+    uint toInsurance
   ) {
     return ConverterStrategyBaseLib._recycle(p);
   }
@@ -330,14 +332,15 @@ contract ConverterStrategyBaseLibFacade {
     return ConverterStrategyBaseLib._repayDebt(converter, collateralAsset, borrowAsset, amountToRepay);
   }
 
-  function _coverDebtToInsuranceFromRewards(
+  function _prepareToCoverDebtToInsuranceFromRewards(
     ConverterStrategyBaseLib.RecycleParams memory p,
     uint index,
     uint debtAmount
   ) external returns (
     uint rewardsLeftovers,
-    int debtToInsuranceOut
+    int debtToInsuranceOut,
+    uint toInsurance
   ) {
-    return ConverterStrategyBaseLib._coverDebtToInsuranceFromRewards(p, index, debtAmount);
+    return ConverterStrategyBaseLib._prepareToCoverDebtToInsuranceFromRewards(p, index, debtAmount);
   }
 }

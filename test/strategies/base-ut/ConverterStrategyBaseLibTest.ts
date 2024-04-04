@@ -1740,9 +1740,10 @@ describe('ConverterStrategyBaseLibTest', () => {
       tokenBalances: string[];
       rewardTokenBalances: string[];
       debtToInsurance: number;
+      toInsurance: number;
     }
 
-    async function makeRecycle(p: IParams): Promise<IResults> {
+    async function makeTest(p: IParams): Promise<IResults> {
       // read decimals
       const decimalsRewardTokens: number[] = [];
       for (let i = 0; i < p.rewardTokens.length; ++i) {
@@ -1821,7 +1822,12 @@ describe('ConverterStrategyBaseLibTest', () => {
       };
 
       // make test
-      const {amountsToForward, amountToPerformanceAndInsurance, debtToInsuranceOut} = await facade.callStatic._recycle(recycleParams);
+      const {
+        amountsToForward,
+        amountToPerformanceAndInsurance,
+        debtToInsuranceOut,
+        toInsurance
+      } = await facade.callStatic._recycle(recycleParams);
       console.log(amountsToForward, amountToPerformanceAndInsurance);
 
       const tx = await facade._recycle(recycleParams);
@@ -1840,6 +1846,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           async t => (+formatUnits(await t.balanceOf(facade.address), await t.decimals())).toString()
         )),
         debtToInsurance: +formatUnits(debtToInsuranceOut, decimalsTokens[p.assetIndex]),
+        toInsurance: +formatUnits(toInsurance, decimalsTokens[p.assetIndex]),
       }
     }
 
@@ -1857,7 +1864,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               });
 
               async function makeRecycleTest(): Promise<IResults> {
-                return makeRecycle({
+                return makeTest({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
                   rewardTokens: [usdc],
@@ -1901,7 +1908,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               });
 
               async function makeRecycleTest(): Promise<IResults> {
-                return makeRecycle({
+                return makeTest({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
                   rewardTokens: [dai],
@@ -1940,7 +1947,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               });
 
               async function makeRecycleTest(): Promise<IResults> {
-                return makeRecycle({
+                return makeTest({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
                   rewardTokens: [tetu],
@@ -1982,7 +1989,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               });
 
               async function makeRecycleTest(): Promise<IResults> {
-                return makeRecycle({
+                return makeTest({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
                   rewardTokens: [usdc, usdt, weth, dai, tetu],
@@ -2026,7 +2033,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               });
 
               async function makeRecycleTest(): Promise<IResults> {
-                return makeRecycle({
+                return makeTest({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
                   rewardTokens: [usdc, usdt, weth, dai, tetu],
@@ -2067,7 +2074,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               });
 
               async function makeRecycleTest(): Promise<IResults> {
-                return makeRecycle({
+                return makeTest({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
                   rewardTokens: [usdc, usdt, weth, dai, tetu],
@@ -2115,7 +2122,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               });
 
               async function makeRecycleTest(): Promise<IResults> {
-                return makeRecycle({
+                return makeTest({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
                   rewardTokens: [usdc],
@@ -2158,7 +2165,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               });
 
               async function makeRecycleTest(): Promise<IResults> {
-                return makeRecycle({
+                return makeTest({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
                   rewardTokens: [dai],
@@ -2201,7 +2208,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               });
 
               async function makeRecycleTest(): Promise<IResults> {
-                return makeRecycle({
+                return makeTest({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
                   rewardTokens: [tetu],
@@ -2251,7 +2258,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               });
 
               async function makeRecycleTest(): Promise<IResults> {
-                return makeRecycle({
+                return makeTest({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
                   rewardTokens: [usdc, usdt, weth, dai, tetu],
@@ -2301,7 +2308,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               });
 
               async function makeRecycleTest(): Promise<IResults> {
-                return makeRecycle({
+                return makeTest({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
                   rewardTokens: [usdc, usdt, weth, dai, tetu],
@@ -2351,7 +2358,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               });
 
               async function makeRecycleTest(): Promise<IResults> {
-                return makeRecycle({
+                return makeTest({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
                   rewardTokens: [usdc, usdt, weth, dai, tetu],
@@ -2404,7 +2411,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             });
 
             async function makeRecycleTest(): Promise<IResults> {
-              return makeRecycle({
+              return makeTest({
                 assetIndex: 1,
                 tokens: [usdt, usdc, dai],
                 rewardTokens: [dai],
@@ -2436,7 +2443,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             });
 
             async function makeRecycleTest(): Promise<IResults> {
-              return makeRecycle({
+              return makeTest({
                 assetIndex: 1,
                 tokens: [usdt, usdc, dai],
                 rewardTokens: [tetu],
@@ -2482,7 +2489,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               });
 
               async function makeRecycleTest(): Promise<IResults> {
-                return makeRecycle({
+                return makeTest({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
                   rewardTokens: [usdc],
@@ -2507,15 +2514,19 @@ describe('ConverterStrategyBaseLibTest', () => {
               });
               it("should not change balances of secondary depositor assets", async () => {
                 const r = await loadFixture(makeRecycleTest);
-                expect(r.tokenBalances.join()).eq(["1", "102", "3"].join());
+                expect(r.tokenBalances.join()).eq(["1", (102+100).toString(), "3"].join());
               });
               it("should set expected balances of rewards tokens", async () => {
                 const r = await loadFixture(makeRecycleTest);
-                expect(r.rewardTokenBalances.join()).eq(["102"].join());
+                expect(r.rewardTokenBalances.join()).eq([102+100].join());
               });
               it("should cover debtToInsurance completely", async () => {
                 const r = await loadFixture(makeRecycleTest);
                 expect(r.debtToInsurance).eq(0);
+              });
+              it("should prepare expected toInsurance", async () => {
+                const r = await loadFixture(makeRecycleTest);
+                expect(r.toInsurance).eq(100);
               });
             });
             describe("Reward token belongs to the list of depositor tokens, debt to the insurance is covered partially", () => {
@@ -2528,7 +2539,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               });
 
               async function makeRecycleTest(): Promise<IResults> {
-                return makeRecycle({
+                return makeTest({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
                   rewardTokens: [dai],
@@ -2553,30 +2564,28 @@ describe('ConverterStrategyBaseLibTest', () => {
               });
               it("should not change balances of secondary depositor assets", async () => {
                 const r = await loadFixture(makeRecycleTest);
-                expect(r.tokenBalances.join()).eq(["1", "2", "3"].join());
+                expect(r.tokenBalances.join()).eq(["1", (2 + 100).toString(), "3"].join());
               });
               it("should set expected balances of rewards tokens", async () => {
                 const r = await loadFixture(makeRecycleTest);
                 expect(r.rewardTokenBalances.join()).eq(["3"].join());
               });
-              it("should set expected abount of debt to the insurance", async () => {
+              it("should set expected amount of debt to the insurance", async () => {
                 const r = await loadFixture(makeRecycleTest);
                 expect(r.debtToInsurance).eq(500 - 100);
+              });
+              it("should prepare expected toInsurance", async () => {
+                const r = await loadFixture(makeRecycleTest);
+                expect(r.toInsurance).eq(100);
               });
             });
           });
           describe("multiple reward tokens", () => {
             describe("Normal case - a lot of various reward tokens", () => {
               let snapshot: string;
+              let ret: IResults;
               before(async function () {
-                snapshot = await TimeUtils.snapshot();
-              });
-              after(async function () {
-                await TimeUtils.rollback(snapshot);
-              });
-
-              async function makeRecycleTest(): Promise<IResults> {
-                return makeRecycle({
+                const NORMAL_CASE: IParams = {
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
                   rewardTokens: [usdc, usdt, weth, dai, tetu],
@@ -2598,24 +2607,28 @@ describe('ConverterStrategyBaseLibTest', () => {
                   ],
                   performanceFee: 0,
                   debtToInsurance: "200"
-                });
-              }
+                }
+                snapshot = await TimeUtils.snapshot();
+                ret = await makeTest(NORMAL_CASE);
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
 
               it("should return expected amounts for the forwarder", async () => {
-                const r = await loadFixture(makeRecycleTest);
-                expect(r.amountsToForward.join()).eq(["0", "270", "270", "360", "450"].join());
+                expect(ret.amountsToForward.join()).eq(["0", "270", "270", "360", "450"].join());
               });
-              it("should set expected  balances of teh secondary depositor assets", async () => {
-                const r = await loadFixture(makeRecycleTest);
-                expect(r.tokenBalances.join()).eq(["20100", "10088", "30400"].join()); // 10100+33+55-1000 = 10088
+              it("should set expected  balances of the secondary depositor assets", async () => {
+                expect(ret.tokenBalances.join()).eq(["20100", (10088 + 205).toString(), "30400"].join()); // 10100+33+55-1000 = 10088
               });
               it("should set expected balances of rewards tokens", async () => {
-                const r = await loadFixture(makeRecycleTest);
-                expect(r.rewardTokenBalances.join()).eq(["10088", "20100", "271", "30400", "452"].join()); // 10100+33+55-1000 = 10088
+                expect(ret.rewardTokenBalances.join()).eq([(10088 + 205).toString(), "20100", "271", "30400", "452"].join()); // 10100+33+55-1000 = 10088
               });
               it("should set expected debt to insurance", async () => {
-                const r = await loadFixture(makeRecycleTest);
-                expect(r.debtToInsurance).eq(-5);
+                expect(ret.debtToInsurance).eq(-5);
+              });
+              it("should set expected toInsurance", async () => {
+                expect(ret.toInsurance).eq(205);
               });
             });
           });
@@ -2634,7 +2647,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           });
 
           async function makeRecycleTest(): Promise<IResults> {
-            return makeRecycle({
+            return makeTest({
               assetIndex: 1,
               tokens: [usdt, usdc, dai],
               rewardTokens: [tetu],
@@ -2677,7 +2690,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           });
 
           async function makeRecycleTest(): Promise<IResults> {
-            return makeRecycle({
+            return makeTest({
               assetIndex: 1,
               tokens: [usdt, usdc, dai],
               rewardTokens: [tetu],
@@ -2723,7 +2736,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           });
 
           async function makeRecycleTest(): Promise<IResults> {
-            return makeRecycle({
+            return makeTest({
               assetIndex: 0,
               tokens: [usdc, dai],
               rewardTokens: [usdt], // usdt is used as reward token to have decimals 6 and simplify calculations
@@ -2767,7 +2780,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           });
 
           async function makeRecycleTest(): Promise<IResults> {
-            return makeRecycle({
+            return makeTest({
               assetIndex: 1,
               tokens: [usdt, usdc, dai],
               rewardTokens: [tetu],
@@ -2810,7 +2823,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           });
 
           async function makeRecycleTest(): Promise<IResults> {
-            return makeRecycle({
+            return makeTest({
               assetIndex: 1,
               tokens: [usdt, usdc, dai],
               rewardTokens: [tetu],
@@ -2855,7 +2868,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           });
 
           async function makeRecycleTest(): Promise<IResults> {
-            return makeRecycle({
+            return makeTest({
               assetIndex: 1,
               tokens: [usdt, usdc, dai],
               rewardTokens: [dai],
@@ -2901,7 +2914,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           });
 
           async function makeRecycleTest(): Promise<IResults> {
-            return makeRecycle({
+            return makeTest({
               assetIndex: 1,
               tokens: [usdt, usdc, dai],
               rewardTokens: [dai],
@@ -2951,7 +2964,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           });
 
           async function makeRecycleTest(): Promise<IResults> {
-            return makeRecycle({
+            return makeTest({
               assetIndex: 0,
               tokens: [usdc, usdt],
               rewardTokens: [usdt],
@@ -3000,7 +3013,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
         it("should revert", async () => {
           await expect(
-            makeRecycle({
+            makeTest({
               assetIndex: 1,
               tokens: [usdt, usdc, dai],
               rewardTokens: [tetu, usdc],
@@ -4276,14 +4289,15 @@ describe('ConverterStrategyBaseLibTest', () => {
   });
 
   describe('sendPerformanceFee', () => {
-    interface ISendPerformanceFeeParams {
+    interface IParams {
       asset: MockToken;
       amount: string;
       ratio: string;
       threshold?: string;
+      preparedToInsurance?: string; // todo
     }
 
-    interface ISendPerformanceFeeResults {
+    interface IResults {
       toInsurance: number;
       toPerf: number;
       facadeBalance: number;
@@ -4292,10 +4306,11 @@ describe('ConverterStrategyBaseLibTest', () => {
       gasUsed: BigNumber;
     }
 
-    async function makeSendPerformanceFee(p: ISendPerformanceFeeParams): Promise<ISendPerformanceFeeResults> {
+    async function makeTest(p: IParams): Promise<IResults> {
       const receiver = ethers.Wallet.createRandom().address;
       const decimalsAsset = await p.asset.decimals()
       await p.asset.mint(facade.address, parseUnits(p.amount, decimalsAsset));
+      const preparedToInsurance = parseUnits(p.preparedToInsurance ?? "0", decimalsAsset);
 
       const insurance = ethers.Wallet.createRandom().address;
       const vault = await MockHelper.createMockVault(signer);
@@ -4314,7 +4329,8 @@ describe('ConverterStrategyBaseLibTest', () => {
         splitter.address,
         receiver,
         parseUnits(p.ratio, 3),
-        threshold
+        threshold,
+        preparedToInsurance
       );
 
       const tx = await facade.sendPerformanceFee(
@@ -4323,7 +4339,8 @@ describe('ConverterStrategyBaseLibTest', () => {
         insurance,
         receiver,
         parseUnits(p.ratio, 3),
-        threshold
+        threshold,
+        preparedToInsurance
       );
       const gasUsed = (await tx.wait()).gasUsed;
 
@@ -4351,8 +4368,8 @@ describe('ConverterStrategyBaseLibTest', () => {
           await TimeUtils.rollback(snapshot);
         });
 
-        async function makeSendPerformanceFeeTest(): Promise<ISendPerformanceFeeResults> {
-          return makeSendPerformanceFee({
+        async function makeSendPerformanceFeeTest(): Promise<IResults> {
+          return makeTest({
             asset: usdc,
             amount: "100",
             ratio: "50"
@@ -4389,8 +4406,8 @@ describe('ConverterStrategyBaseLibTest', () => {
           await TimeUtils.rollback(snapshot);
         });
 
-        async function makeSendPerformanceFeeTest(): Promise<ISendPerformanceFeeResults> {
-          return makeSendPerformanceFee({
+        async function makeSendPerformanceFeeTest(): Promise<IResults> {
+          return makeTest({
             asset: usdc,
             amount: "0",
             ratio: "50"
@@ -4427,8 +4444,8 @@ describe('ConverterStrategyBaseLibTest', () => {
           await TimeUtils.rollback(snapshot);
         });
 
-        async function makeSendPerformanceFeeTest(): Promise<ISendPerformanceFeeResults> {
-          return makeSendPerformanceFee({
+        async function makeSendPerformanceFeeTest(): Promise<IResults> {
+          return makeTest({
             asset: usdc,
             amount: "100",
             ratio: "20",
@@ -4466,8 +4483,8 @@ describe('ConverterStrategyBaseLibTest', () => {
           await TimeUtils.rollback(snapshot);
         });
 
-        async function makeSendPerformanceFeeTest(): Promise<ISendPerformanceFeeResults> {
-          return makeSendPerformanceFee({
+        async function makeSendPerformanceFeeTest(): Promise<IResults> {
+          return makeTest({
             asset: usdc,
             amount: "100",
             ratio: "80",
@@ -4505,8 +4522,8 @@ describe('ConverterStrategyBaseLibTest', () => {
           await TimeUtils.rollback(snapshot);
         });
 
-        async function makeSendPerformanceFeeTest(): Promise<ISendPerformanceFeeResults> {
-          return makeSendPerformanceFee({
+        async function makeSendPerformanceFeeTest(): Promise<IResults> {
+          return makeTest({
             asset: usdc,
             amount: "100",
             ratio: "50",
@@ -6714,7 +6731,7 @@ describe('ConverterStrategyBaseLibTest', () => {
         await setupMockedLiquidation(liquidator, liquidation);
       }
 
-      const ret = await facade.callStatic._coverDebtToInsuranceFromRewards(
+      const ret = await facade.callStatic._prepareToCoverDebtToInsuranceFromRewards(
         {
           converter: converter.address,
           liquidator: liquidator.address,
@@ -6734,7 +6751,7 @@ describe('ConverterStrategyBaseLibTest', () => {
         parseUnits(p.debtAmount, decimalsAsset)
       );
 
-      await facade._coverDebtToInsuranceFromRewards({
+      await facade._prepareToCoverDebtToInsuranceFromRewards({
           converter: converter.address,
           liquidator: liquidator.address,
           asset: p.asset.address,
