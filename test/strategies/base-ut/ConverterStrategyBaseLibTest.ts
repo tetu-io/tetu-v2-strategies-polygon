@@ -1707,7 +1707,7 @@ describe('ConverterStrategyBaseLibTest', () => {
   });
 
   describe("_recycle", () => {
-    interface IRecycleTestParams {
+    interface IParams {
       compoundRatio: number;
 
       tokens: MockToken[];
@@ -1727,9 +1727,11 @@ describe('ConverterStrategyBaseLibTest', () => {
       performanceFee: number;
 
       debtToInsurance?: string; // 0 by default
+      insuranceBalance?: string;
+      totalAssets?: string; // 1000 by default
     }
 
-    interface IRecycleTestResults {
+    interface IResults {
       gasUsed: BigNumber;
 
       amountsToForward: string[];
@@ -1740,7 +1742,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       debtToInsurance: number;
     }
 
-    async function makeRecycle(p: IRecycleTestParams): Promise<IRecycleTestResults> {
+    async function makeRecycle(p: IParams): Promise<IResults> {
       // read decimals
       const decimalsRewardTokens: number[] = [];
       for (let i = 0; i < p.rewardTokens.length; ++i) {
@@ -1753,11 +1755,14 @@ describe('ConverterStrategyBaseLibTest', () => {
 
       // set up insurance
       const insurance = ethers.Wallet.createRandom().address;
+      await p.tokens[p.assetIndex].mint(insurance, parseUnits(p.insuranceBalance ?? "0", decimalsTokens[p.assetIndex]));
+
       const vault = await MockHelper.createMockVault(signer);
       await vault.setInsurance(insurance);
 
       const splitter = await MockHelper.createMockSplitter(signer);
       await splitter.setVault(vault.address);
+      // await splitter.set
 
       // set up thresholds
       const thresholds = p.rewardTokens.map(x => "0");
@@ -1800,8 +1805,7 @@ describe('ConverterStrategyBaseLibTest', () => {
         }
       }
 
-      // make test
-      const {amountsToForward, amountToPerformanceAndInsurance, debtToInsuranceOut} = await facade.callStatic._recycle({
+      const recycleParams = {
         converter: converter.address,
         asset: p.tokens[p.assetIndex].address,
         compoundRatio: p.compoundRatio,
@@ -1811,26 +1815,16 @@ describe('ConverterStrategyBaseLibTest', () => {
         rewardTokens: p.rewardTokens.map(x => x.address),
         rewardAmounts: await p.rewardAmounts.map((amount, index) => parseUnits(amount, decimalsRewardTokens[index])),
         performanceFee: p.performanceFee,
-        splitter: splitter.address,
+        insurance,
         assetThreshold: parseUnits(p.assetThreshold ?? "0", await p.tokens[p.assetIndex].decimals()),
         debtToInsurance: parseUnits(p.debtToInsurance ?? "0", await p.tokens[p.assetIndex].decimals()),
-      });
+      };
+
+      // make test
+      const {amountsToForward, amountToPerformanceAndInsurance, debtToInsuranceOut} = await facade.callStatic._recycle(recycleParams);
       console.log(amountsToForward, amountToPerformanceAndInsurance);
 
-      const tx = await facade._recycle({
-        converter: converter.address,
-        asset: p.tokens[p.assetIndex].address,
-        compoundRatio: p.compoundRatio,
-        tokens: p.tokens.map(x => x.address),
-        liquidator: liquidator.address,
-        thresholds: thresholds.map((x, index) => parseUnits(x, decimalsRewardTokens[index])),
-        rewardTokens: p.rewardTokens.map(x => x.address),
-        rewardAmounts: await p.rewardAmounts.map((amount, index) => parseUnits(amount, decimalsRewardTokens[index])),
-        performanceFee: p.performanceFee,
-        splitter: splitter.address,
-        assetThreshold: parseUnits(p.assetThreshold ?? "0", await p.tokens[p.assetIndex].decimals()),
-        debtToInsurance: parseUnits(p.debtToInsurance ?? "0", await p.tokens[p.assetIndex].decimals()),
-      });
+      const tx = await facade._recycle(recycleParams);
       const gasUsed = (await tx.wait()).gasUsed;
 
       return {
@@ -1862,7 +1856,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -1879,6 +1873,11 @@ describe('ConverterStrategyBaseLibTest', () => {
                 });
               }
 
+              it("should not exceed gas limits", async () => {
+                const r = await loadFixture(makeRecycleTest);
+                console.log("Gas use", r.gasUsed);
+                expect(r.gasUsed).lt(40_000); // 32570
+              });
               it("should return expected amounts for the forwarder", async () => {
                 const r = await loadFixture(makeRecycleTest);
                 expect(r.amountsToForward.join()).eq(["10"].join());
@@ -1901,7 +1900,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -1940,7 +1939,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -1982,7 +1981,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2026,7 +2025,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2067,7 +2066,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2115,7 +2114,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2158,7 +2157,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2201,7 +2200,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2251,7 +2250,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2301,7 +2300,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2351,7 +2350,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2404,7 +2403,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               await TimeUtils.rollback(snapshot);
             });
 
-            async function makeRecycleTest(): Promise<IRecycleTestResults> {
+            async function makeRecycleTest(): Promise<IResults> {
               return makeRecycle({
                 assetIndex: 1,
                 tokens: [usdt, usdc, dai],
@@ -2436,7 +2435,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               await TimeUtils.rollback(snapshot);
             });
 
-            async function makeRecycleTest(): Promise<IRecycleTestResults> {
+            async function makeRecycleTest(): Promise<IResults> {
               return makeRecycle({
                 assetIndex: 1,
                 tokens: [usdt, usdc, dai],
@@ -2453,7 +2452,13 @@ describe('ConverterStrategyBaseLibTest', () => {
                 performanceFee: 0,
 
                 // Following isConversionValid check shouldn't be called because TETU is not depositor asset
-                isConversionValidDetailed: [{tokenIn: tetu, tokenOut: usdc, amountIn: "90", amountOut: "97", result: 2}]
+                isConversionValidDetailed: [{
+                  tokenIn: tetu,
+                  tokenOut: usdc,
+                  amountIn: "90",
+                  amountOut: "97",
+                  result: 2
+                }]
               });
             }
 
@@ -2476,7 +2481,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2522,7 +2527,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2570,7 +2575,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                 await TimeUtils.rollback(snapshot);
               });
 
-              async function makeRecycleTest(): Promise<IRecycleTestResults> {
+              async function makeRecycleTest(): Promise<IResults> {
                 return makeRecycle({
                   assetIndex: 1,
                   tokens: [usdt, usdc, dai],
@@ -2628,7 +2633,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+          async function makeRecycleTest(): Promise<IResults> {
             return makeRecycle({
               assetIndex: 1,
               tokens: [usdt, usdc, dai],
@@ -2671,7 +2676,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+          async function makeRecycleTest(): Promise<IResults> {
             return makeRecycle({
               assetIndex: 1,
               tokens: [usdt, usdc, dai],
@@ -2717,7 +2722,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+          async function makeRecycleTest(): Promise<IResults> {
             return makeRecycle({
               assetIndex: 0,
               tokens: [usdc, dai],
@@ -2761,7 +2766,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+          async function makeRecycleTest(): Promise<IResults> {
             return makeRecycle({
               assetIndex: 1,
               tokens: [usdt, usdc, dai],
@@ -2804,7 +2809,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+          async function makeRecycleTest(): Promise<IResults> {
             return makeRecycle({
               assetIndex: 1,
               tokens: [usdt, usdc, dai],
@@ -2849,7 +2854,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+          async function makeRecycleTest(): Promise<IResults> {
             return makeRecycle({
               assetIndex: 1,
               tokens: [usdt, usdc, dai],
@@ -2895,7 +2900,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+          async function makeRecycleTest(): Promise<IResults> {
             return makeRecycle({
               assetIndex: 1,
               tokens: [usdt, usdc, dai],
@@ -2945,7 +2950,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+          async function makeRecycleTest(): Promise<IResults> {
             return makeRecycle({
               assetIndex: 0,
               tokens: [usdc, usdt],
@@ -3008,6 +3013,446 @@ describe('ConverterStrategyBaseLibTest', () => {
           ).revertedWith("TS-4 wrong lengths"); // WRONG_LENGTHS
         });
       });
+    });
+  });
+
+  describe("recycle", () => {
+    interface IParams {
+      totalAssets: string;
+      baseState: {
+        performanceFee: string;
+        performanceFeeRatio: string;
+        compoundRatio: string;
+      }
+
+      tokens: MockToken[];
+      assetIndex: number;
+
+      liquidations: ILiquidationParams[];
+      thresholds?: ITokenAmountNum[];
+      initialBalances: ITokenAmountNum[];
+
+      rewardTokens: MockToken[];
+      rewardAmounts: string[];
+
+      isConversionValid?: boolean;
+      isConversionValidDetailed?: IConversionValidationParams[];
+
+      debtToInsurance?: string; // 0 by default
+      insuranceBalance?: string;
+    }
+
+    interface IResults {
+      gasUsed: number;
+
+      paidDebtToInsurance: number;
+      amountPerf: number;
+
+      performanceReceiverBalance: number;
+      insuranceBalance: number;
+
+      tokenBalances: string[];
+      rewardTokenBalances: string[];
+      debtToInsurance: number;
+
+      forwarder: {
+        tokens: string[];
+        amounts: number[];
+        vault: string;
+        isDistribute: boolean;
+      }
+    }
+
+    async function makeTest(p: IParams): Promise<IResults> {
+      const performanceReceiver = ethers.Wallet.createRandom().address;
+      const forwarder = await MockHelper.createMockForwarder(signer);
+
+      // read decimals
+      const decimalsRewardTokens: number[] = [];
+      for (let i = 0; i < p.rewardTokens.length; ++i) {
+        decimalsRewardTokens.push(await p.rewardTokens[i].decimals());
+      }
+      const decimalsTokens: number[] = [];
+      for (let i = 0; i < p.tokens.length; ++i) {
+        decimalsTokens.push(await p.tokens[i].decimals());
+      }
+
+      // set up insurance
+      const insurance = ethers.Wallet.createRandom().address;
+      await p.tokens[p.assetIndex].mint(insurance, parseUnits(p.insuranceBalance ?? "0", decimalsTokens[p.assetIndex]));
+
+      const vault = await MockHelper.createMockVault(signer);
+      await vault.setInsurance(insurance);
+
+      const splitter = await MockHelper.createMockSplitter(signer);
+      await splitter.setVault(vault.address);
+      await splitter.setTotalAssets(parseUnits(p.totalAssets, decimalsTokens[p.assetIndex]));
+      // await splitter.set
+
+      // set up thresholds
+      const thresholds = p.rewardTokens.map(x => "0");
+      if (p.thresholds) {
+        for (const thresholdInfo of p.thresholds) {
+          for (let i = 0; i < p.rewardTokens.length; ++i) {
+            if (p.rewardTokens[i] === thresholdInfo.token) {
+              thresholds[i] = thresholdInfo.amount;
+            }
+          }
+        }
+      }
+
+      // set up initial balances
+      for (const b of p.initialBalances) {
+        await b.token.mint(facade.address, parseUnits(b.amount, await b.token.decimals()));
+      }
+
+      // set up TetuConverter, controller and priceOracle
+      const priceOracle = await MockHelper.createPriceOracle(signer, [], [],);
+      const converter = await MockHelper.createMockTetuConverter(signer);
+
+      // set up expected liquidations
+      const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
+      for (const liquidation of p.liquidations) {
+        await setupMockedLiquidation(liquidator, liquidation);
+        if (!p.isConversionValidDetailed) {
+          await setupIsConversionValid(
+            converter,
+            liquidation,
+            p.isConversionValid === undefined
+              ? true
+              : p.isConversionValid
+          )
+        }
+      }
+
+      // set up controller
+      const controller = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
+      await converter.setController(controller.address);
+      await controller.setLiquidator(liquidator.address);
+      await controller.setForwarder(forwarder.address);
+
+      if (p.isConversionValidDetailed) {
+        for (const cv of p.isConversionValidDetailed) {
+          await setupIsConversionValidDetailed(converter, cv);
+        }
+      }
+
+      await facade.setCsbs(
+        0, // not used in the test
+        converter.address,
+        0,
+        parseUnits(p.debtToInsurance ?? "0", await p.tokens[p.assetIndex].decimals())
+      );
+
+      await facade.setBaseState(
+        p.tokens[p.assetIndex].address,
+        splitter.address,
+        performanceReceiver,
+        parseUnits(p.baseState.performanceFee, 3),
+        parseUnits(p.baseState.performanceFeeRatio, 3),
+        parseUnits(p.baseState.compoundRatio, 3),
+        "specific-name"
+      )
+
+      // make test
+      const ret = await facade.callStatic.recycle(
+        p.tokens.map(x => x.address),
+        controller.address,
+        p.rewardTokens.map(x => x.address),
+        p.rewardAmounts.map((s, index) => parseUnits(s, decimalsRewardTokens[index]))
+      );
+      const tx = await facade.recycle(
+        p.tokens.map(x => x.address),
+        controller.address,
+        p.rewardTokens.map(x => x.address),
+        p.rewardAmounts.map((s, index) => parseUnits(s, decimalsRewardTokens[index]))
+      );
+      const cr = await tx.wait();
+      const gasUsed = cr.gasUsed;
+
+      const csbsAfter = await facade.getCsbs();
+
+      const forwarderResults = await forwarder.getLastRegisterIncomeResults();
+
+      return {
+        gasUsed: gasUsed.toNumber(),
+        paidDebtToInsurance: +formatUnits(ret.paidDebtToInsurance, decimalsTokens[p.assetIndex]),
+        amountPerf: +formatUnits(ret.amountPerf, decimalsTokens[p.assetIndex]),
+        performanceReceiverBalance: +formatUnits(await p.tokens[p.assetIndex].balanceOf(performanceReceiver), decimalsTokens[p.assetIndex]),
+        insuranceBalance: +formatUnits(await p.tokens[p.assetIndex].balanceOf(insurance), decimalsTokens[p.assetIndex]),
+
+        tokenBalances: await Promise.all(p.tokens.map(
+          async t => (+formatUnits(await t.balanceOf(facade.address), await t.decimals())).toString()
+        )),
+        rewardTokenBalances: await Promise.all(p.rewardTokens.map(
+          async t => (+formatUnits(await t.balanceOf(facade.address), await t.decimals())).toString()
+        )),
+        debtToInsurance: +formatUnits(csbsAfter.debtToInsurance, decimalsTokens[p.assetIndex]),
+        forwarder: {
+          tokens: forwarderResults.tokens,
+          amounts: await Promise.all(forwarderResults.amounts.map(
+            async (amount, index) => +formatUnits(
+              amount,
+              await IERC20Metadata__factory.connect(forwarderResults.tokens[index], signer).decimals()
+            )
+          )),
+          vault: forwarderResults.vault,
+          isDistribute: forwarderResults.isDistribute
+        }
+      }
+    }
+
+    function getNormalCase(): IParams {
+      return {
+        totalAssets: "1000000",
+        assetIndex: 0,
+        tokens: [usdc, dai],
+        baseState: {
+          compoundRatio: "50",
+          performanceFeeRatio: "40",
+          performanceFee: "10",
+        },
+        rewardTokens: [usdt],
+        rewardAmounts: ["100"],
+        isConversionValid: true,
+
+        initialBalances: [
+          {token: usdc, amount: "500"},
+          {token: usdt, amount: "400"},
+          {token: dai, amount: "300"},
+        ],
+        liquidations: [
+          {tokenIn: usdt, tokenOut: usdc, amountIn: "55", amountOut: "56"},
+        ]
+      }
+    }
+    describe("Good paths", () => {
+      describe("Normal case, insurance is empty", () => {
+        let snapshot: string;
+        let ret: IResults;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+          ret = await makeTest(getNormalCase());
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should not exceed gas limits @skip-on-coverage", async () => {
+          console.log("gasUsed", ret.gasUsed);
+          expect(ret.gasUsed).lt(450_000); // 446908
+        });
+        it("should return expected perf amount", async () => {
+          expect(ret.amountPerf).eq(ret.performanceReceiverBalance + ret.insuranceBalance);
+          expect(ret.amountPerf).approximately(56 * 10/55, 0.1);
+        });
+        it("should return expected token balances", async () => {
+          expect(Number(ret.tokenBalances[1])).eq(400 - 100);
+          expect(Number(ret.tokenBalances[0])).approximately(545, 1);
+        });
+        it("should not change debt to insurance", async () => {
+          expect(ret.paidDebtToInsurance).eq(0);
+          expect(ret.debtToInsurance).eq(0, "no changes");
+        });
+        it("should send expected amounts to the forwarder", async () => {
+          // amountFC = 90, amountsToForward = 45
+          expect(ret.forwarder.tokens.join().toLowerCase()).eq([usdt.address].join().toLowerCase());
+          expect(ret.forwarder.amounts.join()).eq([45].join());
+        });
+      });
+      describe("Insurance is full", () => {
+        let snapshot: string;
+        let ret: IResults;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+          ret = await makeTest({
+            ...getNormalCase(),
+            totalAssets: "10000",
+            insuranceBalance: "300", // (!) 3% of totalAsset, no need to increase
+            liquidations: [
+              {tokenIn: usdt, tokenOut: usdc, amountIn: "52", amountOut: "54"},
+            ]
+          });
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should not exceed gas limits @skip-on-coverage", async () => {
+          console.log("gasUsed", ret.gasUsed);
+          expect(ret.gasUsed).lt(430_000); // 421639
+        });
+        it("should return expected perf amount", async () => {
+          // console.log(ret);
+          expect(ret.amountPerf).eq(ret.performanceReceiverBalance);
+          // performanceFeeEffective = 4%, effectivePerformanceFeeRatio = 100%
+          // amountFC = 96, amountC = 48, amountP = 40, amountCP = 52, receivedAmountOut = 54
+          expect(ret.amountPerf).approximately(54 * 4/52, 0.1);
+        });
+        it("should return expected token balances", async () => {
+          expect(Number(ret.tokenBalances[1])).eq(400 - 100);
+          expect(Number(ret.tokenBalances[0])).approximately(550, 1);
+        });
+        it("should not change insurance", async () => {
+          expect(ret.insuranceBalance).eq(300);
+        });
+        it("should not change debt to insurance", async () => {
+          expect(ret.paidDebtToInsurance).eq(0);
+          expect(ret.debtToInsurance).eq(0, "no changes");
+        });
+        it("should send expected amounts to the forwarder", async () => {
+          // amountFC = 96, amountsToForward = 48
+          expect(ret.forwarder.tokens.join().toLowerCase()).eq([usdt.address].join().toLowerCase());
+          expect(ret.forwarder.amounts.join()).eq([48].join());
+        });
+      });
+      describe("Debt to insurance is high", () => {
+        let snapshot: string;
+        let ret: IResults;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+          ret = await makeTest({
+            ...getNormalCase(),
+            totalAssets: "10000",
+            insuranceBalance: "300", // 3% of totalAsset, no need to increase
+            liquidations: [
+              {tokenIn: usdt, tokenOut: usdc, amountIn: "100", amountOut: "101"},
+            ],
+            debtToInsurance: "1000" // (!) all rewards are not enough to cover it
+          });
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should not exceed gas limits @skip-on-coverage", async () => {
+          console.log("gasUsed", ret.gasUsed);
+          expect(ret.gasUsed).lt(250_000); // 243985
+        });
+        it("should return expected perf amount", async () => {
+          // console.log(ret);
+          expect(ret.amountPerf).eq(0);
+          expect(ret.performanceReceiverBalance).eq(0);
+        });
+        it("should not change token balances", async () => {
+          expect(Number(ret.tokenBalances[0])).eq(500);
+          expect(Number(ret.tokenBalances[1])).eq(300);
+        });
+        it("should increase the insurance", async () => {
+          expect(ret.insuranceBalance).eq(300 + 101);
+        });
+        it("should reduce debt to insurance", async () => {
+          expect(ret.paidDebtToInsurance).eq(101);
+          expect(ret.debtToInsurance).eq(1000 - 101);
+        });
+        it("should NOT send any amounts to the forwarder", async () => {
+          expect(ret.forwarder.amounts.length).eq(0);
+        });
+      });
+    });
+  });
+
+  describe("_getEffectivePerformanceFee", () => {
+    interface IParams {
+      performanceFee: string;
+      performanceFeeRatio: string;
+      insuranceBalance: string;
+      tvl: string;
+    }
+    interface IResults {
+      gasUsed: number;
+      effectivePerformanceFee: number;
+      effectivePerformanceFeeRatio: number;
+    }
+    async function makeTest(p: IParams): Promise<IResults> {
+      const insurance = ethers.Wallet.createRandom().address;
+      await usdc.mint(insurance, parseUnits(p.insuranceBalance, 6));
+
+      const gasUsed = await facade.estimateGas._getEffectivePerformanceFee(
+        parseUnits(p.performanceFee, 3),
+        parseUnits(p.performanceFeeRatio, 3),
+        parseUnits(p.tvl, 6),
+        usdc.address,
+        insurance
+      );
+
+      const ret = await facade._getEffectivePerformanceFee(
+        parseUnits(p.performanceFee, 3),
+        parseUnits(p.performanceFeeRatio, 3),
+        parseUnits(p.tvl, 6),
+        usdc.address,
+        insurance
+      );
+
+      return {
+        gasUsed: gasUsed.toNumber(),
+        effectivePerformanceFee: +formatUnits(ret.effectivePerformanceFee, 3),
+        effectivePerformanceFeeRatio: +formatUnits(ret.effectivePerformanceFeeRatio, 3),
+      }
+    }
+
+    const NORMAL_CASE: IParams = {
+      tvl: "1000",
+      performanceFee: "20",
+      performanceFeeRatio: "40", // 40% to perf, 60% to insurance
+      insuranceBalance: "25"
+    }
+
+    it("should return expected values in normal case", async () => {
+      const ret = await makeTest(NORMAL_CASE);
+      // 20 * 0.4 = 8% toPerf
+      // 20 * 0.6 * (1000*0.03 - 25)/(1000*0.03) = 2% toInsurance
+      // effectivePerformanceFeeRatio = 8 / (2 + 8) = 80%
+      expect(ret.effectivePerformanceFee).eq(20 * (0.4 + 0.6 * (1000*0.03 - 25)/(1000*0.03)));
+      expect(ret.effectivePerformanceFeeRatio).eq(80);
+    });
+
+
+    it("should use max performance fee if insurance balance is 0", async () => {
+      const ret = await makeTest({
+        ...NORMAL_CASE,
+        insuranceBalance: "0"
+      });
+      expect(ret.effectivePerformanceFee).eq(20);
+      expect(ret.effectivePerformanceFeeRatio).eq(40);
+    });
+
+    it("should return toPerf=100% if tvl is zero", async () => {
+      const ret = await makeTest({
+        ...NORMAL_CASE,
+        tvl: "0"
+      });
+      expect(ret.effectivePerformanceFee).eq(20*0.4, "20% * 40%");
+      expect(ret.effectivePerformanceFeeRatio).eq(100);
+    });
+
+    it("should return toPerf=100% if insurance is full", async () => {
+      const ret = await makeTest({
+        ...NORMAL_CASE,
+        insuranceBalance: "30" // 3% of $1000
+      });
+      expect(ret.effectivePerformanceFee).eq(20*0.4, "20% * 40%");
+      expect(ret.effectivePerformanceFeeRatio).eq(100);
+    });
+
+    it("should return toPerf=100% if max percent toInsurance is 0", async () => {
+      const ret = await makeTest({
+        ...NORMAL_CASE,
+        insuranceBalance: "0",
+        performanceFeeRatio: "100"
+      });
+      expect(ret.effectivePerformanceFee).eq(20);
+      expect(ret.effectivePerformanceFeeRatio).eq(100);
+    });
+
+    it("should return 0 if toPerf is 0 and the insurance is too high", async () => {
+      const ret = await makeTest({
+        ...NORMAL_CASE,
+        insuranceBalance: "5000",
+        performanceFeeRatio: "0"
+      });
+      expect(ret.effectivePerformanceFee).eq(0);
+      expect(ret.effectivePerformanceFeeRatio).eq(100);
     });
   });
 
@@ -3834,6 +4279,8 @@ describe('ConverterStrategyBaseLibTest', () => {
     interface ISendPerformanceFeeParams {
       asset: MockToken;
       amount: string;
+      ratio: string;
+      threshold?: string;
     }
 
     interface ISendPerformanceFeeResults {
@@ -3857,20 +4304,26 @@ describe('ConverterStrategyBaseLibTest', () => {
       const splitter = await MockHelper.createMockSplitter(signer);
       await splitter.setVault(vault.address);
 
+      const threshold = p.threshold
+        ? parseUnits(p.threshold, decimalsAsset)
+        : parseUnits("0", decimalsAsset);
+
       const r = await facade.callStatic.sendPerformanceFee(
         p.asset.address,
         parseUnits(p.amount, decimalsAsset),
         splitter.address,
         receiver,
-        50_000
+        parseUnits(p.ratio, 3),
+        threshold
       );
 
       const tx = await facade.sendPerformanceFee(
         p.asset.address,
         parseUnits(p.amount, decimalsAsset),
-        splitter.address,
+        insurance,
         receiver,
-        50_000
+        parseUnits(p.ratio, 3),
+        threshold
       );
       const gasUsed = (await tx.wait()).gasUsed;
 
@@ -3901,7 +4354,8 @@ describe('ConverterStrategyBaseLibTest', () => {
         async function makeSendPerformanceFeeTest(): Promise<ISendPerformanceFeeResults> {
           return makeSendPerformanceFee({
             asset: usdc,
-            amount: "100"
+            amount: "100",
+            ratio: "50"
           });
         }
 
@@ -3938,7 +4392,8 @@ describe('ConverterStrategyBaseLibTest', () => {
         async function makeSendPerformanceFeeTest(): Promise<ISendPerformanceFeeResults> {
           return makeSendPerformanceFee({
             asset: usdc,
-            amount: "0"
+            amount: "0",
+            ratio: "50"
           });
         }
 
@@ -3953,6 +4408,123 @@ describe('ConverterStrategyBaseLibTest', () => {
         it('should set expected facade balances', async () => {
           const results = await loadFixture(makeSendPerformanceFeeTest);
           expect(results.facadeBalance).eq(0);
+        });
+        it('should return receiver balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.receiverBalance).eq(0);
+        });
+        it('should return insurance balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.insuranceBalance).eq(0);
+        });
+      });
+      describe('toPerf < threshold', () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeSendPerformanceFeeTest(): Promise<ISendPerformanceFeeResults> {
+          return makeSendPerformanceFee({
+            asset: usdc,
+            amount: "100",
+            ratio: "20",
+            threshold: "21"
+          });
+        }
+
+        it('should return expected toPerf', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.toPerf).eq(0);
+        });
+        it('should return expected toInsurance', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.toInsurance).eq(80);
+        });
+        it('should set expected facade balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.facadeBalance).eq(20);
+        });
+        it('should return receiver balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.receiverBalance).eq(0);
+        });
+        it('should return insurance balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.insuranceBalance).eq(80);
+        });
+      });
+      describe('toInsurance < threshold', () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeSendPerformanceFeeTest(): Promise<ISendPerformanceFeeResults> {
+          return makeSendPerformanceFee({
+            asset: usdc,
+            amount: "100",
+            ratio: "80",
+            threshold: "21"
+          });
+        }
+
+        it('should return expected toPerf', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.toPerf).eq(80);
+        });
+        it('should return expected toInsurance', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.toInsurance).eq(0);
+        });
+        it('should set expected facade balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.facadeBalance).eq(20);
+        });
+        it('should return receiver balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.receiverBalance).eq(80);
+        });
+        it('should return insurance balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.insuranceBalance).eq(0);
+        });
+      });
+      describe('toPerf < threshold and toInsurance < threshold', () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeSendPerformanceFeeTest(): Promise<ISendPerformanceFeeResults> {
+          return makeSendPerformanceFee({
+            asset: usdc,
+            amount: "100",
+            ratio: "50",
+            threshold: "101"
+          });
+        }
+
+        it('should return expected toPerf', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.toPerf).eq(0);
+        });
+        it('should return expected toInsurance', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.toInsurance).eq(0);
+        });
+        it('should set expected facade balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.facadeBalance).eq(100);
         });
         it('should return receiver balances', async () => {
           const results = await loadFixture(makeSendPerformanceFeeTest);
@@ -4918,7 +5490,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               },
             );
 
-            console.log('results', r);
+            // console.log('results', r);
 
             const totalAmountInTermsCollateral = r.collateralAmountOut.add(
               r.borrowedAmountOut
@@ -6151,7 +6723,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           thresholds: thresholds.map((x, index) => parseUnits(x, decimalsRewardTokens[index])),
           rewardTokens: p.rewardTokens.map(x => x.address),
           rewardAmounts: await p.rewardAmounts.map((amount, index) => parseUnits(amount, decimalsRewardTokens[index])),
-          splitter: splitter.address,
+          insurance,
           assetThreshold: parseUnits(p.assetThreshold, decimalsAsset),
 
           performanceFee: 0, // not used here
@@ -6170,7 +6742,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           thresholds: thresholds.map((x, index) => parseUnits(x, decimalsRewardTokens[index])),
           rewardTokens: p.rewardTokens.map(x => x.address),
           rewardAmounts: await p.rewardAmounts.map((amount, index) => parseUnits(amount, decimalsRewardTokens[index])),
-          splitter: splitter.address,
+          insurance,
           assetThreshold: parseUnits(p.assetThreshold, decimalsAsset),
 
           performanceFee: 0, // not used here

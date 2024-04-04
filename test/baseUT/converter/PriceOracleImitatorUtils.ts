@@ -115,6 +115,32 @@ export class PriceOracleImitatorUtils {
     await priceOracleAsPoolOwner.setAssetSources([stableToken, volatileToken], sources.map(x => x.address));
   }
 
+  public static async uniswapV3BaseChain(
+    signer: SignerWithAddress,
+    pool: string,
+    stableToken: string,
+    stableTokenPrice: string = '100000000'
+  ) {
+    throw Error("TODO: uniswapV3BaseChain is not implemented")
+    // Disable all lending platforms except AAVE3
+    // await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+    // await ConverterUtils.disablePlatformAdapter(signer, await getAaveTwoPlatformAdapter(signer));
+    //
+    // const poolOwner = await Misc.impersonate(MaticAddresses.AAVE3_POOL_OWNER);
+    // const priceOracleAsPoolOwner: IAave3PriceOracle = IAave3PriceOracle__factory.connect(MaticAddresses.AAVE3_PRICE_ORACLE, poolOwner);
+    //
+    // const univ3Pool = IUniswapV3Pool__factory.connect(pool, signer)
+    // const token0 = await univ3Pool.token0()
+    // const token1 = await univ3Pool.token1()
+    // const volatileToken = token0.toLowerCase() === stableToken.toLowerCase() ? token1 : token0
+    // const sources: AggregatorInterface[] = [
+    //   await DeployerUtils.deployContract(signer, 'Aave3PriceSourceFixed', stableTokenPrice) as AggregatorInterface,
+    //   await DeployerUtils.deployContract(signer, 'Aave3PriceSourceUniswapV3', pool, volatileToken) as AggregatorInterface
+    // ]
+    //
+    // await priceOracleAsPoolOwner.setAssetSources([stableToken, volatileToken], sources.map(x => x.address));
+  }
+
   public static async algebra(
     signer: SignerWithAddress,
     pool: string,

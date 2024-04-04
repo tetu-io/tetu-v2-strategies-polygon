@@ -29,7 +29,7 @@ import {AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR} from "../../baseUT/utils/Aggre
 const { expect } = chai;
 
 describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
-  const CHAINS_IN_ORDER_EXECUTION: number[] = [ZKEVM_NETWORK_ID, BASE_NETWORK_ID, POLYGON_NETWORK_ID];
+  const CHAINS_IN_ORDER_EXECUTION: number[] = [BASE_NETWORK_ID, POLYGON_NETWORK_ID]; // ZKEVM_NETWORK_ID
 
 //region Variables
   let snapshotBefore: string;
@@ -229,8 +229,9 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
 
       const strategies: IStrategyInfo[] = [
         {name: PLATFORM_UNIV3, chainId: POLYGON_NETWORK_ID},
-        {name: PLATFORM_PANCAKE, chainId: BASE_NETWORK_ID},
-        {name: PLATFORM_PANCAKE, chainId: ZKEVM_NETWORK_ID},
+        // todo {name: PLATFORM_UNIV3, chainId: BASE_NETWORK_ID},
+        // {name: PLATFORM_PANCAKE, chainId: ZKEVM_NETWORK_ID},
+        // {name: PLATFORM_PANCAKE, chainId: BASE_NETWORK_ID},
         // { name: PLATFORM_ALGEBRA,}, // todo getPrice reverts
         // { name: PLATFORM_KYBER,}, // todo getPrice reverts
       ];

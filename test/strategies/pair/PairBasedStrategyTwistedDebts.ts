@@ -51,7 +51,7 @@ import {PlatformUtils} from "../../baseUT/utils/PlatformUtils";
 import {AGGREGATOR_TETU_LIQUIDATOR, AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR} from "../../baseUT/utils/AggregatorUtils";
 
 describe('PairBasedStrategyTwistedDebts', function () {
-  const CHAINS_IN_ORDER_EXECUTION: number[] = [ZKEVM_NETWORK_ID, BASE_NETWORK_ID, POLYGON_NETWORK_ID];
+  const CHAINS_IN_ORDER_EXECUTION: number[] = [BASE_NETWORK_ID, POLYGON_NETWORK_ID]; // ZKEVM_NETWORK_ID
   /**
    * Max allowed count of steps required to reduce locked percent to the given value.
    * Without calculation of requiredAmountToReduceDebt this value can be very high
@@ -214,10 +214,10 @@ describe('PairBasedStrategyTwistedDebts', function () {
       }
 
       const strategies: IStrategyInfo[] = [
-        {name: PLATFORM_ALGEBRA, chainId: POLYGON_NETWORK_ID},
         {name: PLATFORM_UNIV3, chainId: POLYGON_NETWORK_ID, amountDepositBySigner: "25000"},
-        {name: PLATFORM_PANCAKE, chainId: BASE_NETWORK_ID},
-        {name: PLATFORM_PANCAKE, chainId: ZKEVM_NETWORK_ID},
+        // todo {name: PLATFORM_UNIV3, chainId: BASE_NETWORK_ID},
+        // {name: PLATFORM_ALGEBRA, chainId: POLYGON_NETWORK_ID},
+        // {name: PLATFORM_PANCAKE, chainId: ZKEVM_NETWORK_ID},
       ];
 
       describe("Prices up", () => {

@@ -3,7 +3,7 @@ import {TimeUtils} from "../../scripts/utils/TimeUtils";
 import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
 import {
   ControllerV2__factory,
-  ConverterStrategyBase__factory, IPairBasedStrategyReaderAccess__factory,
+  ConverterStrategyBase__factory, IERC20__factory, IPairBasedStrategyReaderAccess__factory,
   IRebalancingV2Strategy__factory, ITetuConverter__factory, PairBasedStrategyReader__factory,
   StrategySplitterV2__factory,
   TetuVaultV2__factory
@@ -27,9 +27,11 @@ import {Misc} from "../../scripts/utils/Misc";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {MockAggregatorUtils} from "../baseUT/mocks/MockAggregatorUtils";
 import {BigNumber} from "ethers";
+import {TokenUtils} from "../../scripts/utils/TokenUtils";
+import {parseUnits} from "ethers/lib/utils";
 
 describe("Check actions on base @skip-on-coverage", () => {
-  const BLOCK = 11893249; // 8597351; // 8498893; // 7981926;
+  const BLOCK = 12270343; // 8597351; // 8498893; // 7981926;
   // const BLOCK = 7981927 - 2;
   const STRATEGY = "0xAA43e2cc199DC946b3D528c6E00ebb3F4CC2fC0e";
   const CONTROLLER = "0x255707B70BF90aa112006E1b07B9AeA6De021424";
@@ -347,4 +349,25 @@ describe("Check actions on base @skip-on-coverage", () => {
     const eventsSet = await CaptureEvents.makeHardwork(strategyAsSplitter);
     await saver("a", eventsSet);
   });
+
+  it("test upgrade", async () => {
+    const controller = await ControllerV2__factory.connect(CONTROLLER, signer);
+    const operator = await Misc.impersonate((await controller.operatorsList())[0]);
+    await controller.connect(operator).upgradeProxy([STRATEGY, "0x32f7C3a5319A612C1992f021aa70510bc9F16161"]);
+  });
+
+  it("deposit", async () => {
+    const controller = await ControllerV2__factory.connect(CONTROLLER, signer);
+    const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, signer);
+    const converterStrategyBase = ConverterStrategyBase__factory.connect(STRATEGY, signer);
+    const vault = TetuVaultV2__factory.connect(
+      await (await StrategySplitterV2__factory.connect(await converterStrategyBase.splitter(), signer)).vault(),
+      signer
+    );
+
+    console.log('deposit...');
+    await IERC20__factory.connect(BaseAddresses.USDbC_TOKEN, signer).approve(vault.address, Misc.MAX_UINT);
+    await TokenUtils.getToken(BaseAddresses.USDbC_TOKEN, signer.address, parseUnits('1000', 6));
+    await vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
+  })
 });

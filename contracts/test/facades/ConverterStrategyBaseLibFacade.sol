@@ -8,10 +8,49 @@ import "../../strategies/ConverterStrategyBaseLib.sol";
 /// @notice Provide public access to internal functions of ConverterStrategyBaseLib
 contract ConverterStrategyBaseLibFacade {
   mapping(address => uint) private liquidationThresholds;
+  IStrategyV3.BaseState private baseState;
+  IConverterStrategyBase.ConverterStrategyBaseState private _csbs;
 
+  //region --------------------------------- For tests
   function setLiquidationThreshold(address asset, uint values) external {
     liquidationThresholds[asset] = values;
   }
+
+  function getCsbs() external view returns (IConverterStrategyBase.ConverterStrategyBaseState memory) {
+    return _csbs;
+  }
+
+  function setCsbs(
+    uint investedAssets,
+    ITetuConverter converter,
+    uint reinvestThresholdPercent,
+    int debtToInsurance
+  ) external {
+    _csbs.investedAssets = investedAssets;
+    _csbs.converter = converter;
+    _csbs.reinvestThresholdPercent = reinvestThresholdPercent;
+    _csbs.debtToInsurance = debtToInsurance;
+  }
+
+  function setBaseState(
+    address asset,
+    address splitter,
+    address performanceReceiver,
+    uint performanceFee,
+    uint performanceFeeRatio,
+    uint compoundRatio,
+    string memory strategySpecificName
+  ) external {
+    baseState.asset = asset;
+    baseState.splitter = splitter;
+    baseState.performanceFee = performanceFee;
+    baseState.performanceReceiver = performanceReceiver;
+    baseState.performanceFeeRatio = performanceFeeRatio;
+    baseState.compoundRatio = compoundRatio;
+    baseState.strategySpecificName = strategySpecificName;
+  }
+  //endregion --------------------------------- For tests
+
 
   function getCollaterals(
     uint amount_,
@@ -115,11 +154,11 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
-  function sendPerformanceFee(address asset_, uint amount_, address splitter, address receiver_, uint ratio) external returns (
+  function sendPerformanceFee(address asset, uint amount, address insurance, address receiver, uint ratio, uint threshold) external returns (
     uint toPerf,
     uint toInsurance
   ) {
-    return ConverterStrategyBaseLib._sendPerformanceFee(asset_, amount_, splitter, receiver_, ratio);
+    return ConverterStrategyBaseLib._sendPerformanceFee(asset, amount, insurance, receiver, ratio, threshold);
   }
 
   function closePositionsToGetAmount(
@@ -179,12 +218,34 @@ contract ConverterStrategyBaseLibFacade {
     return ConverterStrategyBaseLib._sendTokensToForwarder(controller_, splitter_, tokens_, amounts_, thresholds_);
   }
 
+  function recycle(
+    address[] memory tokens,
+    address controller,
+    address[] memory rewardTokens_,
+    uint[] memory rewardAmounts_
+  ) external returns (uint paidDebtToInsurance, uint amountPerf) {
+    return ConverterStrategyBaseLib.recycle(baseState, _csbs, tokens, controller, liquidationThresholds, rewardTokens_, rewardAmounts_);
+  }
+
   function _recycle(ConverterStrategyBaseLib.RecycleParams memory p) external returns (
     uint[] memory amountsToForward,
     uint amountToPerformanceAndInsurance,
     int debtToInsuranceOut
   ) {
     return ConverterStrategyBaseLib._recycle(p);
+  }
+
+  function _getEffectivePerformanceFee(
+    uint performanceFee,
+    uint performanceFeeRatio,
+    uint tvl,
+    address asset,
+    address insurance
+  ) external view returns (
+    uint effectivePerformanceFee,
+    uint effectivePerformanceFeeRatio
+  ) {
+    return ConverterStrategyBaseLib._getEffectivePerformanceFee(performanceFee, performanceFeeRatio, tvl, asset, insurance);
   }
 
   function getTokenAmounts(

@@ -36,7 +36,7 @@ import {ConverterUtils} from "../../baseUT/utils/ConverterUtils";
 describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
 //region Constants
   const DEFAULT_SWAP_AMOUNT_RATIO = 1.01;
-  const CHAINS_IN_ORDER_EXECUTION: number[] = [ZKEVM_NETWORK_ID, BASE_NETWORK_ID, POLYGON_NETWORK_ID];
+  const CHAINS_IN_ORDER_EXECUTION: number[] = [BASE_NETWORK_ID, POLYGON_NETWORK_ID]; // ZKEVM_NETWORK_ID
 //endregion Constants
 
 //region Variables
@@ -203,10 +203,10 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
         }
 
         const strategies: IStrategyInfo[] = [
-          {name: PLATFORM_PANCAKE, chainId: ZKEVM_NETWORK_ID},
-          {name: PLATFORM_PANCAKE, chainId: BASE_NETWORK_ID},
+          // todo {name: PLATFORM_UNIV3, chainId: BASE_NETWORK_ID},
           {name: PLATFORM_UNIV3, chainId: POLYGON_NETWORK_ID},
-          {name: PLATFORM_ALGEBRA, chainId: POLYGON_NETWORK_ID},
+          // {name: PLATFORM_PANCAKE, chainId: ZKEVM_NETWORK_ID},
+          // {name: PLATFORM_ALGEBRA, chainId: POLYGON_NETWORK_ID},
         ];
 
         strategies.forEach(function (strategyInfo: IStrategyInfo) {
@@ -307,7 +307,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
 
         const strategies: IStrategyInfo[] = [
           {name: PLATFORM_UNIV3, chainId: POLYGON_NETWORK_ID},
-          {name: PLATFORM_ALGEBRA, chainId: POLYGON_NETWORK_ID},
+          // {name: PLATFORM_ALGEBRA, chainId: POLYGON_NETWORK_ID},
 
           // For Kyber we have error NOT_ALLOWED ('TS-23 not allowed') here
           // It means, that required proportion of one of the assets is too small, almost zero

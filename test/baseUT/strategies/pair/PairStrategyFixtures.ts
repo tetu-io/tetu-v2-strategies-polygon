@@ -46,6 +46,8 @@ export class PairStrategyFixtures {
       }
     } else if (chainId === BASE_NETWORK_ID) {
       switch (strategyName) {
+        case PLATFORM_UNIV3:
+          return this.buildUniv3UsdtUsdcBaseChain(signer, signer2, p?.customParams,);
         case PLATFORM_PANCAKE:
           return this.buildPancakeUsdtUsdcBaseChain(signer, signer2, p?.customParams,);
         default:
@@ -238,6 +240,39 @@ export class PairStrategyFixtures {
 //endregion Polygon
 
 //region Base
+  static async buildUniv3UsdtUsdcBaseChain(
+    signer: SignerWithAddress,
+    signer2: SignerWithAddress,
+    p?: IStrategyCustomizationParams
+  ): Promise<IBuilderResults> {
+    return PairBasedStrategyBuilder.buildUniv3(
+      {
+        signer,
+        signer2,
+        gov: BaseAddresses.GOV_ADDRESS,
+        pool: BaseAddresses.UNISWAPV3_USDC_USDbC_100,
+        asset: BaseAddresses.USDbC_TOKEN,
+        vaultName: 'TetuV2_Univ3_USDC-USDbC-0.01%',
+        converter: BaseAddresses.TETU_CONVERTER,
+        profitHolderTokens: [BaseAddresses.USDC_TOKEN, BaseAddresses.USDbC_TOKEN],
+        swapper: BaseAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+        quoter: BaseAddresses.UNISWAPV3_QUOTER_V2,
+
+        liquidatorPools: [
+          {
+            pool: BaseAddresses.UNISWAPV3_USDC_USDbC_100,
+            swapper: BaseAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+            tokenIn: BaseAddresses.USDC_TOKEN,
+            tokenOut: BaseAddresses.USDbC_TOKEN,
+          }
+        ],
+
+        ...p
+      },
+      BASE_NETWORK_ID,
+    );
+  }
+
   static async buildPancakeUsdtUsdcBaseChain(
     signer: SignerWithAddress,
     signer2: SignerWithAddress,

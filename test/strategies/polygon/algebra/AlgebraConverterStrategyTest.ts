@@ -32,7 +32,10 @@ import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 import {ITetuLiquidatorPoolInfo, TetuLiquidatorUtils} from "../../../baseUT/utils/TetuLiquidatorUtils";
 
-describe('AlgebraConverterStrategyTest', function() {
+/**
+ * Algebra is not used anymore
+ */
+describe.skip('AlgebraConverterStrategyTest', function() {
 
   let snapshotBefore: string;
   let snapshot: string;

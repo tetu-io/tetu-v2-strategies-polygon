@@ -43,7 +43,10 @@ interface IIncentiveKey {
   endTime: number
 }
 
-describe('AlgebraConverterStrategyUniversalTest', async () => {
+/**
+ * Algebra is not used anymore
+ */
+describe.skip('AlgebraConverterStrategyUniversalTest', async () => {
 
   // [asset, pool, tickRange, rebalanceTickRange, incentiveKey]
   const targets: [string, string, number, number, IIncentiveKey][] = [
