@@ -78,7 +78,7 @@
     "ethereumjs-tx": "^2.1.2",
     "ethers": "5.7.2",
     "graphql": "^16.6.0",
-    "hardhat": "2.14.1",
+    "hardhat": "2.22.2",
     "hardhat-abi-exporter": "^2.10.1",
     "hardhat-change-network": "^0.0.7",
     "hardhat-contract-sizer": "^2.8.0",
