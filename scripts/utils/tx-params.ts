@@ -22,7 +22,7 @@ type OWLRACLE_RESPONSE = {
 
 export async function txParamsBasic(provider: providers.Provider, hre: HardhatRuntimeEnvironment, acceptance = 2) {
   const feeData = await provider.getFeeData();
-
+  // console.log("feeData", feeData);
 
   console.log('maxPriorityFeePerGas', formatUnits(feeData.maxPriorityFeePerGas?.toString() ?? '0', 9));
   console.log('maxFeePerGas', formatUnits(feeData.maxFeePerGas?.toString() ?? '0', 9));
@@ -54,10 +54,14 @@ export async function txParamsBasic(provider: providers.Provider, hre: HardhatRu
       maxFeesPerNetwork(hre),
     );
     const maxFeePerGas = (feeData.maxFeePerGas?.toNumber() ?? 1) * 2;
-    return {
-      maxPriorityFeePerGas: maxPriorityFeePerGas.toFixed(0),
-      maxFeePerGas: maxFeePerGas.toFixed(0),
+    const ret = {
+      maxPriorityFeePerGas: (1.2*feeData.maxPriorityFeePerGas.toNumber()).toFixed(0),
+      maxFeePerGas: (1.2*maxFeePerGas).toFixed(0),
+      // gasPrice: ((feeData.gasPrice?.toNumber() ?? 1) * 1.2).toFixed(0)
     };
+    // console.log("ret", ret);
+    // console.log("maxFeesPerNetwork(hre)", maxFeesPerNetwork(hre))
+    return ret;
   } else {
     return {
       gasPrice: ((feeData.gasPrice?.toNumber() ?? 1) * 1.2).toFixed(0),
