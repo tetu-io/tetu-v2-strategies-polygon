@@ -31,7 +31,7 @@ import {TokenUtils} from "../../scripts/utils/TokenUtils";
 import {parseUnits} from "ethers/lib/utils";
 
 describe("Check actions on base @skip-on-coverage", () => {
-  const BLOCK = 12270343; // 8597351; // 8498893; // 7981926;
+  const BLOCK = 12926275; // 8597351; // 8498893; // 7981926;
   // const BLOCK = 7981927 - 2;
   const STRATEGY = "0xAA43e2cc199DC946b3D528c6E00ebb3F4CC2fC0e";
   const CONTROLLER = "0x255707B70BF90aa112006E1b07B9AeA6De021424";
