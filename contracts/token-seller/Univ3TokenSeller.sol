@@ -8,6 +8,10 @@ contract Univ3TokenSeller {
   /// @notice Token to be withdrawn
   address public immutable tokenB;
   address public immutable pool;
+
+  // todo delay for refreshPool
+  // todo list of operators
+
   //endregion ---------------------- Members
 
   //region ---------------------- Errors

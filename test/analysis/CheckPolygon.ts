@@ -1,9 +1,9 @@
-import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID} from "../baseUT/utils/HardhatUtils";
+import {HardhatUtils, POLYGON_NETWORK_ID} from "../baseUT/utils/HardhatUtils";
 import {TimeUtils} from "../../scripts/utils/TimeUtils";
 import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
 import {
   ControllerV2__factory,
-  ConverterStrategyBase__factory, IPairBasedStrategyReaderAccess__factory,
+  ConverterStrategyBase__factory, IERC20__factory, IPairBasedStrategyReaderAccess__factory,
   IRebalancingV2Strategy__factory, ISplitter__factory, PairBasedStrategyReader__factory,
   StrategySplitterV2__factory,
   TetuVaultV2__factory
@@ -21,9 +21,11 @@ import {ethers} from "hardhat";
 import {Misc} from "../../scripts/utils/Misc";
 import {MaticAddresses} from "../../scripts/addresses/MaticAddresses";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
+import {TokenUtils} from "../../scripts/utils/TokenUtils";
+import {parseUnits} from "ethers/lib/utils";
 
 describe("Check actions on Polygon @skip-on-coverage", () => {
-  const BLOCK = 52600760; // 51918500;
+  const BLOCK = 55620924; // 51918500;
   const STRATEGY = "0xCdc5560AB926Dca3d4989bF814469Af3f989Ab2C";
   const CONTROLLER = "0x33b27e0a2506a4a2fbc213a01c51d0451745343a";
   const OPERATOR = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
@@ -303,4 +305,31 @@ describe("Check actions on Polygon @skip-on-coverage", () => {
     await splitter.rebalance(100, 500);
     await saver("5");
   });
+
+  it("deposit", async () => {
+    const signer = await DeployerUtilsLocal.impersonate(OPERATOR);
+
+    const controller = await ControllerV2__factory.connect(CONTROLLER, signer);
+    const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, signer);
+    const converterStrategyBase = ConverterStrategyBase__factory.connect(STRATEGY, signer);
+    const vault = TetuVaultV2__factory.connect(
+      await (await StrategySplitterV2__factory.connect(await converterStrategyBase.splitter(), signer)).vault(),
+      signer
+    );
+
+    console.log('deposit...');
+    await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, signer).approve(vault.address, Misc.MAX_UINT);
+    await TokenUtils.getToken(MaticAddresses.USDC_TOKEN, signer.address, parseUnits('1000', 6));
+    console.log("balance initial", await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, signer).balanceOf(signer.address));
+
+    await vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
+
+    console.log("balance intermediate", await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, signer).balanceOf(signer.address));
+
+    console.log("withdraw....");
+    await TimeUtils.advanceNBlocks(10);
+    await vault.connect(signer).withdrawAll();
+
+    console.log("balance final", await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, signer).balanceOf(signer.address));
+  })
 });
