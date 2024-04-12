@@ -62,6 +62,10 @@ library UniswapV3Lib {
 
   /// @notice Computes the maximum amount of liquidity received for a given amount of token0, token1, the current
   /// pool prices and the prices at the tick boundaries
+  /// @param sqrtRatioX96 A sqrt price representing the current pool prices
+  /// @param amount0 The amount of token0 being sent in
+  /// @param amount1 The amount of token1 being sent in
+  /// @return liquidity The maximum amount of liquidity received
   function getLiquidityForAmounts(
     uint160 sqrtRatioX96,
     int24 lowerTick,

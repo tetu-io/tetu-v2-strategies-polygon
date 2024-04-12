@@ -123,11 +123,11 @@ describe('TokenSellerTest', () => {
       console.log("amountA", amountA);
       const amountB = parseUnits(poolParams.tokenAmountB, decimalsB);
       console.log("amountB", amountB);
-      const price36 = amountA.div(amountB).mul(parseUnits("1", 36)).div(parseUnits("1", decimalsA - decimalsB));
+      const price36 = amountB.mul(parseUnits("1", 36)).div(amountA);
       console.log("price36", price36);
       const sqrtPrice18 = await calcLib.sqrt(price36);
       console.log("sqrtPrice18", sqrtPrice18);
-      const sqrtPriceX96 = sqrtPrice18.mul(BigNumber.from(2).pow(96)).div(parseUnits("1", 18));
+      const sqrtPriceX96 = sqrtPrice18.mul(BigNumber.from(2).pow(96)).div(parseUnits("1", 18)); // 18 = sqrt of 36
       console.log("sqrtPriceX96", sqrtPriceX96);
       await pool.initialize(sqrtPriceX96);
 
@@ -175,9 +175,6 @@ describe('TokenSellerTest', () => {
       await tokenB.mint(signer.address, requiredAmounts.amount1);
       await tokenB.approve(uniswapV3Callee.address, requiredAmounts.amount1);
 
-      // const preview = await facadeUni.addLiquidityPreview(pool.address, lowerTick, upperTick, amountA, amountB);
-      // console.log("preview", preview);
-
       await uniswapV3Callee.mint(pool.address, signer.address, lowerTick, upperTick, liquidityAmount, {gasLimit: 9_000_000});
       console.log("done");
     });
@@ -187,6 +184,14 @@ describe('TokenSellerTest', () => {
     });
 
     describe("Create token-seller contract", () => {
+      let snapshot2: string;
+      before(async function () {
+        snapshot2 = await TimeUtils.snapshot();
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshot2);
+      });
+
       it("pool should have expected liquidity and prices", async () => {
         const liquidity = await pool.liquidity();
         console.log("liquidity", liquidity);
@@ -194,8 +199,67 @@ describe('TokenSellerTest', () => {
 
         const priceA = await facadeUni.getPrice(pool.address, tokenA.address);
         const priceB = await facadeUni.getPrice(pool.address, tokenB.address);
-        expect(priceA).eq(parseUnits("1", decimalsA));
-        expect(priceB).eq(parseUnits("1", decimalsB));
+        expect(priceA).approximately(parseUnits("1", decimalsB), 1, "price A in terms of B");
+        expect(priceB).approximately(parseUnits("1", decimalsA), 1, "price B in terms of A");
+      });
+
+      describe("Swap B => A (buy A)", () => {
+        const swapAmountB: string = "800";
+        let snapshot3: string;
+        before(async function () {
+          snapshot3 = await TimeUtils.snapshot();
+
+          const amountToSwapB = parseUnits(swapAmountB, decimalsB);
+
+          await tokenB.mint(signer.address, amountToSwapB);
+          await tokenB.approve(uniswapV3Callee.address, amountToSwapB);
+
+          await uniswapV3Callee.swap(pool.address, signer.address, tokenB.address, amountToSwapB);
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot3);
+        });
+
+        it("pool should have expected liquidity and prices", async () => {
+          const liquidity = await pool.liquidity();
+          console.log("liquidity", liquidity);
+          expect(liquidity).gt(0);
+
+          const priceA = await facadeUni.getPrice(pool.address, tokenA.address);
+          const priceB = await facadeUni.getPrice(pool.address, tokenB.address);
+          console.log("priceA", priceA);
+          console.log("priceB", priceB);
+        });
+
+      });
+
+      describe("Swap A => B (sell A)", () => {
+        const swapAmountA: string = "600";
+        let snapshot3: string;
+        before(async function () {
+          snapshot3 = await TimeUtils.snapshot();
+
+          const amountToSwapA = parseUnits(swapAmountA, decimalsA);
+
+          await tokenA.mint(signer.address, amountToSwapA);
+          await tokenA.approve(uniswapV3Callee.address, amountToSwapA);
+
+          await uniswapV3Callee.swap(pool.address, signer.address, tokenA.address, amountToSwapA);
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot3);
+        });
+
+        it("pool should have expected liquidity and prices", async () => {
+          const liquidity = await pool.liquidity();
+          console.log("liquidity", liquidity);
+          expect(liquidity).gt(0);
+
+          const priceA = await facadeUni.getPrice(pool.address, tokenA.address);
+          const priceB = await facadeUni.getPrice(pool.address, tokenB.address);
+          console.log("priceA", priceA);
+          console.log("priceB", priceB);
+        });
       });
     });
   });
