@@ -2,7 +2,7 @@
 pragma solidity 0.8.17;
 
 library Univ3TokenSellerLib {
-  function calcTickRange(int24 tick, int24 tickRange, int24 tickSpacing) public pure returns (
+  function calcTickRange(int24 tick, int24 tickRange, int24 tickSpacing) internal pure returns (
     int24 lowerTick,
     int24 upperTick
   ) {
