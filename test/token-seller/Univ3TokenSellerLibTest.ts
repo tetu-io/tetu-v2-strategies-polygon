@@ -68,4 +68,16 @@ describe('Univ3TokenSellerLibTest', () => {
       expect(upperTick).eq(-82);
     });
   });
+
+  describe("calcNeedToRefreshRatio", () => {
+    it("should return expected negative values", async () => {
+      expect(await facade.calcNeedToRefreshRatio(15, 20, 30)).eq(-50_000);
+    });
+    it("should return expected positive values", async () => {
+      expect(await facade.calcNeedToRefreshRatio(20, 20, 30)).eq(0);
+      expect(await facade.calcNeedToRefreshRatio(22, 20, 30)).eq(20_000);
+      expect(await facade.calcNeedToRefreshRatio(30, 20, 30)).eq(100_000);
+      expect(await facade.calcNeedToRefreshRatio(40, 20, 30)).eq(200_000);
+    });
+  });
 });
