@@ -2,12 +2,25 @@
 pragma solidity 0.8.17;
 
 contract Univ3TokenSeller {
+  //region ---------------------- Constants
+  string constant TOKEN_SELLER_VERSION = "1.0.0";
+  uint private DENOMINATOR = 100_000;
+  //endregion ---------------------- Constants
+
   //region ---------------------- Members
   /// @notice Token to be sold
   address public immutable tokenA;
   /// @notice Token to be withdrawn
   address public immutable tokenB;
   address public immutable pool;
+
+  /// @notice Min allowed lowest tick
+  /// If current prices moves below it, the contract stops to move range and waits when the price will return back.
+  int24 public minTick;
+
+  /// @notice Range size in shares of the price.
+  /// tickRange = [tick(currentPrice), tick(currentPrice * (1 + rangeSizeRatio / DENOMINATOR))]
+  uint public rangeSizeRatio;
 
   // todo delay for refreshPool
   // todo list of operators
@@ -79,4 +92,9 @@ contract Univ3TokenSeller {
 
   }
   //endregion ---------------------- Actions
+
+  //region ---------------------- Governance action
+  // todo function setLowestBound()
+
+  //region ---------------------- Governance action
 }
