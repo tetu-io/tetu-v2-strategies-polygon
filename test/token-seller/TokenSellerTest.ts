@@ -205,46 +205,56 @@ describe('TokenSellerTest', () => {
         // provide liquidity in narrow range
         const amountB = parseUnits(AMOUNT_B, decimalsB);
         const slot0 = await pool.slot0();
+        const sqrtP = slot0.sqrtPriceX96;
         const tickSpacing = await facadeUni.getTickSpacing(poolParams.fee);
+        console.log("amountB", amountB);
+        console.log("sqrtP", sqrtP);
+        console.log("tickSpacing", tickSpacing);
 
         // we know current price. Let's calculate Pa and Pb
         const targetPa = slot0.sqrtPriceX96; // Pa ~ P
         const targetPb = slot0.sqrtPriceX96.mul(3); // Pb ~ 9 * P
+        console.log("targetPa", targetPa);
+        console.log("targetPb", targetPb);
 
         // calculate ticks for the target prices
         const targetTickA = await facadeUni._getTickAtSqrtRatio(targetPa);
         const targetTickB = await facadeUni._getTickAtSqrtRatio(targetPb);
+        console.log("targetTickA", targetTickA);
+        console.log("targetTickB", targetTickB);
 
         // adjust the ticks to the allowable values
         const tickLowerA = Math.ceil(targetTickA / tickSpacing) * tickSpacing;
         const tickUpperB = Math.ceil(targetTickB / tickSpacing) * tickSpacing;
+        console.log("tickLowerA", tickLowerA);
+        console.log("tickUpperB", tickUpperB);
 
         // now, let's calculate allowable Pa and Pb
-        const pA = await facadeUni._getSqrtRatioAtTick(tickLowerA);
-        const pB = await facadeUni._getSqrtRatioAtTick(tickUpperB);
+        const sqrtPa = await facadeUni._getSqrtRatioAtTick(tickLowerA);
+        const sqrtPb = await facadeUni._getSqrtRatioAtTick(tickUpperB);
+        console.log("sqrtPa", sqrtPa);
+        console.log("sqrtPb", sqrtPb);
 
         // current tick
         const tickCurrent = await facadeUni._getTickAtSqrtRatio(slot0.sqrtPriceX96);
+        console.log("tickCurrent", tickCurrent);
 
-        // we know: amount of B, pA, pB, P. What is amount of A?
+        // we know: y = amount of B, pA, pB, P. What is amount of A?
         // https://atiselsts.github.io/pdfs/uniswap-v3-liquidity-math.pdf
         // section 3.2.1: we know y, pA, pb, P, we need to find x
         // Ly = y / (sqrtPb - sqrtP)
-        // x = Ly * (sqrtPb - sqrtPa) / (sqrtA * sqrtB)
+        // x = Ly * (sqrtPb - sqrtPa) / (sqrtPa * sqrtPb)
 
-        // todo
+        const q96 = BigNumber.from(2).pow(96);
+        const liquidityAmountY = amountB.mul(q96).div(sqrtPb.sub(sqrtP));
+        const amountA = liquidityAmountY.mul(q96).mul(sqrtPb.sub(sqrtP)).div(sqrtPa.mul(sqrtPb));
+        console.log("liquidityAmountY", liquidityAmountY);
+        console.log("amountA", amountA);
 
-
-        let liquidityAmount = await facadeUni.getLiquidityForAmounts(
-          slot0.sqrtPriceX96,
-          tickLowerA,
-          tickUpperB,
-          0,
-          parseUnits(AMOUNT_B, decimalsB)
-        );
-        liquidityAmount = parseUnits(AMOUNT_B, decimalsB).mul(slot0.sqrtPriceX96);
+        const liquidityAmount = await facadeUni.getLiquidityForAmounts(sqrtP, tickLowerA, tickUpperB, amountA, amountB);
         console.log("liquidityAmount", liquidityAmount);
-        const requiredAmounts = await facadeUni.getAmountsForLiquidity(slot0.sqrtPriceX96, lowerTick, upperTick, liquidityAmount);
+
+        const requiredAmounts = await facadeUni.getAmountsForLiquidity(slot0.sqrtPriceX96, tickLowerA, tickUpperB, liquidityAmount);
         console.log("requiredAmounts", requiredAmounts);
 
         // prepare initial amounts of both token
@@ -253,9 +263,9 @@ describe('TokenSellerTest', () => {
         await tokenB.mint(signer.address, requiredAmounts.amount1);
         await tokenB.approve(uniswapV3Callee.address, requiredAmounts.amount1);
 
-        await uniswapV3Callee.mint(pool.address, signer.address, lowerTick, upperTick, liquidityAmount, {gasLimit: 9_000_000});
-        lowerTickNarrow = lowerTick;
-        upperTickNarrow = upperTick;
+        await uniswapV3Callee.mint(pool.address, signer.address, tickLowerA, tickUpperB, liquidityAmount, {gasLimit: 9_000_000});
+        lowerTickNarrow = tickLowerA;
+        upperTickNarrow = tickUpperB;
         liquidityAmountNarrow = liquidityAmount;
       });
       after(async function () {
