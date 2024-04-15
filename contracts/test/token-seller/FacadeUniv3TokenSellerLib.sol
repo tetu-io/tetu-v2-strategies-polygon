@@ -19,8 +19,8 @@ contract FacadeUniv3TokenSellerLib {
     return Univ3TokenSellerLib.calcTickRangeSymmetrically(tick, tickRange, tickSpacing);
   }
 
-  function calcTickRangeRightHalf(int24 tick, int24 tickRange, int24 tickSpacing) external pure returns (int24 lowerTick, int24 upperTick) {
-    return Univ3TokenSellerLib.calcTickRangeRightHalf(tick, tickRange, tickSpacing);
+  function calcTickRangeAsymmetrical(int24 tick, int24 tickRangeLeft, int24 tickRangeRight, int24 tickSpacing) external pure returns (int24 lowerTick, int24 upperTick) {
+    return Univ3TokenSellerLib.calcTickRangeAsymmetrical(tick, tickRangeLeft, tickRangeRight, tickSpacing);
   }
   //endregion ------------------------------ Calculate tick range
 

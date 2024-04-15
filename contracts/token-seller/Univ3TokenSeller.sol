@@ -4,8 +4,9 @@ pragma solidity 0.8.17;
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
 import "../integrations/uniswap/IUniswapV3Pool.sol";
 import "./Univ3TokenSellerLib.sol";
+import "../integrations/uniswap/IUniswapV3MintCallback.sol";
 
-contract Univ3TokenSeller {
+contract Univ3TokenSeller is IUniswapV3MintCallback {
   //region ---------------------- Constants
   string constant public TOKEN_SELLER_VERSION = "1.0.0";
   uint private DENOMINATOR = 100_000;
@@ -17,28 +18,10 @@ contract Univ3TokenSeller {
   /// @notice Token to be withdrawn
   address public immutable tokenB;
   IUniswapV3Pool public immutable pool;
+  int24 public immutable tickSpacing;
 
-  /// @notice Receiver of the token B
-  address public receiver;
-
-  /// @notice Min allowed lowest tick
-  /// If current prices moves below it, the contract stops to move range and waits when the price will return back.
-  int24 public minTick;
-
-  /// @notice Range size in shares of the price.
-  /// tickRange = [tick(currentPrice), tick(currentPrice * (1 + rangeSizeRatio / DENOMINATOR))]
-  uint public rangeSizeRatio;
-
-  /// @notice Amount of token B that cannot be withdrawn from balance inside {refreshPool}
-  uint public minBalanceTokenB;
-
-  /// @notice Lower bound of the currently opened position
-  int24 public lowerTick;
-  /// @notice Upper bound of the currently opened position
-  int24 public upperTick;
-
-  /// @notice Min amount of token B that should be transferred to the receiver
-  uint public thresholdTokenB;
+  Univ3TokenSellerLib.Config public config;
+  Univ3TokenSellerLib.State public state;
 
   // todo delay for refreshPool
   // todo list of operators
@@ -58,11 +41,14 @@ contract Univ3TokenSeller {
   constructor (
     address tokenA_,
     address tokenB_,
-    address pool_
+    address pool_,
+    Univ3TokenSellerLib.Config memory config_
   ) {
     tokenA = tokenA_;
     tokenB = tokenB_;
     pool = IUniswapV3Pool(pool_);
+    config = config_;
+    tickSpacing = IUniswapV3Pool(pool_).tickSpacing();
   }
   //endregion ---------------------- Constructor
 
@@ -72,15 +58,17 @@ contract Univ3TokenSeller {
   }
 
   function needToRefresh() public view returns (bool) {
-    int24 _lowerTick = lowerTick;
-    int24 _upperTick = upperTick;
+    int24 _lowerTick = state.lowerTick;
+    int24 _upperTick = state.upperTick;
     (uint160 sqrtPriceX96, int24 tick,,,,,) = pool.slot0();
     int24 ratio = Univ3TokenSellerLib.calcNeedToRefreshRatio(tick, _lowerTick, _upperTick);
     if (ratio < 0) {
+      // new price is below lower tick, tick range should be moved
       return true;
     } else {
+      // new price is higher lowest tick
       (, uint amountB) = UniswapV3Lib.getAmountsForLiquidity(sqrtPriceX96, _lowerTick, _upperTick, pool.liquidity());
-      return amountB > thresholdTokenB;
+      return amountB > config.thresholdTokenB && uint(int(ratio)) > config.thresholdRatio;
     }
   }
 
@@ -94,26 +82,26 @@ contract Univ3TokenSeller {
 
   /// @notice Deposit to pool required amount of {liquidity}.
   /// Exact amounts of token A and B are calculated on the base of {liquidity} and tick range
-  function openPosition(uint liquidity) external {
+  /// @param liquidity Required amount of liquidity that should be deposited to the pool.
+  /// Assume that required amounts of A and B exist on the balance.
+  function openPosition(uint128 liquidity) external {
     // todo only allowed contracts
     if (isPositionOpened()) revert AlreadyOpened();
 
-    // get optimal tick range
-    // shift tick range if price is below lower bound
-    // enter to the pool
+    Univ3TokenSellerLib._enter(pool, tickSpacing, config, state, liquidity);
   }
 
   function closePosition() external {
     // todo only allowed contracts
     if (isPositionOpened()) {
-      // todo exit from the pool
+      Univ3TokenSellerLib._exit(pool, state, true);
     }
   }
 
   function refreshPool() external {
     // todo only allowed contracts
     if (needToRefresh()) {
-      // todo exit from the pool
+      Univ3TokenSellerLib._exit(pool, state, false);
       // todo enter to the pool
       // todo withdraw token B
     }
@@ -124,6 +112,20 @@ contract Univ3TokenSeller {
 
   }
   //endregion ---------------------- Actions
+
+  //region ---------------------- UniswapV3 callbacks
+  /// @notice Uniswap V3 callback fn, called back on pool.mint
+  function uniswapV3MintCallback(uint amount0Owed, uint amount1Owed, bytes calldata data) external override {
+    // todo sender can be equal to this
+    address sender = abi.decode(data, (address));
+    if (amount0Owed != 0) {
+      IERC20(IUniswapV3Pool(msg.sender).token0()).transferFrom(sender, msg.sender, amount0Owed);
+    }
+    if (amount1Owed != 0) {
+      IERC20(IUniswapV3Pool(msg.sender).token1()).transferFrom(sender, msg.sender, amount1Owed);
+    }
+  }
+  //endregion ---------------------- UniswapV3 callbacks
 
   //region ---------------------- Governance action
   // todo function setLowestBound()
