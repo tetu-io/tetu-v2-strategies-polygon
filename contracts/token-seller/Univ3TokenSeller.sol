@@ -64,7 +64,8 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
     int24 ratio = Univ3TokenSellerLib.calcNeedToRefreshRatio(tick, _lowerTick, _upperTick);
     if (ratio < 0) {
       // new price is below lower tick, tick range should be moved
-      return true;
+      // difference in 1 tick is allowed, it's exist right after the call of refreshPool()
+      return _lowerTick - tick > tickSpacing;
     } else {
       // new price is higher lowest tick
       (, uint amountB) = UniswapV3Lib.getAmountsForLiquidity(sqrtPriceX96, _lowerTick, _upperTick, pool.liquidity());
@@ -84,11 +85,11 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
   /// Exact amounts of token A and B are calculated on the base of {liquidity} and tick range
   /// @param liquidity Required amount of liquidity that should be deposited to the pool.
   /// Assume that required amounts of A and B exist on the balance.
-  function openPosition(uint128 liquidity) external {
+  function openPosition() external {
     // todo only allowed contracts
     if (isPositionOpened()) revert AlreadyOpened();
 
-    Univ3TokenSellerLib._enter(pool, tickSpacing, config, state, liquidity);
+    Univ3TokenSellerLib._enter(pool, tickSpacing, config, state, config.amountA);
   }
 
   function closePosition() external {
@@ -102,14 +103,19 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
     // todo only allowed contracts
     if (needToRefresh()) {
       Univ3TokenSellerLib._exit(pool, state, false);
-      // todo enter to the pool
-      // todo withdraw token B
+      Univ3TokenSellerLib._enter(pool, tickSpacing, config, state, config.amountA);
+
+      uint balanceB = IERC20(tokenB).balanceOf(address(this));
+      if (balanceB > config.thresholdTokenB) {
+        IERC20(tokenB).transfer(config.receiver, balanceB);
+      }
     }
   }
 
   function withdraw(address receiver_, address token_, uint amount_) external {
     // todo only allowed contracts
 
+    IERC20(token_).transfer(receiver_, amount_);
   }
   //endregion ---------------------- Actions
 

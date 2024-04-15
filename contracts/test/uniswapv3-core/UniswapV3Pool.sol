@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity >=0.8.12;
+import "hardhat/console.sol";
 
 import {IUniswapV3PoolImmutables, IUniswapV3PoolState, IUniswapV3PoolActions, IUniswapV3PoolDerivedState, IUniswapV3PoolOwnerActions, IUniswapV3Pool} from './interfaces/IUniswapV3Pool.sol';
 
@@ -483,6 +484,10 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
     liquidityDelta : int256(uint256(amount)).toInt128()
     })
     );
+    console.log("mint.recipient", recipient);
+    console.log("mint.tickLower");console.logInt(tickLower);
+    console.log("mint.tickUpper");console.logInt(tickUpper);
+    console.log("mint.liquidityDelta", uint256(amount));
 
     amount0 = uint256(amount0Int);
     amount1 = uint256(amount1Int);
@@ -542,6 +547,10 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
     liquidityDelta : - int256(uint256(amount)).toInt128()
     })
     );
+      console.log("burn.msg.sender", msg.sender);
+      console.log("burn.tickLower");console.logInt(tickLower);
+      console.log("burn.tickUpper");console.logInt(tickUpper);
+      console.log("burn.liquidityDelta", uint256(amount));
 
     amount0 = uint256(- amount0Int);
     amount1 = uint256(- amount1Int);

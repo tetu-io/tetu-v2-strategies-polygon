@@ -14,25 +14,22 @@ library Univ3TokenSellerLib {
     /// @notice Receiver of the token B
     address receiver;
 
+    /// @notice Amount ot token A to invest to the narrow range
+    uint amountA;
+
+    /// @notice size of the narrow range
+    int24 tickRange;
+
     /// @notice Min allowed lowest tick
-    /// If current prices moves below it, the contract stops to move range and waits when the price will return back.
+    /// If current prices moves below it, the contract stops to move range and waits when the price return back.
     int24 minTick;
-
-    /// @notice Required right tick range (same for any price values) = upper tick - tick
-    /// Assume, that it's divisible without remainder by tickSpacing
-    int24 tickRangeRight;
-
-    /// @notice Required left tick range (same for any price values) = tick - lower tick, can be 0
-    /// Assume, that it's divisible without remainder by tickSpacing
-    int24 tickRangeLeft;
-
-    /// @notice Amount of token B that cannot be withdrawn from balance inside {refreshPool}
-    uint minBalanceTokenB;
 
     /// @notice Min amount of token B that can be transferred to the receiver
     uint thresholdTokenB;
 
-    /// @notice Threshold for the ratio = (tick - lowerBound) / (lowerBound - upperBound), DENOMINATOR
+    /// @notice Threshold for the current tick. Refresh is required if
+    /// (tick - lower tick) / (upper tick - lower tick)
+    ///  exceeds the threshold
     uint thresholdRatio;
   }
 
@@ -74,21 +71,18 @@ library Univ3TokenSellerLib {
     upperTick = tickRange == 0 ? lowerTick + tickSpacing : lowerTick + tickRange * 2;
   }
 
-  /// @notice Calculate values of lowerTick and upperTick so that the {tick} is at the left edge of the total range
+  /// @notice Calculate values of lowerTick and upperTick so that the {tick} is out of the total range
+  /// and tick - tickLower <= tickSpacing
   /// @param tick Current tick (according to the current price)
   /// @param tickRangeLeft tick - lowerTick. It must be evenly divisible by {tickSpacing}, can be 0
   /// @param tickRangeRight upperTick - tick. It must be evenly divisible by {tickSpacing}
   /// @param tickSpacing Distance between ticks (related to the fee)
-  function calcTickRangeAsymmetrical(int24 tick, int24 tickRangeLeft, int24 tickRangeRight, int24 tickSpacing) internal pure returns (
+  function getNarrowTickRange(int24 tick, int24 tickRange, int24 tickSpacing) internal pure returns (
     int24 lowerTick,
     int24 upperTick
   ) {
-    if (tick < 0 && tick / tickSpacing * tickSpacing != tick) {
-      lowerTick = ((tick - tickRangeLeft) / tickSpacing - 1) * tickSpacing;
-    } else {
-      lowerTick = (tick - tickRangeLeft) / tickSpacing * tickSpacing;
-    }
-    upperTick = tickRangeRight == 0 ? lowerTick + tickSpacing : lowerTick + tickRangeRight + tickRangeLeft;
+    // todo
+    return (lowerTick, upperTick);
   }
   //endregion ------------------------------ Calculate tick range
 
@@ -112,15 +106,17 @@ library Univ3TokenSellerLib {
     int24 tickSpacing,
     Univ3TokenSellerLib.Config storage config,
     Univ3TokenSellerLib.State storage state,
-    uint128 liquidity
+    uint amountA
   ) internal {
     // get optimal tick range
-    (, int24 tick,,,,,) = pool.slot0();
-    (int24 tickLower, int24 tickUpper) = Univ3TokenSellerLib.calcTickRangeAsymmetrical(
-      tick,
-      config.tickRangeLeft,
-      config.tickRangeRight,
-      tickSpacing
+    (uint160 sqrtRatioX96, int24 tick,,,,,) = pool.slot0();
+    (int24 tickLower, int24 tickUpper) = Univ3TokenSellerLib.getNarrowTickRange(tick, config.tickRange, tickSpacing);
+    uint128 liquidity = UniswapV3Lib.getLiquidityForAmounts(
+      sqrtRatioX96,
+      tickLower,
+      tickUpper,
+      amountA,
+      0
     );
 
     // enter to the pool
