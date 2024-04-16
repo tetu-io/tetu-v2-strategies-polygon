@@ -15,7 +15,6 @@ import {
 import {parseUnits} from "ethers/lib/utils";
 import {BigNumber} from "ethers";
 import {expect} from "chai";
-import {sign} from "node:crypto";
 import {Misc} from "../../scripts/utils/Misc";
 
 /**

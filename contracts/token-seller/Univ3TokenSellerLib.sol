@@ -69,14 +69,6 @@ library Univ3TokenSellerLib {
 
   //endregion ---------------------- Events
 
-  //region ------------------------------ Utils
-  /// @notice Calculate distance from current tick to lower bound in percents of the total tick range, decimals 5
-  function calcNeedToRefreshRatio(int24 tick, int24 lowerBound, int24 upperBound) internal pure returns (int24 ratio) {
-    return (tick - lowerBound) * DENOMINATOR_INT / (upperBound - lowerBound);
-  }
-
-  //endregion ------------------------------ Utils
-
   //region ------------------------------ Calculate tick range
   /// @notice Calculate values of lowerTick and upperTick so that the {tick} is in the middle of the total range
   /// @param tick Current tick (according to the current price)
@@ -99,13 +91,16 @@ library Univ3TokenSellerLib {
   /// but the difference of {tick} and {tickLower} is less or equal to {tickSpacing}
   /// @param tick Current tick (according to the current price)
   /// @param tickRangeSize Size of the tick range in tickSpacing, tickRange = {tickRangeSize} * {tickSpacing}
-  /// @param tickSpacing Distance between ticks (related to the fee)
+  /// @param tickSpacing Allowed distance between ticks (it depends on the fee)
   /// @param minTick Min allowed value of lowerTick
   function getNarrowTickRange(int24 tick, int24 tickRangeSize, int24 tickSpacing, int24 minTick) internal pure returns (
     int24 lowerTick,
     int24 upperTick
   ) {
-    lowerTick = max((tick / tickSpacing) * tickSpacing, minTick);
+    lowerTick = max(
+      tick < 0 ? tick : tick + tickSpacing - 1,
+      minTick < 0 ? minTick : minTick + tickSpacing - 1
+    ) / tickSpacing * tickSpacing;
     return (lowerTick, lowerTick + tickRangeSize * tickSpacing);
   }
   //endregion ------------------------------ Calculate tick range
@@ -122,14 +117,15 @@ library Univ3TokenSellerLib {
     if (block.timestamp > state.lastRefreshPoolTimestamp + config.thresholdLastRefreshPoolSec) {
       v.lowerTick = state.lowerTick;
       v.upperTick = state.upperTick;
-      (v.sqrtPriceX96, v.tick,,,,,) = pool.slot0();
-      v.ratio = Univ3TokenSellerLib.calcNeedToRefreshRatio(v.tick, v.lowerTick, v.upperTick);
+      (v.sqrtPriceX96, v.tick, ,,,,) = pool.slot0();
+
+      v.ratio = (v.tick - v.lowerTick) * DENOMINATOR_INT / (v.upperTick - v.lowerTick);
       if (v.ratio < 0) {
         // new price is below lower tick, tick range should be moved
-        // difference in 1 tick is allowed, it's exist right after the call of refreshPool()
+        // difference in 1 tickSpacing is allowed, it's exist right after the call of refreshPool()
         return v.lowerTick - v.tick > tickSpacing;
       } else {
-        // new price is higher lowest tick
+        // new price is higher the lower tick
         (v.amount0, v.amount1) = UniswapV3Lib.getAmountsForLiquidity(v.sqrtPriceX96, v.lowerTick, v.upperTick, pool.liquidity());
         uint amountB = poolSwapTokens ? v.amount0 : v.amount1;
         return amountB > config.thresholdTokenB && uint(int(v.ratio)) > config.thresholdRatio;

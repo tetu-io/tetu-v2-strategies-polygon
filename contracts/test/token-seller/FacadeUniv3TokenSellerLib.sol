@@ -23,14 +23,6 @@ contract FacadeUniv3TokenSellerLib {
 
   //endregion ------------------------------ For tests
 
-  //region ------------------------------ Utils
-  /// @notice Calculate distance from current tick to lower bound in percents of the total tick range, decimals 5
-  function calcNeedToRefreshRatio(int24 tick, int24 lowerBound, int24 upperBound) external pure returns (int32 ratio) {
-    return Univ3TokenSellerLib.calcNeedToRefreshRatio(tick, lowerBound, upperBound);
-  }
-
-  //endregion ------------------------------ Utils
-
   //region ------------------------------ Calculate tick range
 
   function calcTickRange(int24 tick, int24 tickRange, int24 tickSpacing) external pure returns (int24 lowerTick, int24 upperTick) {

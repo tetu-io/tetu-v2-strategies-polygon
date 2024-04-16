@@ -124,6 +124,7 @@ const libraries = new Map<string, string[]>([
   ['PancakeLibFacade', ['PancakeLib']],
   ['PancakeDebtLibFacade', ['PancakeLib']],
   ['PancakeConverterStrategyLogicLibFacade', ['PancakeConverterStrategyLogicLib', 'PairBasedStrategyLogicLib']],
+  ['FacadeUniv3TokenSellerLib', ['UniswapV3Lib']]
 ]);
 
 export async function deployContractSilently<T extends ContractFactory>(
