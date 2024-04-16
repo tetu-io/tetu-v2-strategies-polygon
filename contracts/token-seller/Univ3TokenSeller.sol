@@ -99,10 +99,21 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
   }
 
   function isPositionOpened() public view returns (bool) {
-    return pool.liquidity() != 0;
+    return state.liquidityAmount != 0;
   }
 
+  // todo calc tick by price (to be able to setup minTick)
   //endregion ---------------------- View
+
+  //region ---------------------- Configure
+  function setConfig(Univ3TokenSellerLib.Config memory config_) external {
+    onlyOwner();
+
+    config = config_;
+  }
+
+  // todo Possibility to change owner
+  //endregion ---------------------- Configure
 
   //region ---------------------- Actions
 
@@ -115,7 +126,6 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
 
     uint amountA = _getAmountA();
     Univ3TokenSellerLib.enter(pool, tickSpacing, config, state, amountA, poolSwapTokens);
-
   }
 
   function closePosition() external {
@@ -154,15 +164,6 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
   }
   //endregion ---------------------- Actions
 
-  //region ---------------------- Internal logic
-  /// @notice Get in-amount of token A to enter to the pool
-  function _getAmountA() internal view returns (uint amountA) {
-    amountA = Math.min(config.amountA, IERC20(tokenA).balanceOf(address(this)));
-    if (amountA == 0) revert ZeroAmountA();
-  }
-
-  //endregion ---------------------- Internal logic
-
   //region ---------------------- UniswapV3 callbacks
   /// @notice Uniswap V3 callback fn, called back on pool.mint
   function uniswapV3MintCallback(uint amount0Owed, uint amount1Owed, bytes calldata data) external override {
@@ -177,12 +178,12 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
   }
   //endregion ---------------------- UniswapV3 callbacks
 
-  //region ---------------------- Governance action
-  function setConfig(Univ3TokenSellerLib.Config memory config_) external {
-    onlyOwner();
-
-    config = config_;
+  //region ---------------------- Internal logic
+  /// @notice Get in-amount of token A to enter to the pool
+  function _getAmountA() internal view returns (uint amountA) {
+    amountA = Math.min(config.amountA, IERC20(tokenA).balanceOf(address(this)));
+    if (amountA == 0) revert ZeroAmountA();
   }
 
-  //region ---------------------- Governance action
+  //endregion ---------------------- Internal logic
 }

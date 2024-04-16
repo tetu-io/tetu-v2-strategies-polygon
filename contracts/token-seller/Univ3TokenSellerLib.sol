@@ -13,7 +13,7 @@ library Univ3TokenSellerLib {
   //region ---------------------- Data types
   struct Config {
     /// @notice Receiver of the token B
-    address receiver;
+    address receiver; // todo remove, receiver is owner ALWAYS
 
     /// @notice Amount ot token A to invest to the narrow range
     uint amountA;
@@ -30,7 +30,7 @@ library Univ3TokenSellerLib {
 
     /// @notice Threshold for the current tick. Refresh is required if
     /// (tick - lower tick) / (upper tick - lower tick)
-    ///  exceeds the threshold
+    /// exceeds the threshold. Decimals = {DENOMINATOR_INT}
     uint thresholdRatio;
 
     /// @notice Min allowed interval between calls of {refreshPool}
@@ -181,13 +181,13 @@ library Univ3TokenSellerLib {
   }
 
   /// @notice Close position and withdraw all fees and amounts from the pool on balance.
-  /// @param clearState True - clear values in {state}
+  /// @param clearState True - clear position-related values in {state}
   function exit(
     IUniswapV3Pool pool,
     Univ3TokenSellerLib.State storage state,
     bool clearState
   ) internal {
-    // withdraw liquidity from the pool to the balance
+    // prepare to withdraw liquidity from the pool
     pool.burn(state.lowerTick, state.upperTick, state.liquidityAmount);
 
     // collect fees and put them to the balance

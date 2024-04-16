@@ -6,8 +6,9 @@ import {DeployerUtils} from "../../scripts/utils/DeployerUtils";
 import {FacadeUniv3TokenSellerLib, MockUniswapV3Pool, UniswapV3LibFacade} from "../../typechain";
 import {expect} from "chai";
 import {BigNumber} from "ethers";
-import {parseUnits} from "ethers/lib/utils";
+import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
 import {MockHelper} from "../baseUT/helpers/MockHelper";
+import {range} from "lodash";
 
 describe('Univ3TokenSellerLibTest', () => {
   const DENOMINATOR_INT = "100000";
@@ -197,12 +198,12 @@ describe('Univ3TokenSellerLibTest', () => {
 
   describe("Enter/exit logic", () => {
     describe("needToRefresh", () => {
-      let snapshot1: string;
-      before(async function () {
-        snapshot1 = await TimeUtils.snapshot();
+      let snapshotEach: string;
+      beforeEach(async function () {
+        snapshotEach = await TimeUtils.snapshot();
       });
-      after(async function () {
-        await TimeUtils.rollback(snapshot1);
+      afterEach(async function () {
+        await TimeUtils.rollback(snapshotEach);
       });
 
       interface IParams {
@@ -413,7 +414,159 @@ describe('Univ3TokenSellerLibTest', () => {
     });
 
     describe("enter", () => {
+      let snapshotEach: string;
+      beforeEach(async function () {
+        snapshotEach = await TimeUtils.snapshot();
+      });
+      afterEach(async function () {
+        await TimeUtils.rollback(snapshotEach);
+      });
 
+      interface IParams {
+        tickSpacing: number;
+        amountA: string;
+        config: {
+          tickRangeSize: number;
+          minTick: number;
+        }
+        pool: {
+          amount0: string;
+          amount1: string;
+        }
+
+        poolSwapTokens?: boolean;
+        decimalsB?: number; // 6 by default
+        decimalsA?: number; // same by default to simplify numbers
+      }
+      interface IResults {
+        gasUsed: number;
+        state: {
+          lowerTick: number;
+          upperTick: number;
+          liquidityAmount: BigNumber;
+        }
+        expected: {
+          lowerTick: number;
+          upperTick: number;
+          liquidityAmount: BigNumber;
+        }
+        isMintCalled: boolean;
+      }
+      async function makeTest(p: IParams): Promise<IResults> {
+        const poolSwapTokens = p.poolSwapTokens ?? false;
+        const decimalsA = p.decimalsA ?? 6;
+        const decimalsB = p.decimalsB ?? 6;
+
+// set up pool mock
+        const amount0 = parseUnits(p.pool.amount0, poolSwapTokens ? decimalsB: decimalsA);
+        const amount1 = parseUnits(p.pool.amount1, poolSwapTokens ? decimalsA: decimalsB);
+
+        // sqrt(price) = sqrt(reserves B / reserves A)
+        const sqrtPriceX96 = amount1.div(amount0).mul(BigNumber.from(2).pow(96));
+        // tick = log_{sqrt(1.0001)}(sqrt(price))
+        const tick = await facadeUni._getTickAtSqrtRatio(sqrtPriceX96);
+
+        const expectedRange = await facade.getNarrowTickRange(tick, p.config.tickRangeSize, p.tickSpacing, p.config.minTick);
+        const expectedLiquidity = await facadeUni.getLiquidityForAmounts(
+          sqrtPriceX96,
+          expectedRange.lowerTick,
+          expectedRange.upperTick,
+          p.poolSwapTokens ? 0 : p.amountA,
+          p.poolSwapTokens ? p.amountA : 0,
+        );
+
+        await mockedPool.setMint(
+          facade.address,
+          expectedRange.lowerTick,
+          expectedRange.upperTick,
+          expectedLiquidity,
+          defaultAbiCoder.encode(["address"], [signer.address]),
+          41, // not used in the code
+          57, // not used in the code
+        );
+
+        await mockedPool.setSlot0(sqrtPriceX96, tick,
+          // following values are not used here
+          0, 0, 0, 0, false
+        );
+
+// set up facade
+        await facade.setConfig({
+          minTick: p.config.minTick,
+          tickRangeSize: p.config.tickRangeSize,
+          // not used
+          thresholdLastRefreshPoolSec: 0,
+          thresholdRatio: 0,
+          thresholdTokenB: 0,
+          receiver: ethers.Wallet.createRandom().address,
+          amountA: 0,
+        });
+        const amountA = parseUnits(p.amountA, decimalsA);
+
+        const tr = await facade.enter(mockedPool.address, p.tickSpacing, amountA, poolSwapTokens);
+        const cr = await tr.wait();
+        const gasUsed = cr.gasUsed.toNumber();
+
+        const stateAfter = await facade.getState();
+        const isMintCalled = await mockedPool.isMintCalled(
+          facade.address,
+          expectedRange.lowerTick,
+          expectedRange.upperTick,
+          expectedLiquidity,
+          defaultAbiCoder.encode(["address"], [signer.address]),
+        );
+
+        return {
+          gasUsed,
+          expected: {
+            lowerTick: expectedRange.lowerTick,
+            upperTick: expectedRange.upperTick,
+            liquidityAmount: expectedLiquidity
+          },
+          state: {
+            lowerTick: stateAfter.lowerTick,
+            upperTick: stateAfter.upperTick,
+            liquidityAmount: stateAfter.liquidityAmount
+          },
+          isMintCalled
+        }
+      }
+
+      const NORMAL_CASE: IParams = {
+        pool: {
+          amount0: "1",
+          amount1: "1000",
+        },
+        amountA: "5000",
+        tickSpacing: 1,
+        config: {
+          minTick: -888_888,
+          tickRangeSize: 10
+        }
+      }
+      describe("poolSwapTokens is false", () => {
+        it("should return expected values in normal case", async () => {
+          const ret = await makeTest(NORMAL_CASE);
+          console.log("ret", ret);
+          expect(ret.state.liquidityAmount).eq(ret.expected.liquidityAmount);
+          expect(ret.state.lowerTick).eq(ret.expected.lowerTick);
+          expect(ret.state.upperTick).eq(ret.expected.upperTick);
+          expect(ret.isMintCalled).eq(true);
+        });
+      });
+      describe("poolSwapTokens is true", () => {
+        it("should return expected values in normal case", async () => {
+          const ret = await makeTest({
+            ...NORMAL_CASE,
+            poolSwapTokens: true
+          });
+          console.log("ret", ret);
+          expect(ret.state.liquidityAmount).eq(ret.expected.liquidityAmount);
+          expect(ret.state.lowerTick).eq(ret.expected.lowerTick);
+          expect(ret.state.upperTick).eq(ret.expected.upperTick);
+          expect(ret.isMintCalled).eq(true);
+        });
+      });
     });
   });
 });
