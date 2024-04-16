@@ -21,23 +21,27 @@ import {Misc} from "../../scripts/utils/Misc";
  * There is uniswap v3 pool with two tokens:
  * - token A - the token to be sold
  * - token B - the token to be withdrawn
- * The pool has some liquidity, so the tokens have some price P.
+ * The pool has some liquidity, so the tokens have some price P = reserves B / reserves A
+ * For simplicity, whole liquidity is provided by single {singer1}
+ * Possible pool params:
+ * 1) pool swaps tokens (token A is token 1, token B is token 0)
+ * 2) tickSpacing (1, 10, 60, 200 - it depends on fee value)
  *
- * Contract TokenSeller is liquidity provider of token A.
+ * Contract TokenSeller is liquidity provider of token A. The owner is {signer}
  * It creates range [P0, P1], where P0 <= P < P1
  * The task is to keep P ~ P0, ideally P = P0.
  * P1 >> P, so user is always able to buy any required amount of A.
  * Token seller provides liquidity of A to buy A and doesn't provide liquidity of B to sell A.
- * Anyway, user is able to swap A to B using liquidity from the main pool.
+ * Anyway, the user {signer2} is able to swap A to B using liquidity from the main pool.
  *
- * If a user buys A, following happens:
+ * If the user buys A, following happens:
  * - amount of B is increased on delta B
  * - price of A is increased: P => P2
  *
  * Token seller does following:
  *  - withdraw liquidity from the pool
  *  - deposit liquidity to the pool with new range [P0', P1'], where P0' <= P2 < P1'
- *  - transfer delta B to specified contract.
+ *  - transfer delta B to {receiver}
  *
  * If a user swaps A to B, following happens:
  * - price of A is decreased, P => P3:
@@ -51,6 +55,16 @@ import {Misc} from "../../scripts/utils/Misc";
  * Invariant:
  *    Token seller shouldn't change price of the tokens in the pool.
  *
+ * Test params that produce various uses cases:
+ * 1) Initial amounts of B and A in the pool. P = reserves B / reserves A.
+ * P ~ 0, P >> 0, P << 0
+ * 2) Pool swap tokens
+ * 3) Tick spacing (1, 10, 60, 200)
+ * 4) min allowed tick - TokenSeller is not able to move price below the min allowed tick
+ * 5) amount of liquidity in narrow range L (amount A)
+ * 6) swap amount SA: SA << L, SA >> L, SA ~ L; we need to check a lot of variants SA with tiny delta.
+ * 7) Threshold for ratio
+ * 8) Threshold for amount B
  */
 describe('TokenSellerTest', () => {
   let snapshotBefore: string;

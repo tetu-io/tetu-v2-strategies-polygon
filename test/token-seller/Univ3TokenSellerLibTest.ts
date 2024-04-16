@@ -8,11 +8,9 @@ import {expect} from "chai";
 import {BigNumber} from "ethers";
 import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
 import {MockHelper} from "../baseUT/helpers/MockHelper";
-import {range} from "lodash";
+import {Misc} from "../../scripts/utils/Misc";
 
 describe('Univ3TokenSellerLibTest', () => {
-  const DENOMINATOR_INT = "100000";
-
   let snapshotBefore: string;
   let signer: SignerWithAddress;
   let facade: FacadeUniv3TokenSellerLib;
@@ -566,6 +564,116 @@ describe('Univ3TokenSellerLibTest', () => {
           expect(ret.state.upperTick).eq(ret.expected.upperTick);
           expect(ret.isMintCalled).eq(true);
         });
+      });
+    });
+
+    describe("exit", () => {
+      let snapshotEach: string;
+      beforeEach(async function () {
+        snapshotEach = await TimeUtils.snapshot();
+      });
+      afterEach(async function () {
+        await TimeUtils.rollback(snapshotEach);
+      });
+
+      interface IParams {
+        clearState: boolean;
+        state: {
+          lowerTick: number;
+          upperTick: number;
+          liquidityAmount: BigNumber;
+        }
+      }
+      interface IResults {
+        gasUsed: number;
+        state: {
+          lowerTick: number;
+          upperTick: number;
+          liquidityAmount: BigNumber;
+        }
+        isBurnCalled: boolean;
+        isCollectCalled: boolean;
+      }
+      async function makeTest(p: IParams): Promise<IResults> {
+        // set up facade
+        await facade.setState({
+          lowerTick: p.state.lowerTick,
+          upperTick: p.state.upperTick,
+          liquidityAmount: p.state.liquidityAmount,
+          lastRefreshPoolTimestamp: 0
+        });
+
+        // set up mocked pool
+        await mockedPool.setCollect(
+          facade.address,
+          p.state.lowerTick,
+          p.state.upperTick,
+          Misc.MAX_UINT_128,
+          Misc.MAX_UINT_128,
+          41, // not used here
+          71, // not used here
+        );
+
+        await mockedPool.setBurn(
+          p.state.lowerTick,
+          p.state.upperTick,
+          p.state.liquidityAmount,
+          41, // not used here
+          71, // not used here
+        );
+
+        const tr = await facade.exit(mockedPool.address, p.clearState);
+        const cr = await tr.wait();
+        const gasUsed = cr.gasUsed.toNumber();
+
+        const stateAfter = await facade.getState();
+        const isCollectCalled = await mockedPool.isCollectCalled(
+          facade.address,
+          p.state.lowerTick,
+          p.state.upperTick,
+          Misc.MAX_UINT_128,
+          Misc.MAX_UINT_128,
+        );
+        const isBurnCalled = await mockedPool.isBurnCalled(
+          p.state.lowerTick,
+          p.state.upperTick,
+          p.state.liquidityAmount,
+        );
+
+        return {
+          gasUsed,
+          state: {
+            lowerTick: stateAfter.lowerTick,
+            upperTick: stateAfter.upperTick,
+            liquidityAmount: stateAfter.liquidityAmount
+          },
+          isCollectCalled,
+          isBurnCalled
+        }
+      }
+
+      it("should call expected functions and clear state", async () => {
+        const ret = await makeTest({
+          state: {lowerTick: 1, upperTick: 2, liquidityAmount: BigNumber.from(3)},
+          clearState: true
+        });
+        console.log(ret);
+        expect(ret.isBurnCalled).eq(true);
+        expect(ret.isCollectCalled).eq(true);
+        expect(ret.state.lowerTick).eq(0);
+        expect(ret.state.upperTick).eq(0);
+        expect(ret.state.liquidityAmount).eq(0);
+      });
+      it("should call expected functions but NOT clear state", async () => {
+        const ret = await makeTest({
+          state: {lowerTick: 1, upperTick: 2, liquidityAmount: BigNumber.from(3)},
+          clearState: false
+        });
+        expect(ret.isBurnCalled).eq(true);
+        expect(ret.isCollectCalled).eq(true);
+        expect(ret.state.lowerTick).eq(1);
+        expect(ret.state.upperTick).eq(2);
+        expect(ret.state.liquidityAmount).eq(3);
       });
     });
   });
