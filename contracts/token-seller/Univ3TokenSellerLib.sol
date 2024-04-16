@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.17;
 
+import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "../integrations/uniswap/IUniswapV3Pool.sol";
 import "../strategies/uniswap/UniswapV3Lib.sol";
 
@@ -17,8 +18,8 @@ library Univ3TokenSellerLib {
     /// @notice Amount ot token A to invest to the narrow range
     uint amountA;
 
-    /// @notice size of the narrow range
-    int24 tickRange;
+    /// @notice size of the narrow range (in tickSpacing)
+    int24 tickRangeSize;
 
     /// @notice Min allowed lowest tick
     /// If current prices moves below it, the contract stops to move range and waits when the price return back.
@@ -31,6 +32,9 @@ library Univ3TokenSellerLib {
     /// (tick - lower tick) / (upper tick - lower tick)
     ///  exceeds the threshold
     uint thresholdRatio;
+
+    /// @notice Min allowed interval between calls of {refreshPool}
+    uint thresholdLastRefreshPoolSec;
   }
 
   struct State {
@@ -42,8 +46,28 @@ library Univ3TokenSellerLib {
 
     /// @notice Liquidity amount deposited to the given range
     uint128 liquidityAmount;
+
+    /// @notice Timestamp of last call of {refreshPool}
+    uint lastRefreshPoolTimestamp;
+  }
+
+  struct NeedToRefreshLocal {
+    int24 lowerTick;
+    int24 upperTick;
+    int24 tick;
+    int24 ratio;
+    uint160 sqrtPriceX96;
+    uint amount0;
+    uint amount1;
   }
   //endregion ---------------------- Data types
+
+  //region ---------------------- Events
+  event EnterToPool(uint amountA, uint128 liquidity, int24 lowerTick, int24 upperTick);
+  event ExitFromPool();
+  event Withdraw(address receiver, address token, uint amount);
+
+  //endregion ---------------------- Events
 
   //region ------------------------------ Utils
   /// @notice Calculate distance from current tick to lower bound in percents of the total tick range, decimals 5
@@ -71,52 +95,76 @@ library Univ3TokenSellerLib {
     upperTick = tickRange == 0 ? lowerTick + tickSpacing : lowerTick + tickRange * 2;
   }
 
-  /// @notice Calculate values of lowerTick and upperTick so that the {tick} is out of the total range
-  /// and tick - tickLower <= tickSpacing
+  /// @notice Calculate values of lowerTick and upperTick so that the {tick} is out of the total range,
+  /// but the difference of {tick} and {tickLower} is less or equal to {tickSpacing}
   /// @param tick Current tick (according to the current price)
-  /// @param tickRangeLeft tick - lowerTick. It must be evenly divisible by {tickSpacing}, can be 0
-  /// @param tickRangeRight upperTick - tick. It must be evenly divisible by {tickSpacing}
+  /// @param tickRangeSize Size of the tick range in tickSpacing, tickRange = {tickRangeSize} * {tickSpacing}
   /// @param tickSpacing Distance between ticks (related to the fee)
-  function getNarrowTickRange(int24 tick, int24 tickRange, int24 tickSpacing) internal pure returns (
+  /// @param minTick Min allowed value of lowerTick
+  function getNarrowTickRange(int24 tick, int24 tickRangeSize, int24 tickSpacing, int24 minTick) internal pure returns (
     int24 lowerTick,
     int24 upperTick
   ) {
-    // todo
-    return (lowerTick, upperTick);
+    lowerTick = max((tick / tickSpacing) * tickSpacing, minTick);
+    return (lowerTick, lowerTick + tickRangeSize * tickSpacing);
   }
   //endregion ------------------------------ Calculate tick range
 
-  //region ------------------------------ Price calculations
-  /// @notice Calculate y = y(c, d, x, P)
-  /// See https://atiselsts.github.io/pdfs/uniswap-v3-liquidity-math.pdf
-  /// formulas 23, 24
-  /// @notice c By definition c^2 * P = p_upper, decimals 18
-  /// @notice d By definition d^2 * P = p_lower, decimals 18
-  /// @notice P Current price
-  /// @notice x Amount 0
-  /// @return y Amount 1
-  function getY(uint p, uint c, uint d, uint x) external pure returns (uint y) {
-    y = (d - 1e18) * c * p * x / (1e18 - c);
-  }
-  //endregion ------------------------------ Price calculations
-
   //region ---------------------- Enter/exit logic
-  function _enter(
+  function needToRefresh(
     IUniswapV3Pool pool,
     int24 tickSpacing,
     Univ3TokenSellerLib.Config storage config,
     Univ3TokenSellerLib.State storage state,
-    uint amountA
+    bool poolSwapTokens
+  ) internal view returns (bool) {
+    NeedToRefreshLocal memory v;
+    if (block.timestamp > state.lastRefreshPoolTimestamp + config.thresholdLastRefreshPoolSec) {
+      v.lowerTick = state.lowerTick;
+      v.upperTick = state.upperTick;
+      (v.sqrtPriceX96, v.tick,,,,,) = pool.slot0();
+      v.ratio = Univ3TokenSellerLib.calcNeedToRefreshRatio(v.tick, v.lowerTick, v.upperTick);
+      if (v.ratio < 0) {
+        // new price is below lower tick, tick range should be moved
+        // difference in 1 tick is allowed, it's exist right after the call of refreshPool()
+        return v.lowerTick - v.tick > tickSpacing;
+      } else {
+        // new price is higher lowest tick
+        (v.amount0, v.amount1) = UniswapV3Lib.getAmountsForLiquidity(v.sqrtPriceX96, v.lowerTick, v.upperTick, pool.liquidity());
+        uint amountB = poolSwapTokens ? v.amount0 : v.amount1;
+        return amountB > config.thresholdTokenB && uint(int(v.ratio)) > config.thresholdRatio;
+      }
+    } else {
+      return false;
+    }
+  }
+
+  /// @notice Enter to the pool using narrow tick range given by {config}.
+  /// Deposit only token A, amount of the second token is always zero.
+  /// @param poolSwapTokens False means that token A is pool.token0 and token B is pool.token1 and vice versa
+  /// @param amountA Amount of token A to be deposited to the pool. Assume that this amount exists on the balance.
+  function enter(
+    IUniswapV3Pool pool,
+    int24 tickSpacing,
+    Univ3TokenSellerLib.Config storage config,
+    Univ3TokenSellerLib.State storage state,
+    uint amountA,
+    bool poolSwapTokens
   ) internal {
     // get optimal tick range
     (uint160 sqrtRatioX96, int24 tick,,,,,) = pool.slot0();
-    (int24 tickLower, int24 tickUpper) = Univ3TokenSellerLib.getNarrowTickRange(tick, config.tickRange, tickSpacing);
+    (int24 tickLower, int24 tickUpper) = Univ3TokenSellerLib.getNarrowTickRange(
+      tick,
+      config.tickRangeSize,
+      tickSpacing,
+      config.minTick
+    );
     uint128 liquidity = UniswapV3Lib.getLiquidityForAmounts(
       sqrtRatioX96,
       tickLower,
       tickUpper,
-      amountA,
-      0
+      poolSwapTokens ? 0 : amountA,
+      poolSwapTokens ? amountA : 0
     );
 
     // enter to the pool
@@ -132,13 +180,17 @@ library Univ3TokenSellerLib {
     state.lowerTick = tickLower;
     state.upperTick = tickUpper;
     state.liquidityAmount = liquidity;
+
+    emit EnterToPool(amountA, liquidity, tickLower, tickUpper);
   }
 
-  function _exit(
+  /// @notice Close position and withdraw all fees and amounts from the pool on balance.
+  /// @param clearState True - clear values in {state}
+  function exit(
     IUniswapV3Pool pool,
     Univ3TokenSellerLib.State storage state,
     bool clearState
-  ) external {
+  ) internal {
     // withdraw liquidity from the pool to the balance
     pool.burn(state.lowerTick, state.upperTick, state.liquidityAmount);
 
@@ -150,7 +202,15 @@ library Univ3TokenSellerLib {
       state.upperTick = 0;
       state.liquidityAmount = 0;
     }
+
+    emit ExitFromPool();
   }
   //endregion ---------------------- Enter/exit logic
 
+  //region ------------------------------ Utils
+  /// @notice Returns the largest of two signed numbers.
+  function max(int24 a, int24 b) internal pure returns (int24) {
+    return a > b ? a : b;
+  }
+  //endregion ------------------------------ Utils
 }

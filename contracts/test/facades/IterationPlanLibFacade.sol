@@ -16,8 +16,7 @@ contract IterationPlanLibFacade {
     uint totalBorrowB,
     uint collateralA,
     uint amountToRepayB
-  ) external view returns(uint amountToSwap, bool swapB) {
-    console.log("estimateSwapAmountForRepaySwapRepay"); // hide pure/view warning
+  ) external pure returns(uint amountToSwap, bool swapB) {
     return IterationPlanLib.estimateSwapAmountForRepaySwapRepay(
       p,
       [balanceA, balanceB],

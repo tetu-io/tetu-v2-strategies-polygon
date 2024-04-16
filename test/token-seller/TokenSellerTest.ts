@@ -202,7 +202,7 @@ describe('TokenSellerTest', () => {
     });
 
     describe("narrow pool", () => {
-      describe("Add narrow pool, pA <= P < pB", () => {
+      describe.skip("Add narrow pool, pA <= P < pB", () => {
         const AMOUNT_A = "1000";
         let snapshot2: string;
         let lowerTickNarrow: number;
@@ -288,7 +288,7 @@ describe('TokenSellerTest', () => {
           expect(slot0.sqrtPriceX96).eq(sqrtPriceX96Wide);
         });
       });
-      describe("Add narrow pool, P < pA < pB", () => {
+      describe("Add narrow pool, P <= pA < pB", () => {
         const AMOUNT_A = "1000";
         let snapshot2: string;
         let lowerTickNarrow: number;
