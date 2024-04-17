@@ -185,6 +185,11 @@ describe('TokenSellerTest', () => {
     swapParams: ISwapParams;
   }
 
+  interface IDerivedValues {
+    tickLimit: number;
+    tickSpacing: number;
+  }
+
   interface IRangeState {
     lowerTick: number;
     upperTick: number;
@@ -221,6 +226,10 @@ describe('TokenSellerTest', () => {
    */
   interface IStateHistory {
     inputParams: IInputParams;
+    derivedValues: {
+      tickLimit: number;
+      tickSpacing: number;
+    }
     start: IState;
     init: IState;
     afterSwap: IState;
@@ -231,17 +240,22 @@ describe('TokenSellerTest', () => {
 
   //region Test data
   const MAIN_POOLS: IMainPoolParams[] = [
-    {tag: "price 1", fee: 10000, amountA: "1000", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
+    {tag: "price 1000:1", fee: 10000, amountA: "1000", amountB: "1", pricesRange: ["0.01", "100"], poolSwapTokens: false},
+    {tag: "price 1:1", fee: 10000, amountA: "1000", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
+    {tag: "price 1:1000", fee: 10000, amountA: "1", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
+
     // todo {tag: "price 1, swap", fee: 10000, amountA: "1000", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: true},
   ];
 
   const NARROW_RANGES: INarrowRangeParams[] = [
-    {tag: "10ths", balanceA: "50000", amountA: "10000", sqrtMinPriceRatio: "0.9", thresholdRatio: "0.001", thresholdTokenB: "1", tickRangeSize: 5}
+    {tag: "10ths", balanceA: "50000", amountA: "10000", sqrtMinPriceRatio: "0.1", thresholdRatio: "0", thresholdTokenB: "0", tickRangeSize: 5}
   ];
 
   const SWAP_SETS: ISwapParams[] = [
     {tag: "B1000", swapTokenA: false, swapAmount: "1000"},
     {tag: "A1000", swapTokenA: true, swapAmount: "1000"},
+    {tag: "B10000", swapTokenA: false, swapAmount: "10000"},
+    {tag: "A10000", swapTokenA: true, swapAmount: "10000"},
   ];
   //endregion Test data
 
@@ -336,6 +350,9 @@ describe('TokenSellerTest', () => {
       "input.swap.tag",
       "input.swap.swapTokenA",
       "input.swap.swapAmount",
+
+      "tickLimit",
+      "tickSpacing",
     ]
   }
   function stateHistoryToArray(state: IStateHistory): (string | number | BigNumber)[]{
@@ -359,6 +376,9 @@ describe('TokenSellerTest', () => {
       state.inputParams.swapParams.tag,
       state.inputParams.swapParams.swapTokenA ? 1 : 0,
       state.inputParams.swapParams.swapAmount,
+
+      state.derivedValues.tickLimit,
+      state.derivedValues.tickSpacing
     ];
   }
 
@@ -589,11 +609,20 @@ describe('TokenSellerTest', () => {
         // todo save states to CSV file
       });
 
+      it("pool should have expected liquidity", async () => {
+        const liquidity = await pool.liquidity();
+        console.log("liquidity", liquidity);
+        expect(liquidity).gt(0);
+        expect(wideRangeState0.amountsAB[0]).approximately(Number(mainPool.amountA), 1);
+        expect(wideRangeState0.amountsAB[1]).approximately(Number(mainPool.amountB), 1);
+      });
+
       NARROW_RANGES.forEach(function (narrowRange: INarrowRangeParams) {
         describe(`Narrow range: ${narrowRange.tag}`, () => {
           let tokenSeller: Univ3TokenSeller;
           let snapshot2: string;
           let init: IState;
+          let derivedValues: IDerivedValues;
           before(async function () {
             console.log("Set up token seller");
             snapshot2 = await TimeUtils.snapshot();
@@ -634,20 +663,34 @@ describe('TokenSellerTest', () => {
               balancesAbSigner1: await getBalancesAB(signer1.address),
               balancesAbSigner2: await getBalancesAB(signer2.address),
             }
+
+            const config = await tokenSeller.config();
+            derivedValues = {
+              tickLimit: config.minTick,
+              tickSpacing: await tokenSeller.tickSpacing(),
+            }
           });
           after(async function () {
             await TimeUtils.rollback(snapshot2);
           });
 
-          it("pool should have expected liquidity and prices", async () => {
+          it("pool should have expected liquidity", async () => {
             const liquidity = await pool.liquidity();
             console.log("liquidity", liquidity);
             expect(liquidity).gt(0);
-
-            const priceA = await facadeUni.getPrice(pool.address, tokenA.address);
-            const priceB = await facadeUni.getPrice(pool.address, tokenB.address);
-            expect(priceA).approximately(parseUnits("1", decimalsB), 1, "price A in terms of B");
-            expect(priceB).approximately(parseUnits("1", decimalsA), 1, "price B in terms of A");
+            expect(init.narrowRange.amountsAB[0]).approximately(Number(narrowRange.amountA), 1);
+            expect(init.narrowRange.amountsAB[1]).eq(0);
+          });
+          it("narrow range should have expected tick range", async () => {
+            expect(
+              init.narrowRange.upperTick - init.narrowRange.lowerTick
+            ).eq(
+              narrowRange.tickRangeSize * derivedValues.tickSpacing
+            )
+          });
+          it("token seller should have expected balances", async () => {
+            expect(init.balancesAbTokenSeller[0]).approximately(Number(narrowRange.balanceA) - Number(narrowRange.amountA), 1e-5);
+            expect(init.balancesAbTokenSeller[1]).eq(0);
           });
 
           SWAP_SETS.forEach(function (swapParams: ISwapParams) {
@@ -690,17 +733,19 @@ describe('TokenSellerTest', () => {
                 await TimeUtils.rollback(snapshot3);
               });
 
-              it("todo pool should have expected liquidity and prices", async () => {
-                const liquidity = await pool.liquidity();
-                console.log("liquidity", liquidity);
-                expect(liquidity).gt(0);
-
-                const priceA = await facadeUni.getPrice(pool.address, tokenA.address);
-                const priceB = await facadeUni.getPrice(pool.address, tokenB.address);
-                console.log("priceA", priceA);
-                console.log("priceB", priceB);
-                console.log("slot0 after swap", await pool.slot0());
+              it("swapper should receive positive amount of the target token", async () => {
+                const indexTargetToken = swapParams.swapTokenA ? 1 : 0;
+                expect(afterSwap.balancesAbSigner2[indexTargetToken]).gt(init.balancesAbSigner2[indexTargetToken]);
               });
+              it("swapper should spend expected amount of the source token", async () => {
+                const indexSourceToken = swapParams.swapTokenA ? 0 : 1;
+                expect(
+                  afterSwap.balancesAbSigner2[indexSourceToken]
+                ).eq(
+                  init.balancesAbSigner2[indexSourceToken] - Number(swapParams.swapAmount)
+                );
+              });
+
 
               describe("refreshPool", () => {
                 let snapshot4: string;
@@ -728,20 +773,46 @@ describe('TokenSellerTest', () => {
                   await TimeUtils.rollback(snapshot4);
                 });
 
-                it("todo pool should have expected liquidity and prices", async () => {
-                  const liquidity = await pool.liquidity();
-                  console.log("liquidity", liquidity);
-                  expect(liquidity).gt(0);
-
-                  const priceA = await facadeUni.getPrice(pool.address, tokenA.address);
-                  const priceB = await facadeUni.getPrice(pool.address, tokenB.address);
-                  console.log("priceA", priceA);
-                  console.log("priceB", priceB);
-                  console.log("slot0 after swap", await pool.slot0());
+                it("should not change current price and current tick", async () => {
+                  expect(afterRefresh.sqrtPriceX96).eq(afterSwap.sqrtPriceX96);
+                  expect(afterRefresh.tick).eq(afterSwap.tick);
                 });
-
+                it("new tick range should have expected size", async () => {
+                  expect(
+                    afterRefresh.narrowRange.upperTick - afterRefresh.narrowRange.lowerTick
+                  ).eq(
+                    derivedValues.tickSpacing * narrowRange.tickRangeSize
+                  );
+                });
+                it("new tick range should have expected bounds", async () => {
+                  expect(
+                    (afterRefresh.narrowRange.lowerTick - afterRefresh.tick) < derivedValues.tickSpacing
+                    || afterRefresh.tick < derivedValues.tickLimit
+                  ).eq(true);
+                });
+                if (!swapParams.swapTokenA) {
+                  it("tokenSeller should withdraw some amount of token B", async () => {
+                    if (Math.abs(afterSwap.tick - init.tick) > derivedValues.tickSpacing) {
+                      expect(afterRefresh.balancesAbSigner[1]).gt(afterSwap.balancesAbSigner[1]);
+                      expect(afterRefresh.balancesAbTokenSeller[1]).eq(0);
+                    }
+                  });
+                  it("tokenSeller should deposit additional amount of token A", async () => {
+                    if (Math.abs(afterSwap.tick - init.tick) > derivedValues.tickSpacing) {
+                      expect(afterRefresh.balancesAbTokenSeller[0]).lt(afterSwap.balancesAbTokenSeller[0]);
+                    }
+                  });
+                  it("tokenSeller should deposit token A only", async () => {
+                    if (Math.abs(afterSwap.tick - init.tick) > derivedValues.tickSpacing) {
+                      expect(afterRefresh.narrowRange.liquidityAmount).gt(0);
+                      expect(afterRefresh.narrowRange.amountsAB[0]).eq(Number(narrowRange.amountA));
+                      expect(afterRefresh.narrowRange.amountsAB[1]).eq(0);
+                    }
+                  });
+                }
                 describe("exit from pool", () => {
                   let snapshot5: string;
+                  let final: IState;
                   before(async function () {
                     console.log("Prepare to exit from the pool");
                     snapshot5 = await TimeUtils.snapshot();
@@ -755,7 +826,7 @@ describe('TokenSellerTest', () => {
                     console.log("Pool is empty");
 
                     const {sqrtPriceX96, tick} = await pool.slot0();
-                    const final = {
+                    final = {
                       mainPool: await getCurrentWideRangeState(sqrtPriceX96),
                       tick,
                       sqrtPriceX96,
@@ -768,6 +839,7 @@ describe('TokenSellerTest', () => {
 
                     registerResults(states, {
                       inputParams: {mainPool, narrowRange, swapParams},
+                      derivedValues,
                       start,
                       init,
                       afterSwap,
@@ -779,10 +851,48 @@ describe('TokenSellerTest', () => {
                     await TimeUtils.rollback(snapshot5);
                   });
 
-                  it("pool should have expected liquidity and prices", async () => {
-                    const liquidity = await pool.liquidity();
-                    console.log("liquidity", liquidity);
-                    expect(liquidity).eq(0);
+                  it("pool should have NO liquidity", async () => {
+                    expect(await pool.liquidity()).eq(0);
+                  });
+                  it("tokenSeller should not have any tokens", async () => {
+                    expect(await final.balancesAbTokenSeller[0]).eq(0);
+                    expect(await final.balancesAbTokenSeller[1]).eq(0);
+                  });
+                  it("total amount of token A should be equal to the initial amount", async () => {
+                    expect(
+                      final.balancesAbSigner[0] + final.balancesAbSigner1[0] + final.balancesAbSigner2[0]
+                    ).eq(
+                      start.balancesAbSigner[0] + start.balancesAbSigner1[0] + start.balancesAbSigner2[0]
+                    );
+                  });
+                  it("total amount of token B should be equal to the initial amount", async () => {
+                    expect(
+                      final.balancesAbSigner[1] + final.balancesAbSigner1[1] + final.balancesAbSigner2[1],
+                    ).approximately(
+                      start.balancesAbSigner[1] + start.balancesAbSigner1[1] + start.balancesAbSigner2[1],
+                      1e5
+                    );
+                  });
+                  it("swapper should spend expected amount of the source token", async () => {
+                    const indexSourceToken = swapParams.swapTokenA ? 0 : 1;
+                    expect(
+                      final.balancesAbSigner2[indexSourceToken]
+                    ).eq(
+                      start.balancesAbSigner2[indexSourceToken] - Number(swapParams.swapAmount)
+                    );
+                  });
+                  it("swapper should receive positive amount of the target token", async () => {
+                    const indexTargetToken = swapParams.swapTokenA ? 1 : 0;
+                    expect(final.balancesAbSigner2[indexTargetToken]).gt(start.balancesAbSigner2[indexTargetToken]);
+                  });
+                  it("both signer and pool-owner should receive swapped amount of the target token", async () => {
+                    const indexSourceToken = swapParams.swapTokenA ? 0 : 1;
+                    expect(
+                      final.balancesAbSigner[indexSourceToken] + final.balancesAbSigner1[indexSourceToken]
+                      - (start.balancesAbSigner[indexSourceToken] + start.balancesAbSigner1[indexSourceToken])
+                    ).approximately(Number(swapParams.swapAmount), 1e-5);
+                    expect(final.balancesAbSigner[indexSourceToken]).gte(start.balancesAbSigner[indexSourceToken]);
+                    expect(final.balancesAbSigner1[indexSourceToken]).gt(start.balancesAbSigner1[indexSourceToken]);
                   });
                 });
               });

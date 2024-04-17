@@ -97,10 +97,16 @@ library Univ3TokenSellerLib {
     int24 lowerTick,
     int24 upperTick
   ) {
+    console.log("getNarrowTickRange.tick");console.logInt(tick);
+    console.log("getNarrowTickRange.tickRangeSize");console.logInt(tickRangeSize);
+    console.log("getNarrowTickRange.tickSpacing");console.logInt(tickSpacing);
+    console.log("getNarrowTickRange.minTick");console.logInt(minTick);
     lowerTick = max(
       tick < 0 ? tick : tick + tickSpacing - 1,
       minTick < 0 ? minTick : minTick + tickSpacing - 1
     ) / tickSpacing * tickSpacing;
+    console.log("getNarrowTickRange.lowerTick");console.logInt(lowerTick);
+    console.log("getNarrowTickRange.upperTick");console.logInt(lowerTick + tickRangeSize * tickSpacing);
     return (lowerTick, lowerTick + tickRangeSize * tickSpacing);
   }
   //endregion ------------------------------ Calculate tick range
@@ -113,24 +119,36 @@ library Univ3TokenSellerLib {
     Univ3TokenSellerLib.TokenSellerState storage state,
     bool poolSwapTokens
   ) internal view returns (bool) {
+    console.log("needToRefresh");
     NeedToRefreshLocal memory v;
     if (block.timestamp > state.lastRefreshPoolTimestamp + config.thresholdLastRefreshPoolSec) {
       v.lowerTick = state.lowerTick;
       v.upperTick = state.upperTick;
       (v.sqrtPriceX96, v.tick, ,,,,) = pool.slot0();
+      console.log("needToRefresh.tick");console.logInt(v.tick);
+      console.log("needToRefresh.v.lowerTick");console.logInt(v.lowerTick);
+      console.log("needToRefresh.v.upperTick");console.logInt(v.upperTick);
 
       if (v.tick <= v.lowerTick) {
+        console.log("result.1:v.lowerTick - v.tick > tickSpacing", v.lowerTick - v.tick > tickSpacing);
         // new price is below lower tick, tick range should be moved
         // difference in 1 tickSpacing is allowed, it's exist right after the call of refreshPool()
         return v.lowerTick - v.tick > tickSpacing;
       } else {
         v.ratio = uint(int(v.tick - v.lowerTick)) * DENOMINATOR / uint(int((v.upperTick - v.lowerTick)));
+        console.log("v.ratio", v.ratio);
         // new price is higher the lower tick
         (v.amount0, v.amount1) = UniswapV3Lib.getAmountsForLiquidity(v.sqrtPriceX96, v.lowerTick, v.upperTick, pool.liquidity());
         uint amountB = poolSwapTokens ? v.amount0 : v.amount1;
+        console.log("v.amount0", v.amount0);
+        console.log("v.amount1", v.amount1);
+        console.log("amountB", amountB);
+        console.log("result.2:amountB > config.thresholdTokenB", amountB > config.thresholdTokenB);
+        console.log("result.2:v.ratio > config.thresholdRatio", v.ratio > config.thresholdRatio);
         return amountB > config.thresholdTokenB && v.ratio > config.thresholdRatio;
       }
     } else {
+      console.log("needToRefresh.3 - false");
       return false;
     }
   }
