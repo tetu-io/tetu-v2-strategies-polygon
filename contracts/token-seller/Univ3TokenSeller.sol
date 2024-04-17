@@ -37,11 +37,14 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
   /// @notice Governance of this contract
   address public owner;
 
+  /// @notice New owner (not zero during process of changing the governance)
+  address public pendingOwner;
+
   /// @notice Config params of pool refreshing
-  Univ3TokenSellerLib.Config public config;
+  Univ3TokenSellerLib.TokenSellerConfig public config;
 
   /// @notice Current state of the opened position
-  Univ3TokenSellerLib.State public state;
+  Univ3TokenSellerLib.TokenSellerState public state;
 
   /// @notice Operator => is allowed to call {refreshPool}
   mapping (address => bool) public operators;
@@ -55,6 +58,10 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
   /// @notice A new position cannot be opened with zero in-amount of token A
   error ZeroAmountA();
 
+  error ErrorZeroAddress();
+
+  error ErrorPendingOwner();
+
   error OnlyOwner();
   error OnlyOwnerOrOperator();
 
@@ -65,7 +72,7 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
     address tokenA_,
     address tokenB_,
     address pool_,
-    Univ3TokenSellerLib.Config memory config_,
+    Univ3TokenSellerLib.TokenSellerConfig memory config_,
     address owner_
   ) {
     tokenA = tokenA_;
@@ -83,8 +90,8 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
     if (owner != msg.sender) revert OnlyOwner();
   }
 
-  function onlyOwnerOrOperator() internal view {
-    if (owner != msg.sender || operators[msg.sender]) revert OnlyOwnerOrOperator();
+  function onlyOwnerOrOperator(address sender) internal view {
+    if (owner != sender || operators[sender]) revert OnlyOwnerOrOperator();
   }
 
   //endregion ---------------------- Restrictions
@@ -106,13 +113,30 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
   //endregion ---------------------- View
 
   //region ---------------------- Configure
-  function setConfig(Univ3TokenSellerLib.Config memory config_) external {
+  function setConfig(Univ3TokenSellerLib.TokenSellerConfig memory config_) external {
     onlyOwner();
 
     config = config_;
   }
 
-  // todo Possibility to change owner
+  /// @notice Suggest to change the owner
+  function setOwner(address newOwner_) external {
+    onlyOwner();
+    if (newOwner_ == address(0)) revert ErrorZeroAddress();
+
+    pendingOwner = newOwner_;
+    emit Univ3TokenSellerLib.OnSetOwner(newOwner_);
+  }
+
+  /// @notice Old owner has suggested to change the owner.
+  ///         Newly suggested owner must accept the change to actually change the owner.
+  function acceptOwner() external {
+    if (pendingOwner != msg.sender) revert ErrorPendingOwner();
+
+    owner = pendingOwner;
+    pendingOwner = address(0);
+    emit Univ3TokenSellerLib.OnAcceptOwner(owner);
+  }
   //endregion ---------------------- Configure
 
   //region ---------------------- Actions
@@ -139,17 +163,17 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
   /// @notice Re-enter to the pool, move range near to the current price: P <= pA < pB (pA - P <= tickSpacing)
   /// where P is current price, pA and pB - prices of lower and upper bounds of the selected tick range.
   function refreshPool() external {
-    onlyOwnerOrOperator();
+    onlyOwnerOrOperator(msg.sender);
 
     if (needToRefresh()) {
       Univ3TokenSellerLib.exit(pool, state, false);
       Univ3TokenSellerLib.enter(pool, tickSpacing, config, state, _getAmountA(), poolSwapTokens);
 
+      // send all tokens B to the owner
       uint balanceB = IERC20(tokenB).balanceOf(address(this));
       if (balanceB > config.thresholdTokenB) {
-        address receiver = config.receiver;
-        IERC20(tokenB).transfer(receiver, balanceB);
-        emit Univ3TokenSellerLib.Withdraw(receiver, tokenB, balanceB);
+        IERC20(tokenB).transfer(owner, balanceB);
+        emit Univ3TokenSellerLib.Withdraw(owner, tokenB, balanceB);
       }
 
       state.lastRefreshPoolTimestamp = block.timestamp;
@@ -167,13 +191,14 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
   //region ---------------------- UniswapV3 callbacks
   /// @notice Uniswap V3 callback fn, called back on pool.mint
   function uniswapV3MintCallback(uint amount0Owed, uint amount1Owed, bytes calldata data) external override {
-    // todo sender can be equal to this
     address sender = abi.decode(data, (address));
+    onlyOwnerOrOperator(sender);
+
     if (amount0Owed != 0) {
-      IERC20(IUniswapV3Pool(msg.sender).token0()).transferFrom(sender, msg.sender, amount0Owed);
+      IERC20(IUniswapV3Pool(msg.sender).token0()).transfer(msg.sender, amount0Owed);
     }
     if (amount1Owed != 0) {
-      IERC20(IUniswapV3Pool(msg.sender).token1()).transferFrom(sender, msg.sender, amount1Owed);
+      IERC20(IUniswapV3Pool(msg.sender).token1()).transfer(msg.sender, amount1Owed);
     }
   }
   //endregion ---------------------- UniswapV3 callbacks

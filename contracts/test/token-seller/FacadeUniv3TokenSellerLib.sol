@@ -4,20 +4,20 @@ pragma solidity 0.8.17;
 import "../../token-seller/Univ3TokenSellerLib.sol";
 
 contract FacadeUniv3TokenSellerLib {
-  Univ3TokenSellerLib.State private _state;
-  Univ3TokenSellerLib.Config private _config;
+  Univ3TokenSellerLib.TokenSellerState private _state;
+  Univ3TokenSellerLib.TokenSellerConfig private _config;
 
   //region ------------------------------ For tests
-  function setState(Univ3TokenSellerLib.State memory state_) external {
+  function setState(Univ3TokenSellerLib.TokenSellerState memory state_) external {
     _state = state_;
   }
-  function getState() external view returns (Univ3TokenSellerLib.State memory state) {
+  function getState() external view returns (Univ3TokenSellerLib.TokenSellerState memory state) {
     return _state;
   }
-  function setConfig(Univ3TokenSellerLib.Config memory config_) external {
+  function setConfig(Univ3TokenSellerLib.TokenSellerConfig memory config_) external {
     _config = config_;
   }
-  function getConfig() external view returns (Univ3TokenSellerLib.Config memory config) {
+  function getConfig() external view returns (Univ3TokenSellerLib.TokenSellerConfig memory config) {
     return _config;
   }
 

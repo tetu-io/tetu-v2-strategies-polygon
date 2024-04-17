@@ -409,6 +409,12 @@ describe('Univ3TokenSellerLibTest', () => {
           });
         });
       });
+
+      // todo try
+      // lowerTick: -276200
+      // upperTick: -275200
+      // tick: -276106
+      // sqrtPriceX96: 80096925681156851618385
     });
 
     describe("enter", () => {

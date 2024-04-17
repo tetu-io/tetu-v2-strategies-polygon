@@ -3,7 +3,6 @@ pragma solidity 0.8.17;
 
 import "../../integrations/uniswap/IUniswapV3Pool.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
-import "hardhat/console.sol";
 
 /// @title Uniswap V3 liquidity management helper
 /// @notice Provides functions for computing liquidity amounts from token amounts and prices
@@ -74,30 +73,20 @@ library UniswapV3Lib {
     uint amount0,
     uint amount1
   ) public pure returns (uint128 liquidity) {
-    console.log("getLiquidityForAmounts.lowerTick");console.logInt(lowerTick);
-    console.log("getLiquidityForAmounts.upperTick");console.logInt(upperTick);
-    console.log("getLiquidityForAmounts.amount0", amount0);
-    console.log("getLiquidityForAmounts.amount1", amount1);
-
     uint160 sqrtRatioAX96 = _getSqrtRatioAtTick(lowerTick);
     uint160 sqrtRatioBX96 = _getSqrtRatioAtTick(upperTick);
     if (sqrtRatioAX96 > sqrtRatioBX96) {
       (sqrtRatioAX96, sqrtRatioBX96) = (sqrtRatioBX96, sqrtRatioAX96);
     }
-    console.log("getLiquidityForAmounts.sqrtRatioAX96", sqrtRatioAX96);
-    console.log("getLiquidityForAmounts.sqrtRatioBX96", sqrtRatioBX96);
 
     if (sqrtRatioX96 <= sqrtRatioAX96) {
       liquidity = _getLiquidityForAmount0(sqrtRatioAX96, sqrtRatioBX96, amount0);
-      console.log("getLiquidityForAmounts.1.liquidity", liquidity);
     } else if (sqrtRatioX96 < sqrtRatioBX96) {
       uint128 liquidity0 = _getLiquidityForAmount0(sqrtRatioX96, sqrtRatioBX96, amount0);
       uint128 liquidity1 = _getLiquidityForAmount1(sqrtRatioAX96, sqrtRatioX96, amount1);
       liquidity = liquidity0 < liquidity1 ? liquidity0 : liquidity1;
-      console.log("getLiquidityForAmounts.2.liquidity", liquidity, liquidity0, liquidity1);
     } else {
       liquidity = _getLiquidityForAmount1(sqrtRatioAX96, sqrtRatioBX96, amount1);
-      console.log("getLiquidityForAmounts.3.liquidity", liquidity);
     }
   }
 
@@ -109,14 +98,8 @@ library UniswapV3Lib {
     int24 upperTick,
     uint128 liquidity
   ) public pure returns (uint amount0, uint amount1) {
-    console.log("getAmountsForLiquidity.lowerTick");console.logInt(lowerTick);
-    console.log("getAmountsForLiquidity.upperTick");console.logInt(upperTick);
-    console.log("getAmountsForLiquidity.liquidity", liquidity);
     uint160 sqrtRatioAX96 = _getSqrtRatioAtTick(lowerTick);
     uint160 sqrtRatioBX96 = _getSqrtRatioAtTick(upperTick);
-
-    console.log("getAmountsForLiquidity.sqrtRatioAX96", sqrtRatioAX96);
-    console.log("getAmountsForLiquidity.sqrtRatioBX96", sqrtRatioBX96);
 
     if (sqrtRatioAX96 > sqrtRatioBX96) {
       (sqrtRatioAX96, sqrtRatioBX96) = (sqrtRatioBX96, sqrtRatioAX96);
@@ -124,14 +107,11 @@ library UniswapV3Lib {
 
     if (sqrtRatioX96 <= sqrtRatioAX96) {
       amount0 = _getAmount0ForLiquidity(sqrtRatioAX96, sqrtRatioBX96, liquidity);
-      console.log("getAmountsForLiquidity.1.amount0", amount0);
     } else if (sqrtRatioX96 < sqrtRatioBX96) {
       amount0 = _getAmount0ForLiquidity(sqrtRatioX96, sqrtRatioBX96, liquidity);
       amount1 = _getAmount1ForLiquidity(sqrtRatioAX96, sqrtRatioX96, liquidity);
-      console.log("getAmountsForLiquidity.2amount0, amount1", amount0, amount1);
     } else {
       amount1 = _getAmount1ForLiquidity(sqrtRatioAX96, sqrtRatioBX96, liquidity);
-      console.log("getAmountsForLiquidity.3.amount1", amount1);
     }
   }
 

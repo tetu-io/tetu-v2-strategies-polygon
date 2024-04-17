@@ -4,17 +4,15 @@ pragma solidity 0.8.17;
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "../integrations/uniswap/IUniswapV3Pool.sol";
 import "../strategies/uniswap/UniswapV3Lib.sol";
+import "hardhat/console.sol";
 
 library Univ3TokenSellerLib {
   //region ---------------------- Constants
-  int24 constant private DENOMINATOR_INT = 100_000;
+  uint constant private DENOMINATOR = 100_000;
   //endregion ---------------------- Constants
 
   //region ---------------------- Data types
-  struct Config {
-    /// @notice Receiver of the token B
-    address receiver; // todo remove, receiver is owner ALWAYS
-
+  struct TokenSellerConfig {
     /// @notice Amount ot token A to invest to the narrow range
     uint amountA;
 
@@ -29,7 +27,7 @@ library Univ3TokenSellerLib {
     uint thresholdTokenB;
 
     /// @notice Threshold for the current tick. Refresh is required if
-    /// (tick - lower tick) / (upper tick - lower tick)
+    ///   (tick - lower tick) / (upper tick - lower tick)
     /// exceeds the threshold. Decimals = {DENOMINATOR_INT}
     uint thresholdRatio;
 
@@ -37,7 +35,7 @@ library Univ3TokenSellerLib {
     uint thresholdLastRefreshPoolSec;
   }
 
-  struct State {
+  struct TokenSellerState {
     /// @notice Lower bound of the currently opened position
     int24 lowerTick;
 
@@ -55,8 +53,8 @@ library Univ3TokenSellerLib {
     int24 lowerTick;
     int24 upperTick;
     int24 tick;
-    int24 ratio;
     uint160 sqrtPriceX96;
+    uint ratio;
     uint amount0;
     uint amount1;
   }
@@ -66,6 +64,8 @@ library Univ3TokenSellerLib {
   event EnterToPool(uint amountA, uint128 liquidity, int24 lowerTick, int24 upperTick);
   event ExitFromPool();
   event Withdraw(address receiver, address token, uint amount);
+  event OnSetOwner(address newOwner);
+  event OnAcceptOwner(address pendingOwner);
 
   //endregion ---------------------- Events
 
@@ -109,8 +109,8 @@ library Univ3TokenSellerLib {
   function needToRefresh(
     IUniswapV3Pool pool,
     int24 tickSpacing,
-    Univ3TokenSellerLib.Config storage config,
-    Univ3TokenSellerLib.State storage state,
+    Univ3TokenSellerLib.TokenSellerConfig storage config,
+    Univ3TokenSellerLib.TokenSellerState storage state,
     bool poolSwapTokens
   ) internal view returns (bool) {
     NeedToRefreshLocal memory v;
@@ -119,16 +119,16 @@ library Univ3TokenSellerLib {
       v.upperTick = state.upperTick;
       (v.sqrtPriceX96, v.tick, ,,,,) = pool.slot0();
 
-      v.ratio = (v.tick - v.lowerTick) * DENOMINATOR_INT / (v.upperTick - v.lowerTick);
-      if (v.ratio < 0) {
+      if (v.tick <= v.lowerTick) {
         // new price is below lower tick, tick range should be moved
         // difference in 1 tickSpacing is allowed, it's exist right after the call of refreshPool()
         return v.lowerTick - v.tick > tickSpacing;
       } else {
+        v.ratio = uint(int(v.tick - v.lowerTick)) * DENOMINATOR / uint(int((v.upperTick - v.lowerTick)));
         // new price is higher the lower tick
         (v.amount0, v.amount1) = UniswapV3Lib.getAmountsForLiquidity(v.sqrtPriceX96, v.lowerTick, v.upperTick, pool.liquidity());
         uint amountB = poolSwapTokens ? v.amount0 : v.amount1;
-        return amountB > config.thresholdTokenB && uint(int(v.ratio)) > config.thresholdRatio;
+        return amountB > config.thresholdTokenB && v.ratio > config.thresholdRatio;
       }
     } else {
       return false;
@@ -142,8 +142,8 @@ library Univ3TokenSellerLib {
   function enter(
     IUniswapV3Pool pool,
     int24 tickSpacing,
-    Univ3TokenSellerLib.Config storage config,
-    Univ3TokenSellerLib.State storage state,
+    Univ3TokenSellerLib.TokenSellerConfig storage config,
+    Univ3TokenSellerLib.TokenSellerState storage state,
     uint amountA,
     bool poolSwapTokens
   ) internal {
@@ -154,7 +154,12 @@ library Univ3TokenSellerLib {
       config.tickRangeSize,
       tickSpacing,
       config.minTick
-    );
+    ); // todo Take into account poolSwapTokens
+    console.log("enter.tickLower");console.logInt(tickLower);
+    console.log("enter.tickUpper");console.logInt(tickUpper);
+    console.log("enter.tick");console.logInt(tick);
+    console.log("enter.sqrtRatioX96", sqrtRatioX96);
+
     uint128 liquidity = UniswapV3Lib.getLiquidityForAmounts(
       sqrtRatioX96,
       tickLower,
@@ -162,6 +167,7 @@ library Univ3TokenSellerLib {
       poolSwapTokens ? 0 : amountA,
       poolSwapTokens ? amountA : 0
     );
+    console.log("enter.liquidity", liquidity);
 
     // enter to the pool
     IUniswapV3Pool(pool).mint(
@@ -184,7 +190,7 @@ library Univ3TokenSellerLib {
   /// @param clearState True - clear position-related values in {state}
   function exit(
     IUniswapV3Pool pool,
-    Univ3TokenSellerLib.State storage state,
+    Univ3TokenSellerLib.TokenSellerState storage state,
     bool clearState
   ) internal {
     // prepare to withdraw liquidity from the pool
