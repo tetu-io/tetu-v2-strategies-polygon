@@ -20,7 +20,6 @@ import {writeFileSyncRestoreFolder} from "../baseUT/utils/FileUtils";
 import {writeFileSync} from "fs";
 import {Univ3TokenSellerLib} from "../../typechain/contracts/token-seller/Univ3TokenSeller";
 import TokenSellerConfigStruct = Univ3TokenSellerLib.TokenSellerConfigStruct;
-import {token} from "../../typechain/@openzeppelin/contracts";
 import {MockHelper} from "../baseUT/helpers/MockHelper";
 
 /**
@@ -1472,6 +1471,30 @@ describe('TokenSellerTest', () => {
         await expect(
           tokenSeller.connect(notOwner).uniswapV3MintCallback(amount, amount, data)
         ).revertedWithCustomError(tokenSeller, "OnlyPool");
+      });
+    });
+
+    describe("refreshPool / setOperator", () => {
+      it("should success if owner", async () => {
+        const owner = await Misc.impersonate(await tokenSeller.owner());
+        await tokenSeller.connect(owner).refreshPool();
+        // no exception
+      });
+
+      it("should revert if not owner and not operator", async () => {
+        const owner = await Misc.impersonate(await tokenSeller.owner());
+        const notOperator = await Misc.impersonate(ethers.Wallet.createRandom().address);
+        await expect(tokenSeller.connect(notOperator).refreshPool()).revertedWithCustomError(tokenSeller, "OnlyOwnerOrOperator");
+      });
+
+
+      it("should success if operator", async () => {
+        const owner = await Misc.impersonate(await tokenSeller.owner());
+        const operator = await Misc.impersonate(ethers.Wallet.createRandom().address);
+        await tokenSeller.connect(owner).setOperator(operator.address, true);
+        await tokenSeller.connect(operator).refreshPool();
+        await tokenSeller.connect(owner).setOperator(operator.address, false);
+        await expect(tokenSeller.connect(operator).refreshPool()).revertedWithCustomError(tokenSeller, "OnlyOwnerOrOperator");
       });
     });
   });

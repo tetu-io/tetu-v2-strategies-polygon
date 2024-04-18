@@ -6,7 +6,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "../integrations/uniswap/IUniswapV3Pool.sol";
 import "../integrations/uniswap/IUniswapV3MintCallback.sol";
 import "./Univ3TokenSellerLib.sol";
-import "hardhat/console.sol";
 
 /// @notice Deposit amount of token A to the pool under control using narrow tick range P <= Pa < Pb
 /// where P - current price, Pa and Pb - lower and upper bounds of the range, Pa - P <= tickSpacing
@@ -16,7 +15,6 @@ import "hardhat/console.sol";
 contract Univ3TokenSeller is IUniswapV3MintCallback {
   //region ---------------------- Constants
   string constant public TOKEN_SELLER_VERSION = "1.0.0";
-  uint constant private DENOMINATOR = 100_000;
   //endregion ---------------------- Constants
 
   //region ---------------------- Members
@@ -48,6 +46,7 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
   Univ3TokenSellerLib.TokenSellerState public state;
 
   /// @notice Operator => is allowed to call {refreshPool}
+  /// Operators are allowed to call refreshPool beside the owner
   mapping (address => bool) public operators;
 
   //endregion ---------------------- Members
@@ -60,12 +59,10 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
   error ZeroAmountA();
 
   error ErrorZeroAddress();
-
   error ErrorPendingOwner();
 
   error OnlyOwner();
   error OnlyOwnerOrOperator();
-
   error OnlyPool();
 
   //endregion ---------------------- Errors
@@ -94,7 +91,7 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
   }
 
   function onlyOwnerOrOperator(address sender) internal view {
-    if (owner != sender || operators[sender]) revert OnlyOwnerOrOperator();
+    if (owner != sender && !operators[sender]) revert OnlyOwnerOrOperator();
   }
 
   //endregion ---------------------- Restrictions
@@ -137,6 +134,12 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
     owner = pendingOwner;
     pendingOwner = address(0);
     emit Univ3TokenSellerLib.OnAcceptOwner(owner);
+  }
+
+  /// @notice Add or remove an operator
+  function setOperator(address operator_, bool isOperator) external {
+    onlyOwner();
+    operators[operator_] = isOperator;
   }
   //endregion ---------------------- Configure
 
