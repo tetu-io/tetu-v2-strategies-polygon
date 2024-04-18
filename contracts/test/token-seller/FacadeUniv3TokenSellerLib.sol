@@ -29,8 +29,15 @@ contract FacadeUniv3TokenSellerLib {
     return Univ3TokenSellerLib.calcTickRangeSymmetrically(tick, tickRange, tickSpacing);
   }
 
-  function getNarrowTickRange(int24 tick, int24 tickRangeSize, int24 tickSpacing, int24 minTick) external pure returns (int24 lowerTick, int24 upperTick) {
-    return Univ3TokenSellerLib.getNarrowTickRange(tick, tickRangeSize, tickSpacing, minTick);
+  function getNarrowTickRange(
+    uint160 sqrtRatioX96,
+    int24 tick,
+    int24 tickRangeSize,
+    int24 tickSpacing,
+    int24 tickLimit,
+    bool poolSwapTokens
+  ) external pure returns (int24 lowerTick, int24 upperTick) {
+    return Univ3TokenSellerLib.getNarrowTickRange(sqrtRatioX96, tick, tickRangeSize, tickSpacing, tickLimit, poolSwapTokens);
   }
   //endregion ------------------------------ Calculate tick range
 

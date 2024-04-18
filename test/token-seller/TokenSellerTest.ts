@@ -122,7 +122,7 @@ describe('TokenSellerTest', () => {
 
   after(async function () {
     await TimeUtils.rollback(snapshotBefore);
-    saveToCsv(states, "all");
+    saveToCsv(states, "");
   });
 
   //region Data types
@@ -201,6 +201,8 @@ describe('TokenSellerTest', () => {
   interface IState {
     sqrtPriceX96: BigNumber;
     tick: number;
+    needToRefresh: boolean;
+    isPositionOpened: boolean;
 
     mainPool: IRangeState;
     narrowRange: IRangeState;
@@ -238,27 +240,6 @@ describe('TokenSellerTest', () => {
   }
   //endregion Data types
 
-  //region Test data
-  const MAIN_POOLS: IMainPoolParams[] = [
-    {tag: "price 1000:1", fee: 10000, amountA: "1000", amountB: "1", pricesRange: ["0.01", "100"], poolSwapTokens: false},
-    {tag: "price 1:1", fee: 10000, amountA: "1000", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
-    {tag: "price 1:1000", fee: 10000, amountA: "1", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
-
-    // todo {tag: "price 1, swap", fee: 10000, amountA: "1000", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: true},
-  ];
-
-  const NARROW_RANGES: INarrowRangeParams[] = [
-    {tag: "10ths", balanceA: "50000", amountA: "10000", sqrtMinPriceRatio: "0.1", thresholdRatio: "0", thresholdTokenB: "0", tickRangeSize: 5}
-  ];
-
-  const SWAP_SETS: ISwapParams[] = [
-    {tag: "B1000", swapTokenA: false, swapAmount: "1000"},
-    {tag: "A1000", swapTokenA: true, swapAmount: "1000"},
-    {tag: "B10000", swapTokenA: false, swapAmount: "10000"},
-    {tag: "A10000", swapTokenA: true, swapAmount: "10000"},
-  ];
-  //endregion Test data
-
   //region Utils
   async function getBalancesAB(user: string): Promise<number[]> {
     return [
@@ -269,7 +250,7 @@ describe('TokenSellerTest', () => {
 
   function registerResults(states: IStateHistory[], state: IStateHistory) {
     states.push(state);
-    saveToCsv([state], states.length.toString());
+    // saveToCsv([state], states.length.toString());
   }
 
   function rangeStateToArrayHeaders(): string[] {
@@ -305,6 +286,8 @@ describe('TokenSellerTest', () => {
       "poolOwner.balanceB",
       "swapper.balanceA",
       "swapper.balanceB",
+      "needToRefresh",
+      "isPositionOpened",
     ]
   }
   function stateToArray(state: IState) {
@@ -326,7 +309,10 @@ describe('TokenSellerTest', () => {
 
       state.balancesAbSigner2[0],
       state.balancesAbSigner2[1],
-    ]
+
+      state.needToRefresh ? 1 : 0,
+      state.isPositionOpened ? 1 : 0,
+  ]
   }
 
   function stateHistoryToArrayHeaders(): string[] {
@@ -434,697 +420,829 @@ describe('TokenSellerTest', () => {
   }
   //endregion Utils
 
-  MAIN_POOLS.forEach(function (mainPool: IMainPoolParams) {
-    describe(`Main pool: ${mainPool.tag}`, () => {
-      let snapshot1: string;
-      let pool: UniswapV3Pool;
-      let lowerTickWide: number;
-      let upperTickWide: number;
-      let liquidityAmountWide: BigNumber;
-      let sqrtPriceX96Wide: BigNumber;
-      let wideRangeState0: IRangeState;
-      let start: IState;
+  describe("init => swap => refreshPool => withdraw", () => {
+    //region Test data
+    const MAIN_POOLS: IMainPoolParams[] = [
+      // {tag: "price 1:1, swapped, 0.01%", fee: 100, amountA: "1000", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: true},
+      // {tag: "price 1:1000, swapped, 0.01%", fee: 100, amountA: "1", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: true},
+      // {tag: "price 1000:1, swapped, 0.01%", fee: 100, amountA: "1000", amountB: "1", pricesRange: ["0.01", "100"], poolSwapTokens: true},
+      {
+        tag: "price 1:1, swapped, 0.03%",
+        fee: 3000,
+        amountA: "1000",
+        amountB: "1000",
+        pricesRange: ["0.01", "100"],
+        poolSwapTokens: true
+      },
+      {
+        tag: "price 1:1000, swapped, 0.03%",
+        fee: 3000,
+        amountA: "1",
+        amountB: "1000",
+        pricesRange: ["0.01", "100"],
+        poolSwapTokens: true
+      },
+      {
+        tag: "price 1000:1, swapped, 0.03%",
+        fee: 3000,
+        amountA: "1000",
+        amountB: "1",
+        pricesRange: ["0.01", "100"],
+        poolSwapTokens: true
+      },
 
-      //region Utils
-      async function getCurrentNarrowRangeState(tokenSeller: Univ3TokenSeller, sqrtPriceX96: BigNumber): Promise<IRangeState> {
-        const state = await tokenSeller.state();
-        const resultAmounts = await facadeUni.getAmountsForLiquidity(
-          sqrtPriceX96,
-          state.lowerTick,
-          state.upperTick,
-          state.liquidityAmount
-        );
+      {
+        tag: "price 1000:1,0.01%",
+        fee: 100,
+        amountA: "1000",
+        amountB: "1",
+        pricesRange: ["0.01", "100"],
+        poolSwapTokens: false
+      },
+      {
+        tag: "price 1:1,0.01%",
+        fee: 100,
+        amountA: "1000",
+        amountB: "1000",
+        pricesRange: ["0.01", "100"],
+        poolSwapTokens: false
+      },
+      {
+        tag: "price 1:1000,0.01%",
+        fee: 100,
+        amountA: "1",
+        amountB: "1000",
+        pricesRange: ["0.01", "100"],
+        poolSwapTokens: false
+      },
+      // {tag: "price 1000:1,1%", fee: 10000, amountA: "1000", amountB: "1", pricesRange: ["0.01", "100"], poolSwapTokens: false},
+      // {tag: "price 1:1,1%", fee: 10000, amountA: "1000", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
+      // {tag: "price 1:1000,1%", fee: 10000, amountA: "1", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
+      // {tag: "price 1000:1,0.3%", fee: 3000, amountA: "1000", amountB: "1", pricesRange: ["0.01", "100"], poolSwapTokens: false},
+      // {tag: "price 1:1,0.3%", fee: 3000, amountA: "1000", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
+      // {tag: "price 1:1000,0.3%", fee: 3000, amountA: "1", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
+    ];
 
-        return {
-          lowerTick: state.lowerTick,
-          upperTick: state.upperTick,
-          liquidityAmount: state.liquidityAmount,
-          amountsAB: [
-            +formatUnits(mainPool.poolSwapTokens ? resultAmounts[1] : resultAmounts[0], decimalsA),
-            +formatUnits(mainPool.poolSwapTokens ? resultAmounts[0] : resultAmounts[1], decimalsB),
-          ]
+    const NARROW_RANGES: INarrowRangeParams[] = [
+      {
+        tag: "10ths,5",
+        balanceA: "50000",
+        amountA: "10000",
+        sqrtMinPriceRatio: "0.1",
+        thresholdRatio: "0",
+        thresholdTokenB: "0",
+        tickRangeSize: 5
+      },
+      // {tag: "100ths,3", balanceA: "500000", amountA: "100000", sqrtMinPriceRatio: "0.01", thresholdRatio: "0", thresholdTokenB: "0", tickRangeSize: 3},
+    ];
+
+    const SWAP_SETS: ISwapParams[] = [
+      {tag: "B333", swapTokenA: false, swapAmount: "333"},
+      {tag: "A333", swapTokenA: true, swapAmount: "333"},
+      {tag: "B1000", swapTokenA: false, swapAmount: "1000"},
+      {tag: "A1000", swapTokenA: true, swapAmount: "1000"},
+      {tag: "B10000", swapTokenA: false, swapAmount: "10000"},
+      {tag: "A10000", swapTokenA: true, swapAmount: "10000"},
+    ];
+    //endregion Test data
+
+    MAIN_POOLS.forEach(function (mainPool: IMainPoolParams) {
+      describe(`Main pool: ${mainPool.tag}`, () => {
+        let snapshot1: string;
+        let pool: UniswapV3Pool;
+        let lowerTickWide: number;
+        let upperTickWide: number;
+        let liquidityAmountWide: BigNumber;
+        let sqrtPriceX96Wide: BigNumber;
+        let wideRangeState0: IRangeState;
+        let start: IState;
+
+        //region Utils
+        async function getCurrentNarrowRangeState(tokenSeller: Univ3TokenSeller, sqrtPriceX96: BigNumber): Promise<IRangeState> {
+          const state = await tokenSeller.state();
+          const resultAmounts = await facadeUni.getAmountsForLiquidity(
+            sqrtPriceX96,
+            state.lowerTick,
+            state.upperTick,
+            state.liquidityAmount
+          );
+
+          return {
+            lowerTick: state.lowerTick,
+            upperTick: state.upperTick,
+            liquidityAmount: state.liquidityAmount,
+            amountsAB: [
+              +formatUnits(mainPool.poolSwapTokens ? resultAmounts[1] : resultAmounts[0], decimalsA),
+              +formatUnits(mainPool.poolSwapTokens ? resultAmounts[0] : resultAmounts[1], decimalsB),
+            ]
+          }
         }
-      }
 
-      async function getCurrentWideRangeState(sqrtPriceX96: BigNumber): Promise<IRangeState> {
-        const resultAmounts = await facadeUni.getAmountsForLiquidity(
-          sqrtPriceX96,
-          lowerTickWide,
-          upperTickWide,
-          liquidityAmountWide
-        );
+        async function getCurrentWideRangeState(sqrtPriceX96: BigNumber): Promise<IRangeState> {
+          const resultAmounts = await facadeUni.getAmountsForLiquidity(
+            sqrtPriceX96,
+            lowerTickWide,
+            upperTickWide,
+            liquidityAmountWide
+          );
 
-        return {
-          lowerTick: lowerTickWide,
-          upperTick: upperTickWide,
-          liquidityAmount: liquidityAmountWide,
-          amountsAB: [
-            +formatUnits(mainPool.poolSwapTokens ? resultAmounts[1] : resultAmounts[0], decimalsA),
-            +formatUnits(mainPool.poolSwapTokens ? resultAmounts[0] : resultAmounts[1], decimalsB),
-          ]
+          return {
+            lowerTick: lowerTickWide,
+            upperTick: upperTickWide,
+            liquidityAmount: liquidityAmountWide,
+            amountsAB: [
+              +formatUnits(mainPool.poolSwapTokens ? resultAmounts[1] : resultAmounts[0], decimalsA),
+              +formatUnits(mainPool.poolSwapTokens ? resultAmounts[0] : resultAmounts[1], decimalsB),
+            ]
+          }
         }
-      }
 
-      async function initializePool(): Promise<{
-        sqrtPriceX96: BigNumber,
-        amountA: BigNumber,
-        amountB: BigNumber
-      }> {
-        // let's calculate initial price, see https://uniswapv3book.com/milestone_1/calculating-liquidity.html
-        const amountA = parseUnits(mainPool.amountA, decimalsA);
-        console.log("amountA", amountA);
-        const amountB = parseUnits(mainPool.amountB, decimalsB);
-        console.log("amountB", amountB);
+        async function initializePool(): Promise<{
+          sqrtPriceX96: BigNumber,
+          amountA: BigNumber,
+          amountB: BigNumber
+        }> {
+          // let's calculate initial price, see https://uniswapv3book.com/milestone_1/calculating-liquidity.html
+          const amountA = parseUnits(mainPool.amountA, decimalsA);
+          console.log("amountA", amountA);
+          const amountB = parseUnits(mainPool.amountB, decimalsB);
+          console.log("amountB", amountB);
 
-        const price36 = mainPool.poolSwapTokens
-          ? amountA.mul(parseUnits("1", 36)).div(amountB)
-          : amountB.mul(parseUnits("1", 36)).div(amountA);
-        const sqrtPrice18 = await calcLib.sqrt(price36);
-        const sqrtPriceX96 = sqrtPrice18.mul(BigNumber.from(2).pow(96)).div(parseUnits("1", 18)); // 18 = sqrt of 36
-        console.log("sqrtPriceX96", sqrtPriceX96);
-        await pool.initialize(sqrtPriceX96);
-        return {sqrtPriceX96, amountA, amountB}
-      }
-      //endregion Utils
-
-      before(async function () {
-        snapshot1 = await TimeUtils.snapshot();
-
-        start = {
-          mainPool: {
-            lowerTick: 0,
-            upperTick: 0,
-            liquidityAmount: BigNumber.from(0),
-            amountsAB: [0, 0],
-          },
-          tick: 0,
-          sqrtPriceX96: BigNumber.from(0),
-          narrowRange: {
-            lowerTick: 0,
-            upperTick: 0,
-            liquidityAmount: BigNumber.from(0),
-            amountsAB: [0, 0],
-          },
-          balancesAbTokenSeller: [0, 0],
-          balancesAbSigner: await getBalancesAB(signer.address),
-          balancesAbSigner1: await getBalancesAB(signer1.address),
-          balancesAbSigner2: await getBalancesAB(signer2.address),
+          const price36 = mainPool.poolSwapTokens
+            ? amountA.mul(parseUnits("1", 36)).div(amountB)
+            : amountB.mul(parseUnits("1", 36)).div(amountA);
+          const sqrtPrice18 = await calcLib.sqrt(price36);
+          const sqrtPriceX96 = sqrtPrice18.mul(BigNumber.from(2).pow(96)).div(parseUnits("1", 18)); // 18 = sqrt of 36
+          console.log("sqrtPriceX96", sqrtPriceX96);
+          await pool.initialize(sqrtPriceX96);
+          return {sqrtPriceX96, amountA, amountB}
         }
-        pool = UniswapV3Pool__factory.connect(await uniswapV3Factory.callStatic.createPool(
-          mainPool.poolSwapTokens ? tokenB.address : tokenA.address,
-          mainPool.poolSwapTokens ? tokenA.address : tokenB.address,
-          mainPool.fee
-        ), signer);
-        await uniswapV3Factory.createPool(
-          mainPool.poolSwapTokens ? tokenB.address : tokenA.address,
-          mainPool.poolSwapTokens ? tokenA.address : tokenB.address,
-          mainPool.fee
-        );
 
-        // initialize the pool
+        //endregion Utils
 
-        const {sqrtPriceX96, amountA, amountB} = await initializePool();
+        before(async function () {
+          snapshot1 = await TimeUtils.snapshot();
 
-        // provide liquidity in wide range
-        const tickCurrent = await facadeUni._getTickAtSqrtRatio(sqrtPriceX96);
-        console.log("tickCurrent", tickCurrent);
-        const priceLowerSquareX96 = sqrtPriceX96.mul(
-          parseUnits(mainPool.pricesRange[0], 5)
-        ).mul(
-          parseUnits(mainPool.pricesRange[0], 5)
-        ).div(
-          parseUnits("1", 5 + 5)
-        );
-        const priceUpperSquareX96 = sqrtPriceX96.mul(
-          parseUnits(mainPool.pricesRange[1], 5)
-        ).mul(
-          parseUnits(mainPool.pricesRange[1], 5)
-        ).div(
-          parseUnits("1", 5 + 5)
-        );
-        console.log("priceLowerSquareX96", priceLowerSquareX96);
-        console.log("priceUpperSquareX96", priceUpperSquareX96);
-        const tickLower0 = await facadeUni._getTickAtSqrtRatio(priceLowerSquareX96);
-        const tickUpper0 = await facadeUni._getTickAtSqrtRatio(priceUpperSquareX96);
-        const tickSpacing = await facadeUni.getTickSpacing(mainPool.fee)
-        const tickRange = Math.ceil(
-          (Math.round((tickUpper0 - tickLower0) / 2)) / tickSpacing
-        ) * tickSpacing;
-        console.log("tickLower0", tickLower0);
-        console.log("tickUpper0", tickUpper0);
-        console.log("tickRange", tickRange);
-        console.log("tickSpacing", tickSpacing);
+          start = {
+            mainPool: {
+              lowerTick: 0,
+              upperTick: 0,
+              liquidityAmount: BigNumber.from(0),
+              amountsAB: [0, 0],
+            },
+            tick: 0,
+            sqrtPriceX96: BigNumber.from(0),
+            needToRefresh: false,
+            isPositionOpened: false,
+            narrowRange: {
+              lowerTick: 0,
+              upperTick: 0,
+              liquidityAmount: BigNumber.from(0),
+              amountsAB: [0, 0],
+            },
+            balancesAbTokenSeller: [0, 0],
+            balancesAbSigner: await getBalancesAB(signer.address),
+            balancesAbSigner1: await getBalancesAB(signer1.address),
+            balancesAbSigner2: await getBalancesAB(signer2.address),
+          }
+          pool = UniswapV3Pool__factory.connect(await uniswapV3Factory.callStatic.createPool(
+            mainPool.poolSwapTokens ? tokenB.address : tokenA.address,
+            mainPool.poolSwapTokens ? tokenA.address : tokenB.address,
+            mainPool.fee
+          ), signer);
+          await uniswapV3Factory.createPool(
+            mainPool.poolSwapTokens ? tokenB.address : tokenA.address,
+            mainPool.poolSwapTokens ? tokenA.address : tokenB.address,
+            mainPool.fee
+          );
 
-        const {lowerTick, upperTick} = await facadeLib.calcTickRange(tickCurrent, tickRange, tickSpacing);
-        console.log("lowerTick", lowerTick);
-        console.log("upperTick", upperTick);
-        const liquidityAmount = mainPool.poolSwapTokens
-          ? await facadeUni.getLiquidityForAmounts(sqrtPriceX96, lowerTick, upperTick, amountB, amountA)
-          : await facadeUni.getLiquidityForAmounts(sqrtPriceX96, lowerTick, upperTick, amountA, amountB);
-        console.log("liquidityAmount", liquidityAmount);
-        const requiredAmounts = await facadeUni.getAmountsForLiquidity(sqrtPriceX96, lowerTick, upperTick, liquidityAmount);
-        console.log("requiredAmounts", requiredAmounts);
+          // initialize the pool
 
-        // prepare initial amounts of both token
-        await tokenA.connect(signer1).approve(uniswapV3Callee.address, mainPool.poolSwapTokens ? requiredAmounts.amount1 : requiredAmounts.amount0);
-        await tokenB.connect(signer1).approve(uniswapV3Callee.address, mainPool.poolSwapTokens ? requiredAmounts.amount0 : requiredAmounts.amount1);
+          const {sqrtPriceX96, amountA, amountB} = await initializePool();
 
-        console.log("signer1.balance before A0", await tokenA.balanceOf(signer1.address));
-        console.log("balance before B0", await tokenB.balanceOf(signer1.address));
-        await uniswapV3Callee.connect(signer1).mint(pool.address, signer1.address, lowerTick, upperTick, liquidityAmount, {gasLimit: 9_000_000});
-        console.log("signer1.balance after A0", await tokenA.balanceOf(signer1.address));
-        console.log("signer1.balance after B0", await tokenB.balanceOf(signer1.address));
+          // provide liquidity in wide range
+          const tickCurrent = await facadeUni._getTickAtSqrtRatio(sqrtPriceX96);
+          console.log("tickCurrent", tickCurrent);
+          const priceLowerSquareX96 = sqrtPriceX96.mul(
+            parseUnits(mainPool.pricesRange[0], 5)
+          ).mul(
+            parseUnits(mainPool.pricesRange[0], 5)
+          ).div(
+            parseUnits("1", 5 + 5)
+          );
+          const priceUpperSquareX96 = sqrtPriceX96.mul(
+            parseUnits(mainPool.pricesRange[1], 5)
+          ).mul(
+            parseUnits(mainPool.pricesRange[1], 5)
+          ).div(
+            parseUnits("1", 5 + 5)
+          );
+          console.log("priceLowerSquareX96", priceLowerSquareX96);
+          console.log("priceUpperSquareX96", priceUpperSquareX96);
+          const tickLower0 = await facadeUni._getTickAtSqrtRatio(priceLowerSquareX96);
+          const tickUpper0 = await facadeUni._getTickAtSqrtRatio(priceUpperSquareX96);
+          const tickSpacing = await facadeUni.getTickSpacing(mainPool.fee)
+          const tickRange = Math.ceil(
+            (Math.round((tickUpper0 - tickLower0) / 2)) / tickSpacing
+          ) * tickSpacing;
+          console.log("tickLower0", tickLower0);
+          console.log("tickUpper0", tickUpper0);
+          console.log("tickRange", tickRange);
+          console.log("tickSpacing", tickSpacing);
 
-        lowerTickWide = lowerTick;
-        upperTickWide = upperTick;
-        liquidityAmountWide = liquidityAmount;
-        sqrtPriceX96Wide = sqrtPriceX96;
+          const {lowerTick, upperTick} = await facadeLib.calcTickRange(tickCurrent, tickRange, tickSpacing);
+          console.log("lowerTick", lowerTick);
+          console.log("upperTick", upperTick);
+          const liquidityAmount = mainPool.poolSwapTokens
+            ? await facadeUni.getLiquidityForAmounts(sqrtPriceX96, lowerTick, upperTick, amountB, amountA)
+            : await facadeUni.getLiquidityForAmounts(sqrtPriceX96, lowerTick, upperTick, amountA, amountB);
+          console.log("liquidityAmount", liquidityAmount);
+          const requiredAmounts = await facadeUni.getAmountsForLiquidity(sqrtPriceX96, lowerTick, upperTick, liquidityAmount);
+          console.log("requiredAmounts", requiredAmounts);
 
-        wideRangeState0 = await getCurrentWideRangeState(sqrtPriceX96);
-        console.log("Main pool is initialized");
-      });
+          // prepare initial amounts of both token
+          await tokenA.connect(signer1).approve(uniswapV3Callee.address, mainPool.poolSwapTokens ? requiredAmounts.amount1 : requiredAmounts.amount0);
+          await tokenB.connect(signer1).approve(uniswapV3Callee.address, mainPool.poolSwapTokens ? requiredAmounts.amount0 : requiredAmounts.amount1);
 
-      after(async function () {
-        await TimeUtils.rollback(snapshot1);
-        // todo save states to CSV file
-      });
+          console.log("signer1.balance before A0", await tokenA.balanceOf(signer1.address));
+          console.log("balance before B0", await tokenB.balanceOf(signer1.address));
+          await uniswapV3Callee.connect(signer1).mint(pool.address, signer1.address, lowerTick, upperTick, liquidityAmount, {gasLimit: 9_000_000});
+          console.log("signer1.balance after A0", await tokenA.balanceOf(signer1.address));
+          console.log("signer1.balance after B0", await tokenB.balanceOf(signer1.address));
 
-      it("pool should have expected liquidity", async () => {
-        const liquidity = await pool.liquidity();
-        console.log("liquidity", liquidity);
-        expect(liquidity).gt(0);
-        expect(wideRangeState0.amountsAB[0]).approximately(Number(mainPool.amountA), 1);
-        expect(wideRangeState0.amountsAB[1]).approximately(Number(mainPool.amountB), 1);
-      });
+          lowerTickWide = lowerTick;
+          upperTickWide = upperTick;
+          liquidityAmountWide = liquidityAmount;
+          sqrtPriceX96Wide = sqrtPriceX96;
 
-      NARROW_RANGES.forEach(function (narrowRange: INarrowRangeParams) {
-        describe(`Narrow range: ${narrowRange.tag}`, () => {
-          let tokenSeller: Univ3TokenSeller;
-          let snapshot2: string;
-          let init: IState;
-          let derivedValues: IDerivedValues;
-          before(async function () {
-            console.log("Set up token seller");
-            snapshot2 = await TimeUtils.snapshot();
+          wideRangeState0 = await getCurrentWideRangeState(sqrtPriceX96);
+          console.log("Main pool is initialized");
+        });
 
-            const poolInfo = await pool.slot0();
+        after(async function () {
+          await TimeUtils.rollback(snapshot1);
+          // todo save states to CSV file
+        });
 
-            const minSqrtPriceX96 = poolInfo.sqrtPriceX96
-              .mul(parseUnits(narrowRange.sqrtMinPriceRatio, 18))
-              .div(parseUnits("1", 18));
+        it("pool should have expected liquidity", async () => {
+          const liquidity = await pool.liquidity();
+          console.log("liquidity", liquidity);
+          expect(liquidity).gt(0);
+          expect(wideRangeState0.amountsAB[0]).approximately(Number(mainPool.amountA), 1);
+          expect(wideRangeState0.amountsAB[1]).approximately(Number(mainPool.amountB), 1);
+        });
 
-            const tokenSellerConfig: TokenSellerConfigStruct = {
-              amountA: parseUnits(narrowRange.amountA, decimalsA),
-              tickRangeSize: narrowRange.tickRangeSize,
-              minTick: await facadeUni._getTickAtSqrtRatio(minSqrtPriceX96),
-              thresholdTokenB: parseUnits(narrowRange.thresholdTokenB, decimalsB),
-              thresholdRatio: parseUnits(narrowRange.thresholdRatio, 5),
-              thresholdLastRefreshPoolSec: 0 // todo
-            }
+        NARROW_RANGES.forEach(function (narrowRange: INarrowRangeParams) {
+          describe(`Narrow range: ${narrowRange.tag}`, () => {
+            let tokenSeller: Univ3TokenSeller;
+            let snapshot2: string;
+            let init: IState;
+            let derivedValues: IDerivedValues;
+            before(async function () {
+              console.log("Set up token seller");
+              snapshot2 = await TimeUtils.snapshot();
 
-            tokenSeller = (await DeployerUtils.deployContract(
-              signer,
-              "Univ3TokenSeller",
-              tokenA.address, tokenB.address, pool.address, tokenSellerConfig, signer.address,
-            )) as Univ3TokenSeller;
-            console.log("Token seller is created");
+              const poolInfo = await pool.slot0();
 
-            await tokenA.transfer(tokenSeller.address, parseUnits(narrowRange.balanceA, decimalsA));
-            await tokenSeller.openPosition();
-            console.log("Token seller opens a position");
+              const minSqrtPriceX96 = mainPool.poolSwapTokens
+                ? poolInfo.sqrtPriceX96
+                  .mul(parseUnits("1", 18))
+                  .div(parseUnits(narrowRange.sqrtMinPriceRatio, 18))
+                : poolInfo.sqrtPriceX96
+                  .mul(parseUnits(narrowRange.sqrtMinPriceRatio, 18))
+                  .div(parseUnits("1", 18));
 
-            init = {
-              mainPool: wideRangeState0,
-              tick: poolInfo.tick,
-              sqrtPriceX96: poolInfo.sqrtPriceX96,
-              narrowRange: await getCurrentNarrowRangeState(tokenSeller, poolInfo.sqrtPriceX96),
-              balancesAbTokenSeller: await getBalancesAB(tokenSeller.address),
-              balancesAbSigner: await getBalancesAB(signer.address),
-              balancesAbSigner1: await getBalancesAB(signer1.address),
-              balancesAbSigner2: await getBalancesAB(signer2.address),
-            }
+              const tokenSellerConfig: TokenSellerConfigStruct = {
+                amountA: parseUnits(narrowRange.amountA, decimalsA),
+                tickRangeSize: narrowRange.tickRangeSize,
+                tickLimit: await facadeUni._getTickAtSqrtRatio(minSqrtPriceX96),
+                thresholdTokenB: parseUnits(narrowRange.thresholdTokenB, decimalsB),
+                thresholdRatio: parseUnits(narrowRange.thresholdRatio, 5),
+                thresholdLastRefreshPoolSec: 0 // todo
+              }
 
-            const config = await tokenSeller.config();
-            derivedValues = {
-              tickLimit: config.minTick,
-              tickSpacing: await tokenSeller.tickSpacing(),
-            }
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot2);
-          });
+              tokenSeller = (await DeployerUtils.deployContract(
+                signer,
+                "Univ3TokenSeller",
+                tokenA.address, tokenB.address, pool.address, tokenSellerConfig, signer.address,
+              )) as Univ3TokenSeller;
+              console.log("Token seller is created");
 
-          it("pool should have expected liquidity", async () => {
-            const liquidity = await pool.liquidity();
-            console.log("liquidity", liquidity);
-            expect(liquidity).gt(0);
-            expect(init.narrowRange.amountsAB[0]).approximately(Number(narrowRange.amountA), 1);
-            expect(init.narrowRange.amountsAB[1]).eq(0);
-          });
-          it("narrow range should have expected tick range", async () => {
-            expect(
-              init.narrowRange.upperTick - init.narrowRange.lowerTick
-            ).eq(
-              narrowRange.tickRangeSize * derivedValues.tickSpacing
-            )
-          });
-          it("token seller should have expected balances", async () => {
-            expect(init.balancesAbTokenSeller[0]).approximately(Number(narrowRange.balanceA) - Number(narrowRange.amountA), 1e-5);
-            expect(init.balancesAbTokenSeller[1]).eq(0);
-          });
+              await tokenA.transfer(tokenSeller.address, parseUnits(narrowRange.balanceA, decimalsA));
+              await tokenSeller.openPosition();
+              console.log("Token seller opens a position");
 
-          SWAP_SETS.forEach(function (swapParams: ISwapParams) {
-            describe(`Swap ${swapParams.tag}`, () => {
-              let snapshot3: string;
-              let afterSwap: IState;
-              before(async function () {
-                console.log("Prepare to swap");
-                snapshot3 = await TimeUtils.snapshot();
+              init = {
+                mainPool: wideRangeState0,
+                tick: poolInfo.tick,
+                sqrtPriceX96: poolInfo.sqrtPriceX96,
+                needToRefresh: await tokenSeller.needToRefresh(),
+                isPositionOpened: await tokenSeller.isPositionOpened(),
+                narrowRange: await getCurrentNarrowRangeState(tokenSeller, poolInfo.sqrtPriceX96),
+                balancesAbTokenSeller: await getBalancesAB(tokenSeller.address),
+                balancesAbSigner: await getBalancesAB(signer.address),
+                balancesAbSigner1: await getBalancesAB(signer1.address),
+                balancesAbSigner2: await getBalancesAB(signer2.address),
+              }
 
-                const amountToSwap = parseUnits(swapParams.swapAmount, swapParams.swapTokenA ? decimalsA : decimalsB);
+              const config = await tokenSeller.config();
+              derivedValues = {
+                tickLimit: config.tickLimit,
+                tickSpacing: await tokenSeller.tickSpacing(),
+              }
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot2);
+            });
 
-                if (swapParams.swapTokenA) {
-                  await tokenA.connect(signer2).approve(uniswapV3Callee.address, amountToSwap);
-                } else {
-                  await tokenB.connect(signer2).approve(uniswapV3Callee.address, amountToSwap);
-                }
+            it("pool should have expected liquidity", async () => {
+              const liquidity = await pool.liquidity();
+              console.log("liquidity", liquidity);
+              expect(liquidity).gt(0);
+              expect(init.narrowRange.amountsAB[0]).approximately(Number(narrowRange.amountA), 1);
+              expect(init.narrowRange.amountsAB[1]).eq(0);
+            });
+            it("narrow range should have expected tick range", async () => {
+              expect(
+                init.narrowRange.upperTick - init.narrowRange.lowerTick
+              ).eq(
+                narrowRange.tickRangeSize * derivedValues.tickSpacing
+              )
+            });
+            it("token seller should have expected balances", async () => {
+              expect(init.balancesAbTokenSeller[0]).approximately(Number(narrowRange.balanceA) - Number(narrowRange.amountA), 1e-5);
+              expect(init.balancesAbTokenSeller[1]).eq(0);
+            });
+            it("should have expected state", async () => {
+              expect(init.needToRefresh).eq(false);
+              expect(init.isPositionOpened).eq(true);
+            });
 
-                await uniswapV3Callee.connect(signer2).swap(
-                  pool.address,
-                  signer2.address,
-                  swapParams.swapTokenA ? tokenA.address : tokenB.address,
-                  amountToSwap
-                );
-                console.log("Swap is done");
-
-                const {sqrtPriceX96, tick} = await pool.slot0();
-                afterSwap = {
-                  mainPool: await getCurrentWideRangeState(sqrtPriceX96),
-                  tick,
-                  sqrtPriceX96,
-                  narrowRange: await getCurrentNarrowRangeState(tokenSeller, sqrtPriceX96),
-                  balancesAbTokenSeller: await getBalancesAB(tokenSeller.address),
-                  balancesAbSigner: await getBalancesAB(signer.address),
-                  balancesAbSigner1: await getBalancesAB(signer1.address),
-                  balancesAbSigner2: await getBalancesAB(signer2.address),
-                }
-              });
-              after(async function () {
-                await TimeUtils.rollback(snapshot3);
-              });
-
-              it("swapper should receive positive amount of the target token", async () => {
-                const indexTargetToken = swapParams.swapTokenA ? 1 : 0;
-                expect(afterSwap.balancesAbSigner2[indexTargetToken]).gt(init.balancesAbSigner2[indexTargetToken]);
-              });
-              it("swapper should spend expected amount of the source token", async () => {
-                const indexSourceToken = swapParams.swapTokenA ? 0 : 1;
-                expect(
-                  afterSwap.balancesAbSigner2[indexSourceToken]
-                ).eq(
-                  init.balancesAbSigner2[indexSourceToken] - Number(swapParams.swapAmount)
-                );
-              });
-
-
-              describe("refreshPool", () => {
-                let snapshot4: string;
-                let afterRefresh: IState;
+            SWAP_SETS.forEach(function (swapParams: ISwapParams) {
+              describe(`Swap ${swapParams.tag}`, () => {
+                let snapshot3: string;
+                let afterSwap: IState;
                 before(async function () {
-                  console.log("Prepare to refresh the pool");
-                  snapshot4 = await TimeUtils.snapshot();
+                  console.log("Prepare to swap");
+                  snapshot3 = await TimeUtils.snapshot();
 
-                  await tokenSeller.refreshPool();
-                  console.log("The pool is refreshed");
+                  const amountToSwap = parseUnits(swapParams.swapAmount, swapParams.swapTokenA ? decimalsA : decimalsB);
+
+                  if (swapParams.swapTokenA) {
+                    await tokenA.connect(signer2).approve(uniswapV3Callee.address, amountToSwap);
+                  } else {
+                    await tokenB.connect(signer2).approve(uniswapV3Callee.address, amountToSwap);
+                  }
+
+                  await uniswapV3Callee.connect(signer2).swap(
+                    pool.address,
+                    signer2.address,
+                    swapParams.swapTokenA ? tokenA.address : tokenB.address,
+                    amountToSwap
+                  );
+                  console.log("Swap is done");
 
                   const {sqrtPriceX96, tick} = await pool.slot0();
-                  afterRefresh = {
+                  afterSwap = {
                     mainPool: await getCurrentWideRangeState(sqrtPriceX96),
                     tick,
                     sqrtPriceX96,
+                    needToRefresh: await tokenSeller.needToRefresh(),
+                    isPositionOpened: await tokenSeller.isPositionOpened(),
                     narrowRange: await getCurrentNarrowRangeState(tokenSeller, sqrtPriceX96),
                     balancesAbTokenSeller: await getBalancesAB(tokenSeller.address),
                     balancesAbSigner: await getBalancesAB(signer.address),
                     balancesAbSigner1: await getBalancesAB(signer1.address),
                     balancesAbSigner2: await getBalancesAB(signer2.address),
                   }
+                  console.log("init", init)
+                  console.log("afterSwap", afterSwap)
                 });
                 after(async function () {
-                  await TimeUtils.rollback(snapshot4);
+                  await TimeUtils.rollback(snapshot3);
                 });
 
-                it("should not change current price and current tick", async () => {
-                  expect(afterRefresh.sqrtPriceX96).eq(afterSwap.sqrtPriceX96);
-                  expect(afterRefresh.tick).eq(afterSwap.tick);
+                it("swapper should receive positive amount of the target token", async () => {
+                  const indexTargetToken = swapParams.swapTokenA ? 1 : 0;
+                  expect(afterSwap.balancesAbSigner2[indexTargetToken]).gt(init.balancesAbSigner2[indexTargetToken]);
                 });
-                it("new tick range should have expected size", async () => {
+                it("swapper should spend expected amount of the source token", async () => {
+                  const indexSourceToken = swapParams.swapTokenA ? 0 : 1;
                   expect(
-                    afterRefresh.narrowRange.upperTick - afterRefresh.narrowRange.lowerTick
+                    afterSwap.balancesAbSigner2[indexSourceToken]
                   ).eq(
-                    derivedValues.tickSpacing * narrowRange.tickRangeSize
+                    init.balancesAbSigner2[indexSourceToken] - Number(swapParams.swapAmount)
                   );
                 });
-                it("new tick range should have expected bounds", async () => {
-                  expect(
-                    (afterRefresh.narrowRange.lowerTick - afterRefresh.tick) < derivedValues.tickSpacing
-                    || afterRefresh.tick < derivedValues.tickLimit
-                  ).eq(true);
+                it("should have expected state", async () => {
+                  if (Math.abs(afterSwap.tick - init.tick) > derivedValues.tickSpacing) {
+                    expect(afterSwap.needToRefresh).eq(true);
+                  }
+                  expect(afterSwap.isPositionOpened).eq(true);
                 });
-                if (!swapParams.swapTokenA) {
-                  it("tokenSeller should withdraw some amount of token B", async () => {
-                    if (Math.abs(afterSwap.tick - init.tick) > derivedValues.tickSpacing) {
-                      expect(afterRefresh.balancesAbSigner[1]).gt(afterSwap.balancesAbSigner[1]);
-                      expect(afterRefresh.balancesAbTokenSeller[1]).eq(0);
-                    }
-                  });
-                  it("tokenSeller should deposit additional amount of token A", async () => {
-                    if (Math.abs(afterSwap.tick - init.tick) > derivedValues.tickSpacing) {
-                      expect(afterRefresh.balancesAbTokenSeller[0]).lt(afterSwap.balancesAbTokenSeller[0]);
-                    }
-                  });
-                  it("tokenSeller should deposit token A only", async () => {
-                    if (Math.abs(afterSwap.tick - init.tick) > derivedValues.tickSpacing) {
-                      expect(afterRefresh.narrowRange.liquidityAmount).gt(0);
-                      expect(afterRefresh.narrowRange.amountsAB[0]).eq(Number(narrowRange.amountA));
-                      expect(afterRefresh.narrowRange.amountsAB[1]).eq(0);
-                    }
-                  });
-                }
-                describe("exit from pool", () => {
-                  let snapshot5: string;
-                  let final: IState;
+
+                describe("refreshPool", () => {
+                  let snapshot4: string;
+                  let afterRefresh: IState;
                   before(async function () {
-                    console.log("Prepare to exit from the pool");
-                    snapshot5 = await TimeUtils.snapshot();
+                    console.log("Prepare to refresh the pool");
+                    snapshot4 = await TimeUtils.snapshot();
 
-                    await tokenSeller.closePosition();
-                    await tokenSeller.withdraw(signer.address, tokenA.address, await tokenSeller.balanceOf(tokenA.address));
-                    await tokenSeller.withdraw(signer.address, tokenB.address, await tokenSeller.balanceOf(tokenB.address));
-
-                    await pool.connect(signer1).burn(lowerTickWide, upperTickWide, liquidityAmountWide);
-                    await pool.connect(signer1).collect(signer1.address, lowerTickWide, upperTickWide, Misc.MAX_UINT_128, Misc.MAX_UINT_128);
-                    console.log("Pool is empty");
+                    await tokenSeller.refreshPool();
+                    console.log("The pool is refreshed");
 
                     const {sqrtPriceX96, tick} = await pool.slot0();
-                    final = {
+                    afterRefresh = {
                       mainPool: await getCurrentWideRangeState(sqrtPriceX96),
                       tick,
                       sqrtPriceX96,
+                      needToRefresh: await tokenSeller.needToRefresh(),
+                      isPositionOpened: await tokenSeller.isPositionOpened(),
                       narrowRange: await getCurrentNarrowRangeState(tokenSeller, sqrtPriceX96),
                       balancesAbTokenSeller: await getBalancesAB(tokenSeller.address),
                       balancesAbSigner: await getBalancesAB(signer.address),
                       balancesAbSigner1: await getBalancesAB(signer1.address),
                       balancesAbSigner2: await getBalancesAB(signer2.address),
                     }
-
-                    registerResults(states, {
-                      inputParams: {mainPool, narrowRange, swapParams},
-                      derivedValues,
-                      start,
-                      init,
-                      afterSwap,
-                      afterRefresh,
-                      final
-                    });
                   });
                   after(async function () {
-                    await TimeUtils.rollback(snapshot5);
+                    await TimeUtils.rollback(snapshot4);
                   });
 
-                  it("pool should have NO liquidity", async () => {
-                    expect(await pool.liquidity()).eq(0);
+                  it("should not change current price and current tick", async () => {
+                    expect(afterRefresh.sqrtPriceX96).eq(afterSwap.sqrtPriceX96);
+                    expect(afterRefresh.tick).eq(afterSwap.tick);
                   });
-                  it("tokenSeller should not have any tokens", async () => {
-                    expect(await final.balancesAbTokenSeller[0]).eq(0);
-                    expect(await final.balancesAbTokenSeller[1]).eq(0);
-                  });
-                  it("total amount of token A should be equal to the initial amount", async () => {
+                  it("new tick range should have expected size", async () => {
                     expect(
-                      final.balancesAbSigner[0] + final.balancesAbSigner1[0] + final.balancesAbSigner2[0]
+                      afterRefresh.narrowRange.upperTick - afterRefresh.narrowRange.lowerTick
                     ).eq(
-                      start.balancesAbSigner[0] + start.balancesAbSigner1[0] + start.balancesAbSigner2[0]
+                      derivedValues.tickSpacing * narrowRange.tickRangeSize
                     );
                   });
-                  it("total amount of token B should be equal to the initial amount", async () => {
-                    expect(
-                      final.balancesAbSigner[1] + final.balancesAbSigner1[1] + final.balancesAbSigner2[1],
-                    ).approximately(
-                      start.balancesAbSigner[1] + start.balancesAbSigner1[1] + start.balancesAbSigner2[1],
-                      1e5
-                    );
+                  it("new tick range should have expected bounds", async () => {
+                    if (mainPool.poolSwapTokens) {
+                      expect(
+                        (afterRefresh.tick - afterRefresh.narrowRange.upperTick) <= derivedValues.tickSpacing
+                        || afterRefresh.tick > derivedValues.tickLimit
+                      ).eq(true);
+                    } else {
+                      expect(
+                        (afterRefresh.narrowRange.lowerTick - afterRefresh.tick) < derivedValues.tickSpacing
+                        // special case: lowerTick - tickSpacing === tick, but price(lowerTick) < price(tick)
+                        || (afterRefresh.narrowRange.lowerTick - afterRefresh.tick) === derivedValues.tickSpacing
+                        || afterRefresh.tick < derivedValues.tickLimit
+                      ).eq(true);
+                    }
                   });
-                  it("swapper should spend expected amount of the source token", async () => {
-                    const indexSourceToken = swapParams.swapTokenA ? 0 : 1;
-                    expect(
-                      final.balancesAbSigner2[indexSourceToken]
-                    ).eq(
-                      start.balancesAbSigner2[indexSourceToken] - Number(swapParams.swapAmount)
-                    );
+                  if (!swapParams.swapTokenA) {
+                    it("tokenSeller should withdraw some amount of token B", async () => {
+                      if (Math.abs(afterSwap.tick - init.tick) > derivedValues.tickSpacing) {
+                        expect(afterRefresh.balancesAbSigner[1]).gt(afterSwap.balancesAbSigner[1]);
+                        expect(afterRefresh.balancesAbTokenSeller[1]).eq(0);
+                      }
+                    });
+                    it("tokenSeller should deposit additional amount of token A", async () => {
+                      if (Math.abs(afterSwap.tick - init.tick) > derivedValues.tickSpacing) {
+                        expect(afterRefresh.balancesAbTokenSeller[0]).lt(afterSwap.balancesAbTokenSeller[0]);
+                      }
+                    });
+                    it("tokenSeller should deposit token A only", async () => {
+                      if (Math.abs(afterSwap.tick - init.tick) > derivedValues.tickSpacing) {
+                        expect(afterRefresh.narrowRange.liquidityAmount).gt(0);
+                        expect(afterRefresh.narrowRange.amountsAB[0]).eq(Number(narrowRange.amountA));
+                        expect(afterRefresh.narrowRange.amountsAB[1]).eq(0);
+                      }
+                    });
+                  }
+                  it("should have expected state", async () => {
+                    expect(afterRefresh.needToRefresh).eq(false);
+                    expect(afterRefresh.isPositionOpened).eq(true);
                   });
-                  it("swapper should receive positive amount of the target token", async () => {
-                    const indexTargetToken = swapParams.swapTokenA ? 1 : 0;
-                    expect(final.balancesAbSigner2[indexTargetToken]).gt(start.balancesAbSigner2[indexTargetToken]);
-                  });
-                  it("both signer and pool-owner should receive swapped amount of the target token", async () => {
-                    const indexSourceToken = swapParams.swapTokenA ? 0 : 1;
-                    expect(
-                      final.balancesAbSigner[indexSourceToken] + final.balancesAbSigner1[indexSourceToken]
-                      - (start.balancesAbSigner[indexSourceToken] + start.balancesAbSigner1[indexSourceToken])
-                    ).approximately(Number(swapParams.swapAmount), 1e-5);
-                    expect(final.balancesAbSigner[indexSourceToken]).gte(start.balancesAbSigner[indexSourceToken]);
-                    expect(final.balancesAbSigner1[indexSourceToken]).gt(start.balancesAbSigner1[indexSourceToken]);
+
+                  describe("exit from pool", () => {
+                    let snapshot5: string;
+                    let final: IState;
+                    before(async function () {
+                      console.log("Prepare to exit from the pool");
+                      snapshot5 = await TimeUtils.snapshot();
+
+                      await tokenSeller.closePosition();
+                      await tokenSeller.withdraw(signer.address, tokenA.address, await tokenSeller.balanceOf(tokenA.address));
+                      await tokenSeller.withdraw(signer.address, tokenB.address, await tokenSeller.balanceOf(tokenB.address));
+
+                      await pool.connect(signer1).burn(lowerTickWide, upperTickWide, liquidityAmountWide);
+                      await pool.connect(signer1).collect(signer1.address, lowerTickWide, upperTickWide, Misc.MAX_UINT_128, Misc.MAX_UINT_128);
+                      console.log("Pool is empty");
+
+                      const {sqrtPriceX96, tick} = await pool.slot0();
+                      final = {
+                        mainPool: await getCurrentWideRangeState(sqrtPriceX96),
+                        tick,
+                        sqrtPriceX96,
+                        needToRefresh: await tokenSeller.needToRefresh(),
+                        isPositionOpened: await tokenSeller.isPositionOpened(),
+                        narrowRange: await getCurrentNarrowRangeState(tokenSeller, sqrtPriceX96),
+                        balancesAbTokenSeller: await getBalancesAB(tokenSeller.address),
+                        balancesAbSigner: await getBalancesAB(signer.address),
+                        balancesAbSigner1: await getBalancesAB(signer1.address),
+                        balancesAbSigner2: await getBalancesAB(signer2.address),
+                      }
+
+                      registerResults(states, {
+                        inputParams: {mainPool, narrowRange, swapParams},
+                        derivedValues,
+                        start,
+                        init,
+                        afterSwap,
+                        afterRefresh,
+                        final
+                      });
+                    });
+                    after(async function () {
+                      await TimeUtils.rollback(snapshot5);
+                    });
+
+                    it("pool should have NO liquidity", async () => {
+                      expect(await pool.liquidity()).eq(0);
+                    });
+                    it("tokenSeller should not have any tokens", async () => {
+                      expect(await final.balancesAbTokenSeller[0]).eq(0);
+                      expect(await final.balancesAbTokenSeller[1]).eq(0);
+                    });
+                    it("total amount of token A should be equal to the initial amount", async () => {
+                      expect(
+                        final.balancesAbSigner[0] + final.balancesAbSigner1[0] + final.balancesAbSigner2[0]
+                      ).approximately(
+                        start.balancesAbSigner[0] + start.balancesAbSigner1[0] + start.balancesAbSigner2[0],
+                        1e-5
+                      );
+                    });
+                    it("total amount of token B should be equal to the initial amount", async () => {
+                      expect(
+                        final.balancesAbSigner[1] + final.balancesAbSigner1[1] + final.balancesAbSigner2[1],
+                      ).approximately(
+                        start.balancesAbSigner[1] + start.balancesAbSigner1[1] + start.balancesAbSigner2[1],
+                        1e5
+                      );
+                    });
+                    it("swapper should spend expected amount of the source token", async () => {
+                      const indexSourceToken = swapParams.swapTokenA ? 0 : 1;
+                      expect(
+                        final.balancesAbSigner2[indexSourceToken]
+                      ).eq(
+                        start.balancesAbSigner2[indexSourceToken] - Number(swapParams.swapAmount)
+                      );
+                    });
+                    it("swapper should receive positive amount of the target token", async () => {
+                      const indexTargetToken = swapParams.swapTokenA ? 1 : 0;
+                      expect(final.balancesAbSigner2[indexTargetToken]).gt(start.balancesAbSigner2[indexTargetToken]);
+                    });
+                    it("both signer and pool-owner should receive swapped amount of the target token", async () => {
+                      const indexSourceToken = swapParams.swapTokenA ? 0 : 1;
+                      expect(
+                        final.balancesAbSigner[indexSourceToken] + final.balancesAbSigner1[indexSourceToken]
+                        - (start.balancesAbSigner[indexSourceToken] + start.balancesAbSigner1[indexSourceToken])
+                      ).approximately(Number(swapParams.swapAmount), 1e-3);
+                      expect(final.balancesAbSigner[indexSourceToken]).gte(start.balancesAbSigner[indexSourceToken]);
+                      expect(final.balancesAbSigner1[indexSourceToken]).gt(start.balancesAbSigner1[indexSourceToken]);
+                    });
+                    it("should have expected state", async () => {
+                      expect(final.needToRefresh).eq(false);
+                      expect(final.isPositionOpened).eq(false);
+                    });
                   });
                 });
               });
             });
           });
         });
-      });
 
-      describe.skip("study: narrow pool", () => {
-        describe.skip("Add narrow pool, pA <= P < pB", () => {
-          const AMOUNT_A = "1000";
-          let snapshot2: string;
-          let lowerTickNarrow: number;
-          let upperTickNarrow: number;
-          let liquidityAmountNarrow: BigNumber;
+        describe.skip("study: narrow pool", () => {
+          describe.skip("Add narrow pool, pA <= P < pB", () => {
+            const AMOUNT_A = "1000";
+            let snapshot2: string;
+            let lowerTickNarrow: number;
+            let upperTickNarrow: number;
+            let liquidityAmountNarrow: BigNumber;
 
-          before(async function () {
-            console.log("Add liquidity to narrow range");
-            snapshot2 = await TimeUtils.snapshot();
-
-            // provide liquidity in narrow range
-            const amountA = parseUnits(AMOUNT_A, decimalsA);
-            const slot0 = await pool.slot0();
-            const sqrtP = slot0.sqrtPriceX96;
-            const tickSpacing = await facadeUni.getTickSpacing(mainPool.fee);
-            console.log("amountA", amountA);
-            console.log("sqrtP", sqrtP);
-            console.log("tickSpacing", tickSpacing);
-
-            // we know current price. Let's calculate Pa and Pb
-            const targetPa = slot0.sqrtPriceX96; // Pa ~ P
-            const targetPb = slot0.sqrtPriceX96.mul(3); // Pb ~ 9 * P
-            console.log("targetPa", targetPa);
-            console.log("targetPb", targetPb);
-
-            // calculate ticks for the target prices
-            const targetTickA = await facadeUni._getTickAtSqrtRatio(targetPa);
-            const targetTickB = await facadeUni._getTickAtSqrtRatio(targetPb);
-            console.log("targetTickA", targetTickA);
-            console.log("targetTickB", targetTickB);
-
-            // adjust the ticks to the allowable values
-            const tickLowerA = Math.ceil(targetTickA / tickSpacing) * tickSpacing;
-            const tickUpperB = Math.ceil(targetTickB / tickSpacing) * tickSpacing;
-            console.log("tickLowerA", tickLowerA);
-            console.log("tickUpperB", tickUpperB);
-
-            // now, let's calculate allowable Pa and Pb
-            const sqrtPa = await facadeUni._getSqrtRatioAtTick(tickLowerA);
-            const sqrtPb = await facadeUni._getSqrtRatioAtTick(tickUpperB);
-            console.log("sqrtPa", sqrtPa);
-            console.log("sqrtPb", sqrtPb);
-
-            // current tick
-            const tickCurrent = await facadeUni._getTickAtSqrtRatio(slot0.sqrtPriceX96);
-            console.log("tickCurrent", tickCurrent);
-
-            // we know: x = amount of A, pA, pB, P. What is amount of B?
-            // https://atiselsts.github.io/pdfs/uniswap-v3-liquidity-math.pdf
-            // section 3.2.1: we know x, pA, pb, P, we need to find y
-            // Lx = x / (sqrtP * sqrtPb) / (sqrtPb - sqrtP)
-            // y = Lx * (sqrtP - sqrtPa)
-
-            const q96 = BigNumber.from(2).pow(96);
-            const liquidityAmountX = amountA.mul(sqrtP.mul(sqrtPb)).div(sqrtPb.sub(sqrtP)).div(q96);
-            const amountB = liquidityAmountX.mul(sqrtP.sub(sqrtPa)).div(q96);
-            console.log("liquidityAmountX", liquidityAmountX);
-            console.log("amountB", amountB);
-
-            const liquidityAmount = await facadeUni.getLiquidityForAmounts(sqrtP, tickLowerA, tickUpperB, amountA, amountB);
-            console.log("liquidityAmount", liquidityAmount);
-
-            const requiredAmounts = await facadeUni.getAmountsForLiquidity(slot0.sqrtPriceX96, tickLowerA, tickUpperB, liquidityAmount);
-            console.log("requiredAmounts", requiredAmounts);
-
-            // prepare initial amounts of both token
-            await tokenA.approve(uniswapV3Callee.address, requiredAmounts.amount0);
-            await tokenB.approve(uniswapV3Callee.address, requiredAmounts.amount1);
-
-            await uniswapV3Callee.mint(pool.address, signer.address, tickLowerA, tickUpperB, liquidityAmount, {gasLimit: 9_000_000});
-            lowerTickNarrow = tickLowerA;
-            upperTickNarrow = tickUpperB;
-            liquidityAmountNarrow = liquidityAmount;
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot2);
-          });
-
-          it("should not change price", async () => {
-            const slot0 = await pool.slot0();
-            expect(slot0.sqrtPriceX96).eq(sqrtPriceX96Wide);
-          });
-        });
-        describe("Add narrow pool, P <= pA < pB", () => {
-          const AMOUNT_A = "1000";
-          let snapshot2: string;
-          let lowerTickNarrow: number;
-          let upperTickNarrow: number;
-          let liquidityAmountNarrow: BigNumber;
-
-          before(async function () {
-            console.log("Add liquidity to narrow range");
-            snapshot2 = await TimeUtils.snapshot();
-
-            // provide liquidity in narrow range
-            const amountA = parseUnits(AMOUNT_A, decimalsA);
-            const slot0 = await pool.slot0();
-            const sqrtP = slot0.sqrtPriceX96;
-            const tickSpacing = await facadeUni.getTickSpacing(mainPool.fee);
-            console.log("amountA", amountA);
-            console.log("sqrtP", sqrtP);
-            console.log("tickSpacing", tickSpacing);
-
-            // we know current price. Let's calculate Pa and Pb
-            const targetPa = slot0.sqrtPriceX96; // Pa ~ P
-            const targetPb = slot0.sqrtPriceX96.mul(3); // Pb ~ 9 * P
-            console.log("targetPa", targetPa);
-            console.log("targetPb", targetPb);
-
-            // calculate ticks for the target prices
-            const targetTickA = await facadeUni._getTickAtSqrtRatio(targetPa);
-            const targetTickB = await facadeUni._getTickAtSqrtRatio(targetPb);
-            console.log("targetTickA", targetTickA);
-            console.log("targetTickB", targetTickB);
-
-            // adjust the ticks to the allowable values
-            const tickLowerA = Math.ceil(targetTickA / tickSpacing) * tickSpacing;
-            const tickUpperB = Math.ceil(targetTickB / tickSpacing) * tickSpacing;
-            console.log("tickLowerA", tickLowerA);
-            console.log("tickUpperB", tickUpperB);
-
-            // now, let's calculate allowable Pa and Pb
-            const sqrtPa = await facadeUni._getSqrtRatioAtTick(tickLowerA);
-            const sqrtPb = await facadeUni._getSqrtRatioAtTick(tickUpperB);
-            console.log("sqrtPa", sqrtPa);
-            console.log("sqrtPb", sqrtPb);
-
-            // current tick
-            const tickCurrent = await facadeUni._getTickAtSqrtRatio(slot0.sqrtPriceX96);
-            console.log("tickCurrent", tickCurrent);
-
-            // we know: x = amount of A, pA, pB, P. What is amount of B?
-            // https://atiselsts.github.io/pdfs/uniswap-v3-liquidity-math.pdf
-            // section 3.2.1: we know x, pA, pb, P, we need to find y
-            // Lx = x / (sqrtP * sqrtPb) / (sqrtPb - sqrtP)
-            // y = Lx * (sqrtP - sqrtPa)
-
-            const q96 = BigNumber.from(2).pow(96);
-            const liquidityAmountX = amountA.mul(sqrtP.mul(sqrtPb)).div(sqrtPb.sub(sqrtP)).div(q96);
-            const amountB = liquidityAmountX.mul(sqrtP.sub(sqrtPa)).div(q96);
-            console.log("liquidityAmountX", liquidityAmountX);
-            console.log("amountB", amountB);
-
-            const liquidityAmount = await facadeUni.getLiquidityForAmounts(sqrtP, tickLowerA, tickUpperB, amountA, 0);
-            console.log("liquidityAmount", liquidityAmount);
-
-            const requiredAmounts = await facadeUni.getAmountsForLiquidity(sqrtP, tickLowerA, tickUpperB, liquidityAmount);
-            console.log("requiredAmounts", requiredAmounts);
-
-            // prepare initial amounts of both token
-            await tokenA.approve(uniswapV3Callee.address, amountA); // requiredAmounts.amount0);
-            await tokenB.approve(uniswapV3Callee.address, requiredAmounts.amount1);
-
-            console.log("balance before A1", await tokenA.balanceOf(signer.address));
-            console.log("balance before B1", await tokenB.balanceOf(signer.address));
-            await uniswapV3Callee.mint(pool.address, signer.address, tickLowerA, tickUpperB, liquidityAmount, {gasLimit: 9_000_000});
-            console.log("balance after A1", await tokenA.balanceOf(signer.address));
-            console.log("balance after B1", await tokenB.balanceOf(signer.address));
-            lowerTickNarrow = tickLowerA;
-            upperTickNarrow = tickUpperB;
-            liquidityAmountNarrow = liquidityAmount;
-            console.log("slot0 after narrow deposit", await pool.slot0());
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot2);
-          });
-
-          it("should not change price", async () => {
-            const slot0 = await pool.slot0();
-            console.log(slot0);
-            expect(slot0.sqrtPriceX96).eq(sqrtPriceX96Wide);
-          });
-
-          describe("Swap B => A (buy A)", () => {
-            const swapAmountB: string = "800";
-            let snapshot3: string;
             before(async function () {
-              snapshot3 = await TimeUtils.snapshot();
+              console.log("Add liquidity to narrow range");
+              snapshot2 = await TimeUtils.snapshot();
 
-              const amountToSwapB = parseUnits(swapAmountB, decimalsB);
+              // provide liquidity in narrow range
+              const amountA = parseUnits(AMOUNT_A, decimalsA);
+              const slot0 = await pool.slot0();
+              const sqrtP = slot0.sqrtPriceX96;
+              const tickSpacing = await facadeUni.getTickSpacing(mainPool.fee);
+              console.log("amountA", amountA);
+              console.log("sqrtP", sqrtP);
+              console.log("tickSpacing", tickSpacing);
 
-              await tokenB.connect(signer2).approve(uniswapV3Callee.address, amountToSwapB);
+              // we know current price. Let's calculate Pa and Pb
+              const targetPa = slot0.sqrtPriceX96; // Pa ~ P
+              const targetPb = slot0.sqrtPriceX96.mul(3); // Pb ~ 9 * P
+              console.log("targetPa", targetPa);
+              console.log("targetPb", targetPb);
 
-              console.log("signer2.balance before A2", await tokenA.balanceOf(signer2.address));
-              console.log("signer2.balance before B2", await tokenB.balanceOf(signer2.address));
-              await uniswapV3Callee.connect(signer2).swap(pool.address, signer2.address, tokenB.address, amountToSwapB);
-              console.log("signer2.balance after A2", await tokenA.balanceOf(signer2.address));
-              console.log("signer2.balance after B2", await tokenB.balanceOf(signer2.address));
+              // calculate ticks for the target prices
+              const targetTickA = await facadeUni._getTickAtSqrtRatio(targetPa);
+              const targetTickB = await facadeUni._getTickAtSqrtRatio(targetPb);
+              console.log("targetTickA", targetTickA);
+              console.log("targetTickB", targetTickB);
 
-              console.log("slot0 after narrow swap", await pool.slot0());
+              // adjust the ticks to the allowable values
+              const tickLowerA = Math.ceil(targetTickA / tickSpacing) * tickSpacing;
+              const tickUpperB = Math.ceil(targetTickB / tickSpacing) * tickSpacing;
+              console.log("tickLowerA", tickLowerA);
+              console.log("tickUpperB", tickUpperB);
+
+              // now, let's calculate allowable Pa and Pb
+              const sqrtPa = await facadeUni._getSqrtRatioAtTick(tickLowerA);
+              const sqrtPb = await facadeUni._getSqrtRatioAtTick(tickUpperB);
+              console.log("sqrtPa", sqrtPa);
+              console.log("sqrtPb", sqrtPb);
+
+              // current tick
+              const tickCurrent = await facadeUni._getTickAtSqrtRatio(slot0.sqrtPriceX96);
+              console.log("tickCurrent", tickCurrent);
+
+              // we know: x = amount of A, pA, pB, P. What is amount of B?
+              // https://atiselsts.github.io/pdfs/uniswap-v3-liquidity-math.pdf
+              // section 3.2.1: we know x, pA, pb, P, we need to find y
+              // Lx = x / (sqrtP * sqrtPb) / (sqrtPb - sqrtP)
+              // y = Lx * (sqrtP - sqrtPa)
+
+              const q96 = BigNumber.from(2).pow(96);
+              const liquidityAmountX = amountA.mul(sqrtP.mul(sqrtPb)).div(sqrtPb.sub(sqrtP)).div(q96);
+              const amountB = liquidityAmountX.mul(sqrtP.sub(sqrtPa)).div(q96);
+              console.log("liquidityAmountX", liquidityAmountX);
+              console.log("amountB", amountB);
+
+              const liquidityAmount = await facadeUni.getLiquidityForAmounts(sqrtP, tickLowerA, tickUpperB, amountA, amountB);
+              console.log("liquidityAmount", liquidityAmount);
+
+              const requiredAmounts = await facadeUni.getAmountsForLiquidity(slot0.sqrtPriceX96, tickLowerA, tickUpperB, liquidityAmount);
+              console.log("requiredAmounts", requiredAmounts);
+
+              // prepare initial amounts of both token
+              await tokenA.approve(uniswapV3Callee.address, requiredAmounts.amount0);
+              await tokenB.approve(uniswapV3Callee.address, requiredAmounts.amount1);
+
+              await uniswapV3Callee.mint(pool.address, signer.address, tickLowerA, tickUpperB, liquidityAmount, {gasLimit: 9_000_000});
+              lowerTickNarrow = tickLowerA;
+              upperTickNarrow = tickUpperB;
+              liquidityAmountNarrow = liquidityAmount;
             });
             after(async function () {
-              await TimeUtils.rollback(snapshot3);
+              await TimeUtils.rollback(snapshot2);
             });
 
-            it("pool should have expected liquidity and prices", async () => {
-              const liquidity = await pool.liquidity();
-              console.log("liquidity", liquidity);
-              expect(liquidity).gt(0);
+            it("should not change price", async () => {
+              const slot0 = await pool.slot0();
+              expect(slot0.sqrtPriceX96).eq(sqrtPriceX96Wide);
+            });
+          });
+          describe("Add narrow pool, P <= pA < pB", () => {
+            const AMOUNT_A = "1000";
+            let snapshot2: string;
+            let lowerTickNarrow: number;
+            let upperTickNarrow: number;
+            let liquidityAmountNarrow: BigNumber;
 
-              const priceA = await facadeUni.getPrice(pool.address, tokenA.address);
-              const priceB = await facadeUni.getPrice(pool.address, tokenB.address);
-              console.log("priceA", priceA);
-              console.log("priceB", priceB);
-              console.log("slot0 after swap", await pool.slot0());
+            before(async function () {
+              console.log("Add liquidity to narrow range");
+              snapshot2 = await TimeUtils.snapshot();
 
-              console.log("balance before A3", await tokenA.balanceOf(signer.address));
-              console.log("balance before B3", await tokenB.balanceOf(signer.address));
-              await pool.burn(lowerTickNarrow, upperTickNarrow, liquidityAmountNarrow);
-              await pool.collect(signer.address, lowerTickNarrow, upperTickNarrow, Misc.MAX_UINT_128, Misc.MAX_UINT_128);
-              console.log("balance after A3", await tokenA.balanceOf(signer.address));
-              console.log("balance after B3", await tokenB.balanceOf(signer.address));
+              // provide liquidity in narrow range
+              const amountA = parseUnits(AMOUNT_A, decimalsA);
+              const slot0 = await pool.slot0();
+              const sqrtP = slot0.sqrtPriceX96;
+              const tickSpacing = await facadeUni.getTickSpacing(mainPool.fee);
+              console.log("amountA", amountA);
+              console.log("sqrtP", sqrtP);
+              console.log("tickSpacing", tickSpacing);
 
+              // we know current price. Let's calculate Pa and Pb
+              const targetPa = slot0.sqrtPriceX96; // Pa ~ P
+              const targetPb = slot0.sqrtPriceX96.mul(3); // Pb ~ 9 * P
+              console.log("targetPa", targetPa);
+              console.log("targetPb", targetPb);
 
-              console.log("signer1. balance before A4", await tokenA.balanceOf(signer1.address));
-              console.log("signer1. balance before B4", await tokenB.balanceOf(signer1.address));
-              await pool.connect(signer1).burn(lowerTickWide, upperTickWide, liquidityAmountWide);
-              await pool.connect(signer1).collect(signer1.address, lowerTickWide, upperTickWide, Misc.MAX_UINT_128, Misc.MAX_UINT_128);
-              console.log("signer1. balance after A4", await tokenA.balanceOf(signer1.address));
-              console.log("signer1. balance after B4", await tokenB.balanceOf(signer1.address));
+              // calculate ticks for the target prices
+              const targetTickA = await facadeUni._getTickAtSqrtRatio(targetPa);
+              const targetTickB = await facadeUni._getTickAtSqrtRatio(targetPb);
+              console.log("targetTickA", targetTickA);
+              console.log("targetTickB", targetTickB);
+
+              // adjust the ticks to the allowable values
+              const tickLowerA = Math.ceil(targetTickA / tickSpacing) * tickSpacing;
+              const tickUpperB = Math.ceil(targetTickB / tickSpacing) * tickSpacing;
+              console.log("tickLowerA", tickLowerA);
+              console.log("tickUpperB", tickUpperB);
+
+              // now, let's calculate allowable Pa and Pb
+              const sqrtPa = await facadeUni._getSqrtRatioAtTick(tickLowerA);
+              const sqrtPb = await facadeUni._getSqrtRatioAtTick(tickUpperB);
+              console.log("sqrtPa", sqrtPa);
+              console.log("sqrtPb", sqrtPb);
+
+              // current tick
+              const tickCurrent = await facadeUni._getTickAtSqrtRatio(slot0.sqrtPriceX96);
+              console.log("tickCurrent", tickCurrent);
+
+              // we know: x = amount of A, pA, pB, P. What is amount of B?
+              // https://atiselsts.github.io/pdfs/uniswap-v3-liquidity-math.pdf
+              // section 3.2.1: we know x, pA, pb, P, we need to find y
+              // Lx = x / (sqrtP * sqrtPb) / (sqrtPb - sqrtP)
+              // y = Lx * (sqrtP - sqrtPa)
+
+              const q96 = BigNumber.from(2).pow(96);
+              const liquidityAmountX = amountA.mul(sqrtP.mul(sqrtPb)).div(sqrtPb.sub(sqrtP)).div(q96);
+              const amountB = liquidityAmountX.mul(sqrtP.sub(sqrtPa)).div(q96);
+              console.log("liquidityAmountX", liquidityAmountX);
+              console.log("amountB", amountB);
+
+              const liquidityAmount = await facadeUni.getLiquidityForAmounts(sqrtP, tickLowerA, tickUpperB, amountA, 0);
+              console.log("liquidityAmount", liquidityAmount);
+
+              const requiredAmounts = await facadeUni.getAmountsForLiquidity(sqrtP, tickLowerA, tickUpperB, liquidityAmount);
+              console.log("requiredAmounts", requiredAmounts);
+
+              // prepare initial amounts of both token
+              await tokenA.approve(uniswapV3Callee.address, amountA); // requiredAmounts.amount0);
+              await tokenB.approve(uniswapV3Callee.address, requiredAmounts.amount1);
+
+              console.log("balance before A1", await tokenA.balanceOf(signer.address));
+              console.log("balance before B1", await tokenB.balanceOf(signer.address));
+              await uniswapV3Callee.mint(pool.address, signer.address, tickLowerA, tickUpperB, liquidityAmount, {gasLimit: 9_000_000});
+              console.log("balance after A1", await tokenA.balanceOf(signer.address));
+              console.log("balance after B1", await tokenB.balanceOf(signer.address));
+              lowerTickNarrow = tickLowerA;
+              upperTickNarrow = tickUpperB;
+              liquidityAmountNarrow = liquidityAmount;
+              console.log("slot0 after narrow deposit", await pool.slot0());
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot2);
             });
 
+            it("should not change price", async () => {
+              const slot0 = await pool.slot0();
+              console.log(slot0);
+              expect(slot0.sqrtPriceX96).eq(sqrtPriceX96Wide);
+            });
+
+            describe("Swap B => A (buy A)", () => {
+              const swapAmountB: string = "800";
+              let snapshot3: string;
+              before(async function () {
+                snapshot3 = await TimeUtils.snapshot();
+
+                const amountToSwapB = parseUnits(swapAmountB, decimalsB);
+
+                await tokenB.connect(signer2).approve(uniswapV3Callee.address, amountToSwapB);
+
+                console.log("signer2.balance before A2", await tokenA.balanceOf(signer2.address));
+                console.log("signer2.balance before B2", await tokenB.balanceOf(signer2.address));
+                await uniswapV3Callee.connect(signer2).swap(pool.address, signer2.address, tokenB.address, amountToSwapB);
+                console.log("signer2.balance after A2", await tokenA.balanceOf(signer2.address));
+                console.log("signer2.balance after B2", await tokenB.balanceOf(signer2.address));
+
+                console.log("slot0 after narrow swap", await pool.slot0());
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot3);
+              });
+
+              it("pool should have expected liquidity and prices", async () => {
+                const liquidity = await pool.liquidity();
+                console.log("liquidity", liquidity);
+                expect(liquidity).gt(0);
+
+                const priceA = await facadeUni.getPrice(pool.address, tokenA.address);
+                const priceB = await facadeUni.getPrice(pool.address, tokenB.address);
+                console.log("priceA", priceA);
+                console.log("priceB", priceB);
+                console.log("slot0 after swap", await pool.slot0());
+
+                console.log("balance before A3", await tokenA.balanceOf(signer.address));
+                console.log("balance before B3", await tokenB.balanceOf(signer.address));
+                await pool.burn(lowerTickNarrow, upperTickNarrow, liquidityAmountNarrow);
+                await pool.collect(signer.address, lowerTickNarrow, upperTickNarrow, Misc.MAX_UINT_128, Misc.MAX_UINT_128);
+                console.log("balance after A3", await tokenA.balanceOf(signer.address));
+                console.log("balance after B3", await tokenB.balanceOf(signer.address));
+
+
+                console.log("signer1. balance before A4", await tokenA.balanceOf(signer1.address));
+                console.log("signer1. balance before B4", await tokenB.balanceOf(signer1.address));
+                await pool.connect(signer1).burn(lowerTickWide, upperTickWide, liquidityAmountWide);
+                await pool.connect(signer1).collect(signer1.address, lowerTickWide, upperTickWide, Misc.MAX_UINT_128, Misc.MAX_UINT_128);
+                console.log("signer1. balance after A4", await tokenA.balanceOf(signer1.address));
+                console.log("signer1. balance after B4", await tokenB.balanceOf(signer1.address));
+              });
+
+            });
           });
         });
       });
