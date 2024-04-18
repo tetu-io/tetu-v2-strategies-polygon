@@ -23,6 +23,25 @@ contract MockUniswapV3Pool {
   mapping(bytes32 => ActionResult) internal _mintResults;
   mapping(bytes32 => ActionResult) internal _burnResults;
   mapping(bytes32 => ActionResult) internal _collectResults;
+  address private _token0;
+  address private _token1;
+
+  //region --------------------------------- Tokens
+  function setTokens(address token0_, address token1_) external {
+    _token0 = token0_;
+    _token1 = token1_;
+  }
+
+  function token0() external view returns (address) {
+    return _token0;
+  }
+
+  function token1() external view returns (address) {
+    return _token1;
+  }
+
+  //endregion --------------------------------- Tokens
+
 
   //region --------------------------------- Slot0
 

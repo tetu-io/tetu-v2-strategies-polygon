@@ -4,8 +4,9 @@ pragma solidity 0.8.17;
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "../integrations/uniswap/IUniswapV3Pool.sol";
-import "./Univ3TokenSellerLib.sol";
 import "../integrations/uniswap/IUniswapV3MintCallback.sol";
+import "./Univ3TokenSellerLib.sol";
+import "hardhat/console.sol";
 
 /// @notice Deposit amount of token A to the pool under control using narrow tick range P <= Pa < Pb
 /// where P - current price, Pa and Pb - lower and upper bounds of the range, Pa - P <= tickSpacing
@@ -65,6 +66,8 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
   error OnlyOwner();
   error OnlyOwnerOrOperator();
 
+  error OnlyPool();
+
   //endregion ---------------------- Errors
 
   //region ---------------------- Constructor
@@ -108,8 +111,6 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
   function isPositionOpened() public view returns (bool) {
     return state.liquidityAmount != 0;
   }
-
-  // todo calc tick by price (to be able to setup minTick)
   //endregion ---------------------- View
 
   //region ---------------------- Configure
@@ -191,8 +192,9 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
   //region ---------------------- UniswapV3 callbacks
   /// @notice Uniswap V3 callback fn, called back on pool.mint
   function uniswapV3MintCallback(uint amount0Owed, uint amount1Owed, bytes calldata data) external override {
-    address sender = abi.decode(data, (address));
-    onlyOwnerOrOperator(sender);
+    if (msg.sender != address(pool)) revert OnlyPool();
+
+    onlyOwnerOrOperator(abi.decode(data, (address))); // todo do we need this check?
 
     if (amount0Owed != 0) {
       IERC20(IUniswapV3Pool(msg.sender).token0()).transfer(msg.sender, amount0Owed);
