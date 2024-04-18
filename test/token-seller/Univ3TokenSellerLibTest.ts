@@ -30,6 +30,17 @@ describe('Univ3TokenSellerLibTest', () => {
     await TimeUtils.rollback(snapshotBefore);
   });
 
+  async function getSqrtPriceX96(tick: number): Promise<BigNumber> {
+    return facadeUni._getSqrtRatioAtTick(tick);
+  }
+
+  async function getNarrowTickRange(tick: number, tickRangeSize: number, tickSpacing: number, tickLimit: number, poolSwapTokens: boolean): Promise<{
+    lowerTick: number,
+    upperTick: number
+  }> {
+    return facade.getNarrowTickRange(await getSqrtPriceX96(tick), tick, tickRangeSize, tickSpacing, tickLimit, poolSwapTokens);
+  }
+
   describe("Calculate tick range", () => {
     describe("calcTickRangeSymmetrically", () => {
       it("should return expected values if tick > 0, tickSpacing = 5", async () => {
@@ -55,138 +66,276 @@ describe('Univ3TokenSellerLibTest', () => {
       });
     });
     describe("getNarrowTickRange", () => {
-      describe("tickSpacing = 3", () => {
-        describe("minTick is not used", () => {
-          describe("tick != tickLower", () => {
-            it("should return expected values if tick is negative", async () => {
-              const {lowerTick, upperTick} = await facade.getNarrowTickRange(-10, 2, 3, -100);
-              expect(lowerTick).eq(-9);
-              expect(upperTick).eq(-3);
+      describe("poolSwapTokens is false", () => {
+        describe("tickSpacing = 3", () => {
+          describe("tickLimit is not used", () => {
+            describe("tick != tickLower", () => {
+              it("should return expected values if tick is negative", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(-10, 2, 3, -100, false);
+                expect(lowerTick).eq(-9);
+                expect(upperTick).eq(-3);
+              });
+              it("should return expected values if tick is positive", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(10, 2, 3, -100, false);
+                expect(lowerTick).eq(12);
+                expect(upperTick).eq(18);
+              });
             });
-            it("should return expected values if tick is positive", async () => {
-              const {lowerTick, upperTick} = await facade.getNarrowTickRange(10, 2, 3, -100);
-              expect(lowerTick).eq(12);
-              expect(upperTick).eq(18);
+            describe("tick == tickLower", () => {
+              it("should return expected values if tick is negative", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(-9, 2, 3, -100, false);
+                expect(lowerTick).eq(-9);
+                expect(upperTick).eq(-3);
+              });
+              it("should return expected values if tick is positive", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(12, 2, 3, -100, false);
+                expect(lowerTick).eq(12);
+                expect(upperTick).eq(18);
+              });
             });
           });
-          describe("tick == tickLower", () => {
-            it("should return expected values if tick is negative", async () => {
-              const {lowerTick, upperTick} = await facade.getNarrowTickRange(-9, 2, 3, -100);
+          describe("tickLimit is used", () => {
+            describe("minTick is divisible on tickSpacing without remainder", () => {
+              describe("tick != tickLower", () => {
+                it("should return expected values if tick is negative, tick != tickLower", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(-10, 2, 3, -6, false);
+                  expect(lowerTick).eq(-6);
+                  expect(upperTick).eq(0);
+                });
+                it("should return expected values if tick is positive", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(10, 2, 3, 15, false);
+                  expect(lowerTick).eq(15);
+                  expect(upperTick).eq(21);
+                });
+              });
+              describe("tick == tickLower", () => {
+                it("should return expected values if tick is negative, tick != tickLower", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(-6, 2, 3, -6, false);
+                  expect(lowerTick).eq(-6);
+                  expect(upperTick).eq(0);
+                });
+                it("should return expected values if tick is positive", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(15, 2, 3, 15, false);
+                  expect(lowerTick).eq(15);
+                  expect(upperTick).eq(21);
+                });
+              });
+            });
+            describe("minTick is divisible on tickSpacing with remainder", () => {
+              describe("tick != tickLower", () => {
+                it("should return expected values if tick is negative", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(-10, 2, 3, -7, false);
+                  expect(lowerTick).eq(-6);
+                  expect(upperTick).eq(0);
+                });
+                it("should return expected values if tick is positive", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(10, 2, 3, 14, false);
+                  expect(lowerTick).eq(15);
+                  expect(upperTick).eq(21);
+                });
+              });
+              describe("tick == tickLower", () => {
+                it("should return expected values if tick is negative", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(-6, 2, 3, -7, false);
+                  expect(lowerTick).eq(-6);
+                  expect(upperTick).eq(0);
+                });
+                it("should return expected values if tick is positive", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(15, 2, 3, 14, false);
+                  expect(lowerTick).eq(15);
+                  expect(upperTick).eq(21);
+                });
+              });
+            });
+          });
+          describe("same ticks, different sqrtPriceX96", () => {
+            it("should reduce lowerTick on tickSpacing if tick==lowerTick but lowerPrice < price", async () => {
+              const {lowerTick, upperTick} = await facade.getNarrowTickRange(
+                (await getSqrtPriceX96(-9)).add(1),
+                -9,
+                2,
+                3,
+                -100,
+                false
+              );
+              expect(lowerTick).eq(-9+3);
+              expect(upperTick).eq(-3+3);
+            });
+            it("should NOT reduce lowerTick on tickSpacing if tick==lowerTick but lowerPrice >= price", async () => {
+              const {lowerTick, upperTick} = await facade.getNarrowTickRange(
+                (await getSqrtPriceX96(-9)),
+                -9,
+                2,
+                3,
+                -100,
+                false
+              );
               expect(lowerTick).eq(-9);
               expect(upperTick).eq(-3);
-            });
-            it("should return expected values if tick is positive", async () => {
-              const {lowerTick, upperTick} = await facade.getNarrowTickRange(12, 2, 3, -100);
-              expect(lowerTick).eq(12);
-              expect(upperTick).eq(18);
             });
           });
         });
-        describe("minTick is used", () => {
-          describe("minTick is divisible on tickSpacing without remainder", () => {
-            describe("tick != tickLower", () => {
-              it("should return expected values if tick is negative, tick != tickLower", async () => {
-                const {lowerTick, upperTick} = await facade.getNarrowTickRange(-10, 2, 3, -6);
-                expect(lowerTick).eq(-6);
-                expect(upperTick).eq(0);
+        describe("tickSpacing = 1", () => {
+          describe("tickLimit is not used", () => {
+            describe("tick != tickLower", async () => {
+              it("should return expected values if tick is negative", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(-10, 2, 1, -100, false);
+                expect(lowerTick).eq(-10);
+                expect(upperTick).eq(-8);
               });
               it("should return expected values if tick is positive", async () => {
-                const {lowerTick, upperTick} = await facade.getNarrowTickRange(10, 2, 3, 15);
-                expect(lowerTick).eq(15);
-                expect(upperTick).eq(21);
+                const {lowerTick, upperTick} = await getNarrowTickRange(10, 2, 1, -100, false);
+                expect(lowerTick).eq(10);
+                expect(upperTick).eq(12);
               });
             });
-            describe("tick == tickLower", () => {
-              it("should return expected values if tick is negative, tick != tickLower", async () => {
-                const {lowerTick, upperTick} = await facade.getNarrowTickRange(-6, 2, 3, -6);
-                expect(lowerTick).eq(-6);
-                expect(upperTick).eq(0);
+            describe("tick == tickLower", async () => {
+              it("should return expected values if tick is negative", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(-9, 2, 1, -100, false);
+                expect(lowerTick).eq(-9);
+                expect(upperTick).eq(-7);
               });
               it("should return expected values if tick is positive", async () => {
-                const {lowerTick, upperTick} = await facade.getNarrowTickRange(15, 2, 3, 15);
-                expect(lowerTick).eq(15);
-                expect(upperTick).eq(21);
+                const {lowerTick, upperTick} = await getNarrowTickRange(12, 2, 1, -100, false);
+                expect(lowerTick).eq(12);
+                expect(upperTick).eq(14);
               });
             });
           });
-          describe("minTick is divisible on tickSpacing with remainder", () => {
-            describe("tick != tickLower", () => {
-              it("should return expected values if tick is negative", async () => {
-                const {lowerTick, upperTick} = await facade.getNarrowTickRange(-10, 2, 3, -7);
+          describe("tickLimit is used", () => {
+            describe("tickLimit is divisible on tickSpacing without remainder", () => {
+              it("should return expected values if tick is negative, tick != tickLower", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(-10, 6, 1, -6, false);
                 expect(lowerTick).eq(-6);
                 expect(upperTick).eq(0);
               });
               it("should return expected values if tick is positive", async () => {
-                const {lowerTick, upperTick} = await facade.getNarrowTickRange(10, 2, 3, 14);
+                const {lowerTick, upperTick} = await getNarrowTickRange(10, 6, 1, 15, false);
                 expect(lowerTick).eq(15);
                 expect(upperTick).eq(21);
               });
             });
-            describe("tick == tickLower", () => {
+            describe("tickLimit is divisible on tickSpacing with remainder", () => {
               it("should return expected values if tick is negative", async () => {
-                const {lowerTick, upperTick} = await facade.getNarrowTickRange(-6, 2, 3, -7);
-                expect(lowerTick).eq(-6);
-                expect(upperTick).eq(0);
+                const {lowerTick, upperTick} = await getNarrowTickRange(-10, 6, 1, -7, false);
+                expect(lowerTick).eq(-7);
+                expect(upperTick).eq(-1);
               });
               it("should return expected values if tick is positive", async () => {
-                const {lowerTick, upperTick} = await facade.getNarrowTickRange(15, 2, 3, 14);
-                expect(lowerTick).eq(15);
-                expect(upperTick).eq(21);
+                const {lowerTick, upperTick} = await getNarrowTickRange(10, 6, 1, 14, false);
+                expect(lowerTick).eq(14);
+                expect(upperTick).eq(20);
               });
             });
           });
         });
       });
-      describe("tickSpacing = 1", () => {
-        describe("minTick is not used", () => {
-          describe("tick != tickLower", () => {
-            it("should return expected values if tick is negative", async () => {
-              const {lowerTick, upperTick} = await facade.getNarrowTickRange(-10, 2, 1, -100);
-              expect(lowerTick).eq(-10);
-              expect(upperTick).eq(-8);
+      describe("poolSwapTokens is true", () => {
+        describe("tickSpacing = 3", () => {
+          describe("tickLimit is not used", () => {
+            describe("tick != tickLower", () => {
+              it("should return expected values if tick is negative", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(-10, 2, 3, 100, true);
+                expect(lowerTick).eq(-18);
+                expect(upperTick).eq(-12);
+              });
+              it("should return expected values if tick is positive", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(10, 2, 3, 100, true);
+                expect(lowerTick).eq(3);
+                expect(upperTick).eq(9);
+              });
             });
-            it("should return expected values if tick is positive", async () => {
-              const {lowerTick, upperTick} = await facade.getNarrowTickRange(10, 2, 1, -100);
-              expect(lowerTick).eq(10);
-              expect(upperTick).eq(12);
-            });
-          });
-          describe("tick == tickLower", () => {
-            it("should return expected values if tick is negative", async () => {
-              const {lowerTick, upperTick} = await facade.getNarrowTickRange(-9, 2, 1, -100);
-              expect(lowerTick).eq(-9);
-              expect(upperTick).eq(-7);
-            });
-            it("should return expected values if tick is positive", async () => {
-              const {lowerTick, upperTick} = await facade.getNarrowTickRange(12, 2, 1, -100);
-              expect(lowerTick).eq(12);
-              expect(upperTick).eq(14);
-            });
-          });
-        });
-        describe("minTick is used", () => {
-          describe("minTick is divisible on tickSpacing without remainder", () => {
-            it("should return expected values if tick is negative, tick != tickLower", async () => {
-              const {lowerTick, upperTick} = await facade.getNarrowTickRange(-10, 6, 1, -6);
-              expect(lowerTick).eq(-6);
-              expect(upperTick).eq(0);
-            });
-            it("should return expected values if tick is positive", async () => {
-              const {lowerTick, upperTick} = await facade.getNarrowTickRange(10, 6, 1, 15);
-              expect(lowerTick).eq(15);
-              expect(upperTick).eq(21);
+            describe("tick == tickLower", () => {
+              it("should return expected values if tick is negative", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(-9, 2, 3, 100, true);
+                expect(lowerTick).eq(-15);
+                expect(upperTick).eq(-9);
+              });
+              it("should return expected values if tick is positive", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(12, 2, 3, 100, true);
+                expect(lowerTick).eq(6);
+                expect(upperTick).eq(12);
+              });
             });
           });
-          describe("minTick is divisible on tickSpacing with remainder", () => {
-            it("should return expected values if tick is negative", async () => {
-              const {lowerTick, upperTick} = await facade.getNarrowTickRange(-10, 6, 1, -7);
-              expect(lowerTick).eq(-7);
-              expect(upperTick).eq(-1);
+          describe("tickLimit is used", () => {
+            describe("minTick is divisible on tickSpacing without remainder", () => {
+              describe("tick != tickLower", () => {
+                it("should return expected values if tick is negative, tick != tickLower", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(-10, 2, 3, -12, true);
+                  expect(lowerTick).eq(-18);
+                  expect(upperTick).eq(-12);
+                });
+                it("should return expected values if tick is positive", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(10, 2, 3, 9, true);
+                  expect(lowerTick).eq(3);
+                  expect(upperTick).eq(9);
+                });
+              });
+              describe("tick == tickLower", () => {
+                it("should return expected values if tick is negative, tick != tickLower", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(-6, 2, 3, -6, true);
+                  expect(lowerTick).eq(-12);
+                  expect(upperTick).eq(-6);
+                });
+                it("should return expected values if tick is positive", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(15, 2, 3, 15, true);
+                  expect(lowerTick).eq(9);
+                  expect(upperTick).eq(15);
+                });
+              });
             });
-            it("should return expected values if tick is positive", async () => {
-              const {lowerTick, upperTick} = await facade.getNarrowTickRange(10, 6, 1, 14);
-              expect(lowerTick).eq(14);
-              expect(upperTick).eq(20);
+            describe("minTick is divisible on tickSpacing with remainder", () => {
+              describe("tick != tickLower", () => {
+                it("should return expected values if tick is negative", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(-10, 2, 3, -7, true);
+                  expect(lowerTick).eq(-18);
+                  expect(upperTick).eq(-12);
+                });
+                it("should return expected values if tick is positive", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(10, 2, 3, 14, true);
+                  expect(lowerTick).eq(3);
+                  expect(upperTick).eq(9);
+                });
+              });
+              describe("tick == tickLower", () => {
+                it("should return expected values if tick is negative", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(-6, 2, 3, -7, true);
+                  expect(lowerTick).eq(-15);
+                  expect(upperTick).eq(-9);
+                });
+                it("should return expected values if tick is positive", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(15, 2, 3, 14, true);
+                  expect(lowerTick).eq(6);
+                  expect(upperTick).eq(12);
+                });
+              });
+            });
+          });
+          describe("same ticks, different sqrtPriceX96", () => {
+            it("should reduce upperTick on tickSpacing if tick==upperTick but upperPrice > price", async () => {
+              const {lowerTick, upperTick} = await facade.getNarrowTickRange(
+                (await getSqrtPriceX96(-9)).sub(1),
+                -9,
+                2,
+                3,
+                100,
+                true
+              );
+              expect(lowerTick).eq(-9-3-6);
+              expect(upperTick).eq(-9-3);
+            });
+            it("should NOT reduce upperTick on tickSpacing if tick==upperTick but upperPrice <= price", async () => {
+              const {lowerTick, upperTick} = await facade.getNarrowTickRange(
+                (await getSqrtPriceX96(-9)),
+                -9,
+                2,
+                3,
+                100,
+                true
+              );
+              expect(lowerTick).eq(-15);
+              expect(upperTick).eq(-9);
             });
           });
         });
@@ -264,16 +413,15 @@ describe('Univ3TokenSellerLibTest', () => {
           thresholdRatio: parseUnits(p.config?.thresholdRatio ?? "0", 5), // DENOMINATOR_INT
           thresholdTokenB: parseUnits(p.config?.thresholdTokenB ?? "0", decimalsB),
         // not used
-          receiver: ethers.Wallet.createRandom().address,
           amountA: 0,
-          minTick: 0,
+          tickLimit: 0,
           tickRangeSize: 0
         });
 
         await facade.setState({
           lowerTick: p.state.lowerTickDeltaFromTick + tick,
           upperTick: p.state.upperTickDeltaFromTick + tick,
-          liquidityAmount: 0, // not used
+          liquidityAmount: 1,
           lastRefreshPoolTimestamp: p.state.lastRefreshPoolTimestampDelta
             ? (await ethers.provider.getBlock(ethers.provider.blockNumber)).timestamp + p.state.lastRefreshPoolTimestampDelta
             : 0,
@@ -431,7 +579,7 @@ describe('Univ3TokenSellerLibTest', () => {
         amountA: string;
         config: {
           tickRangeSize: number;
-          minTick: number;
+          tickLimit: number;
         }
         pool: {
           amount0: string;
@@ -462,6 +610,7 @@ describe('Univ3TokenSellerLibTest', () => {
         const decimalsB = p.decimalsB ?? 6;
 
 // set up pool mock
+        const amountA = parseUnits(p.amountA, decimalsA);
         const amount0 = parseUnits(p.pool.amount0, poolSwapTokens ? decimalsB: decimalsA);
         const amount1 = parseUnits(p.pool.amount1, poolSwapTokens ? decimalsA: decimalsB);
 
@@ -470,13 +619,20 @@ describe('Univ3TokenSellerLibTest', () => {
         // tick = log_{sqrt(1.0001)}(sqrt(price))
         const tick = await facadeUni._getTickAtSqrtRatio(sqrtPriceX96);
 
-        const expectedRange = await facade.getNarrowTickRange(tick, p.config.tickRangeSize, p.tickSpacing, p.config.minTick);
+        const expectedRange = await facade.getNarrowTickRange(
+          sqrtPriceX96,
+          tick,
+          p.config.tickRangeSize,
+          p.tickSpacing,
+          p.config.tickLimit,
+          !!p.poolSwapTokens
+        );
         const expectedLiquidity = await facadeUni.getLiquidityForAmounts(
           sqrtPriceX96,
           expectedRange.lowerTick,
           expectedRange.upperTick,
-          p.poolSwapTokens ? 0 : p.amountA,
-          p.poolSwapTokens ? p.amountA : 0,
+          p.poolSwapTokens ? 0 : amountA,
+          p.poolSwapTokens ? amountA : 0,
         );
 
         await mockedPool.setMint(
@@ -496,16 +652,14 @@ describe('Univ3TokenSellerLibTest', () => {
 
 // set up facade
         await facade.setConfig({
-          minTick: p.config.minTick,
+          tickLimit: p.config.tickLimit,
           tickRangeSize: p.config.tickRangeSize,
           // not used
           thresholdLastRefreshPoolSec: 0,
           thresholdRatio: 0,
           thresholdTokenB: 0,
-          receiver: ethers.Wallet.createRandom().address,
-          amountA: 0,
+          amountA,
         });
-        const amountA = parseUnits(p.amountA, decimalsA);
 
         const tr = await facade.enter(mockedPool.address, p.tickSpacing, amountA, poolSwapTokens);
         const cr = await tr.wait();
@@ -544,7 +698,7 @@ describe('Univ3TokenSellerLibTest', () => {
         amountA: "5000",
         tickSpacing: 1,
         config: {
-          minTick: -888_888,
+          tickLimit: -100_000,
           tickRangeSize: 10
         }
       }
