@@ -20,7 +20,6 @@ import {writeFileSyncRestoreFolder} from "../baseUT/utils/FileUtils";
 import {writeFileSync} from "fs";
 import {Univ3TokenSellerLib} from "../../typechain/contracts/token-seller/Univ3TokenSeller";
 import TokenSellerConfigStruct = Univ3TokenSellerLib.TokenSellerConfigStruct;
-import {token} from "../../typechain/@openzeppelin/contracts";
 import {MockHelper} from "../baseUT/helpers/MockHelper";
 
 /**
@@ -236,7 +235,7 @@ describe('TokenSellerTest', () => {
     }
     start: IState;
     init: IState;
-    afterSwap: IState;
+    afterSwap: IState[];
     afterRefresh: IState;
     final: IState;
   }
@@ -549,10 +548,15 @@ describe('TokenSellerTest', () => {
 
   function saveToCsv(states: IStateHistory[], tag?: string) {
     const pathOut = `${pathWithoutExt}${tag}.csv`
-    const subStates = ["start", "init", "afterSwap", "afterRefresh", "final"];
     const firstRow = ["param"];
     for (let i = 0; i < states.length; ++i) {
-      const items = subStates.map(x => `${x}:${i}`);
+      const items = [
+        `start:${i}`,
+        `init:${i}`,
+        ...states[i].afterSwap.map((x, index) => `afterSwap:${i}:${index}`),
+        `afterRefresh:${i}`,
+        `final:${i}`,
+      ];
       firstRow.push(...items);
     }
     writeFileSyncRestoreFolder(pathOut, firstRow.join(";") + '\n', { encoding: 'utf8', flag: 'w'});
@@ -563,7 +567,11 @@ describe('TokenSellerTest', () => {
       columns.push(
         stateToArray(states[i].start),
         stateToArray(states[i].init),
-        stateToArray(states[i].afterSwap),
+      );
+      columns.push(
+        ...states[i].afterSwap.map(x => stateToArray(x)),
+      );
+      columns.push(
         stateToArray(states[i].afterRefresh),
         stateToArray(states[i].final),
       );
@@ -585,9 +593,13 @@ describe('TokenSellerTest', () => {
     const data = states.map(x => stateHistoryToArray(x));
     for (let i = 0; i < headers.length; ++i) {
       const line: (string | number | BigNumber)[] = [headers[i]];
-      for (const x of data) {
+      for (let j = 0; j < data.length; ++j) {
+        const x = data[j];
         line.push(x[i]);
-        line.push(...subStates.slice(1).map(_ => ""));
+        line.push(""); // init
+        line.push(...states[j].afterSwap.map(_ => ""));
+        line.push(""); // afterRefresh
+        line.push(""); // final
       }
       writeFileSync(
         pathOut,
@@ -599,61 +611,23 @@ describe('TokenSellerTest', () => {
   }
   //endregion Stat utils
 
-  describe("refreshPool (init => swap => refreshPool => withdraw)", () => {
+  describe("refreshPool (init => {swap => refreshPool} * N => withdraw)", () => {
     //region Test data
     const MAIN_POOLS: IMainPoolParams[] = [
+// Main set
+      {tag: "price 1:1,0.01%", fee: 100, amountA: "1000", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
+      {tag: "price 1000:1,0.01%", fee: 100, amountA: "1000", amountB: "1", pricesRange: ["0.01", "100"], poolSwapTokens: false},
+      {tag: "price 1:1000,0.01%", fee: 100, amountA: "1", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
+
+      {tag: "price 1:1, swapped, 0.03%", fee: 3000, amountA: "1000", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: true},
+      {tag: "price 1:1000, swapped, 0.03%", fee: 3000, amountA: "1", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: true},
+      {tag: "price 1000:1, swapped, 0.03%", fee: 3000, amountA: "1000", amountB: "1", pricesRange: ["0.01", "100"], poolSwapTokens: true},
+
+// Additional set (study)
       // {tag: "price 1:1, swapped, 0.01%", fee: 100, amountA: "1000", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: true},
       // {tag: "price 1:1000, swapped, 0.01%", fee: 100, amountA: "1", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: true},
       // {tag: "price 1000:1, swapped, 0.01%", fee: 100, amountA: "1000", amountB: "1", pricesRange: ["0.01", "100"], poolSwapTokens: true},
-      {
-        tag: "price 1:1, swapped, 0.03%",
-        fee: 3000,
-        amountA: "1000",
-        amountB: "1000",
-        pricesRange: ["0.01", "100"],
-        poolSwapTokens: true
-      },
-      {
-        tag: "price 1:1000, swapped, 0.03%",
-        fee: 3000,
-        amountA: "1",
-        amountB: "1000",
-        pricesRange: ["0.01", "100"],
-        poolSwapTokens: true
-      },
-      {
-        tag: "price 1000:1, swapped, 0.03%",
-        fee: 3000,
-        amountA: "1000",
-        amountB: "1",
-        pricesRange: ["0.01", "100"],
-        poolSwapTokens: true
-      },
 
-      {
-        tag: "price 1000:1,0.01%",
-        fee: 100,
-        amountA: "1000",
-        amountB: "1",
-        pricesRange: ["0.01", "100"],
-        poolSwapTokens: false
-      },
-      {
-        tag: "price 1:1,0.01%",
-        fee: 100,
-        amountA: "1000",
-        amountB: "1000",
-        pricesRange: ["0.01", "100"],
-        poolSwapTokens: false
-      },
-      {
-        tag: "price 1:1000,0.01%",
-        fee: 100,
-        amountA: "1",
-        amountB: "1000",
-        pricesRange: ["0.01", "100"],
-        poolSwapTokens: false
-      },
       // {tag: "price 1000:1,1%", fee: 10000, amountA: "1000", amountB: "1", pricesRange: ["0.01", "100"], poolSwapTokens: false},
       // {tag: "price 1:1,1%", fee: 10000, amountA: "1000", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
       // {tag: "price 1:1000,1%", fee: 10000, amountA: "1", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
@@ -663,26 +637,21 @@ describe('TokenSellerTest', () => {
     ];
 
     const NARROW_RANGES: INarrowRangeParams[] = [
-      {
-        tag: "10ths,5",
-        balanceA: "50000",
-        amountA: "10000",
-        sqrtMinPriceRatio: "0.1",
-        thresholdRatio: "0",
-        thresholdTokenB: "0",
-        tickRangeSize: 5
-      },
+      {tag: "10ths,5", balanceA: "50000", amountA: "10000", sqrtMinPriceRatio: "0.1", thresholdRatio: "0", thresholdTokenB: "0", tickRangeSize: 5},
       // {tag: "100ths,3", balanceA: "500000", amountA: "100000", sqrtMinPriceRatio: "0.01", thresholdRatio: "0", thresholdTokenB: "0", tickRangeSize: 3},
     ];
 
     const SWAP_SETS: ISwapParams[] = [
-      {tag: "B333", swapTokenA: false, swapAmount: "333"},
-      {tag: "A333", swapTokenA: true, swapAmount: "333"},
       {tag: "B1000", swapTokenA: false, swapAmount: "1000"},
       {tag: "A1000", swapTokenA: true, swapAmount: "1000"},
       {tag: "B10000", swapTokenA: false, swapAmount: "10000"},
       {tag: "A10000", swapTokenA: true, swapAmount: "10000"},
+      {tag: "B333", swapTokenA: false, swapAmount: "333"},
+      {tag: "A333", swapTokenA: true, swapAmount: "333"},
     ];
+
+    const MULTI_SWAPS_THRESHOLD_RATIO: string[] = ["0.01", "0.1", "0.2", "0.5", "0.7", "1"];
+    const MULTI_SWAPS_AMOUNTS_B: string[] = ["0.1", "0.5", "1", "5", "10", "50", "100", "500", "1000", "5000", "10000"];
     //endregion Test data
 
     MAIN_POOLS.forEach(function (mainPool: IMainPoolParams) {
@@ -824,6 +793,7 @@ describe('TokenSellerTest', () => {
               expect(init.isPositionOpened).eq(true);
             });
 
+            // test single swaps
             SWAP_SETS.forEach(function (swapParams: ISwapParams) {
               describe(`Swap ${swapParams.tag}`, () => {
                 let snapshot3: string;
@@ -979,6 +949,9 @@ describe('TokenSellerTest', () => {
 
                       await pool.connect(signer1).burn(lowerTickWide, upperTickWide, liquidityAmountWide);
                       await pool.connect(signer1).collect(signer1.address, lowerTickWide, upperTickWide, Misc.MAX_UINT_128, Misc.MAX_UINT_128);
+                      lowerTickWide = 0;
+                      upperTickWide = 0;
+                      liquidityAmountWide = BigNumber.from(0);
                       console.log("Pool is empty");
 
                       const {sqrtPriceX96, tick} = await pool.slot0();
@@ -1000,7 +973,7 @@ describe('TokenSellerTest', () => {
                         derivedValues,
                         start,
                         init,
-                        afterSwap,
+                        afterSwap: [afterSwap],
                         afterRefresh,
                         final
                       });
@@ -1050,6 +1023,257 @@ describe('TokenSellerTest', () => {
                         final.balancesAbSigner[indexSourceToken] + final.balancesAbSigner1[indexSourceToken]
                         - (start.balancesAbSigner[indexSourceToken] + start.balancesAbSigner1[indexSourceToken])
                       ).approximately(Number(swapParams.swapAmount), 1e-3);
+                      expect(final.balancesAbSigner[indexSourceToken]).gte(start.balancesAbSigner[indexSourceToken]);
+                      expect(final.balancesAbSigner1[indexSourceToken]).gt(start.balancesAbSigner1[indexSourceToken]);
+                    });
+                    it("should have expected state", async () => {
+                      expect(final.needToRefresh).eq(false);
+                      expect(final.isPositionOpened).eq(false);
+                    });
+                  });
+                });
+              });
+            });
+
+            // test multiple swaps with various values of threshold-ratio
+            MULTI_SWAPS_THRESHOLD_RATIO.forEach(function (thresholdRatio: string) {
+              let listAfterSwap: IState[];
+              let afterSwap: IState;
+              let totalSwapAmount: number;
+              describe(`ThresholdRatio=${thresholdRatio}, multiswap B=>A up to needRefresh=true`, () => {
+                let snapshot3: string;
+                before(async function () {
+                  snapshot3 = await TimeUtils.snapshot();
+                  listAfterSwap = [];
+
+                  const tokenSellerConfig = await tokenSeller.config();
+                  await tokenSeller.setConfig({
+                    ...tokenSellerConfig,
+                    thresholdRatio: parseUnits(thresholdRatio, 5)
+                  })
+
+                  totalSwapAmount = 0;
+                  for (const amountB of MULTI_SWAPS_AMOUNTS_B) {
+                    totalSwapAmount += Number(amountB);
+                    const amountToSwap = parseUnits(amountB, decimalsB);
+                    await tokenB.connect(signer2).approve(uniswapV3Callee.address, amountToSwap);
+                    await uniswapV3Callee.connect(signer2).swap(pool.address, signer2.address, tokenB.address, amountToSwap);
+                    const {sqrtPriceX96, tick} = await pool.slot0();
+                    const state = {
+                      mainPool: await getCurrentWideRangeState(mainPool, sqrtPriceX96, lowerTickWide, upperTickWide, liquidityAmountWide),
+                      tick,
+                      sqrtPriceX96,
+                      needToRefresh: await tokenSeller.needToRefresh(),
+                      isPositionOpened: await tokenSeller.isPositionOpened(),
+                      narrowRange: await getCurrentNarrowRangeState(mainPool, tokenSeller, sqrtPriceX96),
+                      balancesAbTokenSeller: await getBalancesAB(tokenSeller.address),
+                      balancesAbSigner: await getBalancesAB(signer.address),
+                      balancesAbSigner1: await getBalancesAB(signer1.address),
+                      balancesAbSigner2: await getBalancesAB(signer2.address),
+                    }
+                    listAfterSwap.push(state);
+                    afterSwap = state;
+                    if (await tokenSeller.needToRefresh()) break;
+                  }
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot3);
+                });
+                it("swapper should receive positive amount of the target token", async () => {
+                  const indexTargetToken = 0; // token A
+                  expect(afterSwap.balancesAbSigner2[indexTargetToken]).gt(init.balancesAbSigner2[indexTargetToken]);
+                });
+                it("swapper should spend expected amount of the source token", async () => {
+                  const indexSourceToken = 1; // token B
+                  expect(
+                    afterSwap.balancesAbSigner2[indexSourceToken]
+                  ).eq(
+                    init.balancesAbSigner2[indexSourceToken] - totalSwapAmount
+                  );
+                });
+                it("should have expected state", async () => {
+                  if (Math.abs(afterSwap.tick - init.tick) > derivedValues.tickSpacing) {
+                    expect(afterSwap.needToRefresh).eq(true);
+                  }
+                  expect(afterSwap.isPositionOpened).eq(true);
+                });
+
+                describe("refreshPool", () => {
+                  let snapshot4: string;
+                  let afterRefresh: IState;
+
+                  before(async function () {
+                    console.log("Prepare to refresh the pool");
+                    snapshot4 = await TimeUtils.snapshot();
+
+                    await tokenSeller.refreshPool();
+                    console.log("The pool is refreshed");
+
+                    const {sqrtPriceX96, tick} = await pool.slot0();
+                    afterRefresh = {
+                      mainPool: await getCurrentWideRangeState(mainPool, sqrtPriceX96, lowerTickWide, upperTickWide, liquidityAmountWide),
+                      tick,
+                      sqrtPriceX96,
+                      needToRefresh: await tokenSeller.needToRefresh(),
+                      isPositionOpened: await tokenSeller.isPositionOpened(),
+                      narrowRange: await getCurrentNarrowRangeState(mainPool, tokenSeller, sqrtPriceX96),
+                      balancesAbTokenSeller: await getBalancesAB(tokenSeller.address),
+                      balancesAbSigner: await getBalancesAB(signer.address),
+                      balancesAbSigner1: await getBalancesAB(signer1.address),
+                      balancesAbSigner2: await getBalancesAB(signer2.address),
+                    }
+                  });
+                  after(async function () {
+                    await TimeUtils.rollback(snapshot4);
+                  });
+
+                  it("should not change current price and current tick", async () => {
+                    expect(afterRefresh.sqrtPriceX96).eq(afterSwap.sqrtPriceX96);
+                    expect(afterRefresh.tick).eq(afterSwap.tick);
+                  });
+                  it("new tick range should have expected size", async () => {
+                    expect(
+                      afterRefresh.narrowRange.upperTick - afterRefresh.narrowRange.lowerTick
+                    ).eq(
+                      derivedValues.tickSpacing * narrowRange.tickRangeSize
+                    );
+                  });
+                  it("new tick range should have expected bounds", async () => {
+                    if (mainPool.poolSwapTokens) {
+                      expect(
+                        (afterRefresh.tick - afterRefresh.narrowRange.upperTick) <= derivedValues.tickSpacing
+                        || afterRefresh.tick > derivedValues.tickLimit
+                      ).eq(true);
+                    } else {
+                      expect(
+                        (afterRefresh.narrowRange.lowerTick - afterRefresh.tick) < derivedValues.tickSpacing
+                        // special case: lowerTick - tickSpacing === tick, but price(lowerTick) < price(tick)
+                        || (afterRefresh.narrowRange.lowerTick - afterRefresh.tick) === derivedValues.tickSpacing
+                        || afterRefresh.tick < derivedValues.tickLimit
+                      ).eq(true);
+                    }
+                  });
+                  it("tokenSeller should withdraw some amount of token B", async () => {
+                    if (Math.abs(afterSwap.tick - init.tick) > derivedValues.tickSpacing) {
+                      expect(afterRefresh.balancesAbSigner[1]).gt(afterSwap.balancesAbSigner[1]);
+                      expect(afterRefresh.balancesAbTokenSeller[1]).eq(0);
+                    }
+                  });
+                  it("tokenSeller should deposit additional amount of token A", async () => {
+                    if (Math.abs(afterSwap.tick - init.tick) > derivedValues.tickSpacing) {
+                      expect(afterRefresh.balancesAbTokenSeller[0]).lt(afterSwap.balancesAbTokenSeller[0]);
+                    }
+                  });
+                  it("tokenSeller should deposit token A only", async () => {
+                    if (Math.abs(afterSwap.tick - init.tick) > derivedValues.tickSpacing) {
+                      expect(afterRefresh.narrowRange.liquidityAmount).gt(0);
+                      expect(afterRefresh.narrowRange.amountsAB[1]).eq(0);
+                      expect(afterRefresh.narrowRange.amountsAB[0]).approximately(Number(narrowRange.amountA), 1e-5);
+                    }
+                  });
+                  it("should have expected state", async () => {
+                    expect(afterRefresh.needToRefresh).eq(false);
+                    expect(afterRefresh.isPositionOpened).eq(true);
+                  });
+
+                  describe("exit from pool", () => {
+                    let snapshot5: string;
+                    let final: IState;
+                    before(async function () {
+                      console.log("Prepare to exit from the pool");
+                      snapshot5 = await TimeUtils.snapshot();
+
+                      await tokenSeller.closePosition();
+                      await tokenSeller.withdraw(signer.address, tokenA.address, await tokenSeller.balanceOf(tokenA.address));
+                      await tokenSeller.withdraw(signer.address, tokenB.address, await tokenSeller.balanceOf(tokenB.address));
+
+                      await pool.connect(signer1).burn(lowerTickWide, upperTickWide, liquidityAmountWide);
+                      await pool.connect(signer1).collect(signer1.address, lowerTickWide, upperTickWide, Misc.MAX_UINT_128, Misc.MAX_UINT_128);
+                      lowerTickWide = 0;
+                      upperTickWide = 0;
+                      liquidityAmountWide = BigNumber.from(0);
+                      console.log("Pool is empty");
+
+                      const {sqrtPriceX96, tick} = await pool.slot0();
+                      final = {
+                        mainPool: await getCurrentWideRangeState(mainPool, sqrtPriceX96, lowerTickWide, upperTickWide, liquidityAmountWide),
+                        tick,
+                        sqrtPriceX96,
+                        needToRefresh: await tokenSeller.needToRefresh(),
+                        isPositionOpened: await tokenSeller.isPositionOpened(),
+                        narrowRange: await getCurrentNarrowRangeState(mainPool, tokenSeller, sqrtPriceX96),
+                        balancesAbTokenSeller: await getBalancesAB(tokenSeller.address),
+                        balancesAbSigner: await getBalancesAB(signer.address),
+                        balancesAbSigner1: await getBalancesAB(signer1.address),
+                        balancesAbSigner2: await getBalancesAB(signer2.address),
+                      }
+
+                      registerResults(states, {
+                        inputParams: {
+                          mainPool,
+                          narrowRange: {
+                            ...narrowRange,
+                            thresholdRatio,
+                          },
+                          swapParams: {
+                            tag: `${listAfterSwap.length} swaps`,
+                            swapTokenA: false,
+                            swapAmount: totalSwapAmount.toString(),
+                          }
+                        },
+                        derivedValues,
+                        start,
+                        init,
+                        afterSwap: listAfterSwap,
+                        afterRefresh,
+                        final
+                      });
+                    });
+                    after(async function () {
+                      await TimeUtils.rollback(snapshot5);
+                    });
+
+                    it("pool should have NO liquidity", async () => {
+                      expect(await pool.liquidity()).eq(0);
+                    });
+                    it("tokenSeller should not have any tokens", async () => {
+                      expect(await final.balancesAbTokenSeller[0]).eq(0);
+                      expect(await final.balancesAbTokenSeller[1]).eq(0);
+                    });
+                    it("total amount of token A should be equal to the initial amount", async () => {
+                      expect(
+                        final.balancesAbSigner[0] + final.balancesAbSigner1[0] + final.balancesAbSigner2[0]
+                      ).approximately(
+                        start.balancesAbSigner[0] + start.balancesAbSigner1[0] + start.balancesAbSigner2[0],
+                        1e-5
+                      );
+                    });
+                    it("total amount of token B should be equal to the initial amount", async () => {
+                      expect(
+                        final.balancesAbSigner[1] + final.balancesAbSigner1[1] + final.balancesAbSigner2[1],
+                      ).approximately(
+                        start.balancesAbSigner[1] + start.balancesAbSigner1[1] + start.balancesAbSigner2[1],
+                        1e5
+                      );
+                    });
+                    it("swapper should spend expected amount of the source token", async () => {
+                      const indexSourceToken = 1; // token B
+                      expect(
+                        final.balancesAbSigner2[indexSourceToken]
+                      ).eq(
+                        start.balancesAbSigner2[indexSourceToken] - totalSwapAmount
+                      );
+                    });
+                    it("swapper should receive positive amount of the target token", async () => {
+                      const indexTargetToken = 0; // token A
+                      expect(final.balancesAbSigner2[indexTargetToken]).gt(start.balancesAbSigner2[indexTargetToken]);
+                    });
+                    it("both signer and pool-owner should receive swapped amount of the target token", async () => {
+                      const indexSourceToken = 1; // token B
+                      expect(
+                        final.balancesAbSigner[indexSourceToken] + final.balancesAbSigner1[indexSourceToken]
+                        - (start.balancesAbSigner[indexSourceToken] + start.balancesAbSigner1[indexSourceToken])
+                      ).approximately(totalSwapAmount, 1e-3);
                       expect(final.balancesAbSigner[indexSourceToken]).gte(start.balancesAbSigner[indexSourceToken]);
                       expect(final.balancesAbSigner1[indexSourceToken]).gt(start.balancesAbSigner1[indexSourceToken]);
                     });
@@ -1296,14 +1520,6 @@ describe('TokenSellerTest', () => {
   });
 
   describe("unit tests", () => {
-    let snapshotEach: string;
-    beforeEach(async function () {
-      snapshotEach = await TimeUtils.snapshot();
-    });
-    afterEach(async function () {
-      await TimeUtils.rollback(snapshotEach);
-    });
-
     const mainPool: IMainPoolParams = {
         tag: "price 1:1, swapped, 0.03%",
         fee: 3000,
@@ -1322,6 +1538,7 @@ describe('TokenSellerTest', () => {
       balanceA: "20000"
     }
 
+    let snapshotEach: string;
     let snapshot1: string;
     let pool: UniswapV3Pool;
     let tokenSeller: Univ3TokenSeller;
@@ -1353,9 +1570,50 @@ describe('TokenSellerTest', () => {
         // create token seller, put liquidity into narrow range
         tokenSeller = await createTokenSeller(pool, mainPool, narrowRange, false);
     });
-
     after(async function () {
       await TimeUtils.rollback(snapshot1);
+    });
+    beforeEach(async function () {
+      snapshotEach = await TimeUtils.snapshot();
+    });
+    afterEach(async function () {
+      await TimeUtils.rollback(snapshotEach);
+    });
+
+    // test threshold by time
+    describe("refreshPool", () => {
+      it("should skip refreshPool if not enough time passed since last call of refreshPool", async () => {
+        const tokenSellerConfig = await tokenSeller.config();
+        const thresholdLastRefreshPoolSec = 2; // sec
+        await tokenSeller.setConfig({
+          ...tokenSellerConfig,
+          thresholdRatio: parseUnits("0", 5),
+          thresholdLastRefreshPoolSec
+        })
+
+        await tokenA.transfer(tokenSeller.address, parseUnits(narrowRange.balanceA, decimalsA));
+        await tokenSeller.openPosition();
+
+        const needToRefreshBefore = await tokenSeller.needToRefresh();
+
+        // make first swap
+        const amountToSwap = parseUnits("10000", decimalsA);
+        await tokenA.connect(signer2).approve(uniswapV3Callee.address, amountToSwap);
+        await uniswapV3Callee.connect(signer2).swap(pool.address, signer2.address, tokenA.address, amountToSwap);
+
+        const needToRefreshAfterFirstSwap = await tokenSeller.needToRefresh();
+
+        function delay(ms: number) {
+          return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        await delay(3000);
+        await tokenSeller.setOwner(await tokenSeller.owner());
+        const needToRefreshAfter = await tokenSeller.needToRefresh();
+
+        expect(needToRefreshAfterFirstSwap).eq(false);
+        expect(needToRefreshAfter).eq(true);
+      });
     });
 
     describe("setConfig", () => {
@@ -1420,6 +1678,11 @@ describe('TokenSellerTest', () => {
         await tokenSeller.connect(owner).setOwner(newOwner.address);
         await expect(tokenSeller.connect(owner).acceptOwner()).revertedWithCustomError(tokenSeller, "ErrorPendingOwner");
       });
+
+      it("revert if new owner is zero", async () => {
+        const owner = await Misc.impersonate(await tokenSeller.owner());
+        await expect(tokenSeller.connect(owner).setOwner(Misc.ZERO_ADDRESS)).revertedWithCustomError(tokenSeller, "ErrorZeroAddress");
+      });
     });
 
     describe("openPosition / isPositionOpened / closePosition", () => {
@@ -1430,6 +1693,25 @@ describe('TokenSellerTest', () => {
 
         await tokenSeller.closePosition();
         expect(await tokenSeller.isPositionOpened()).eq(false);
+      });
+
+      it("should revert if the position is already opened", async () => {
+        await tokenA.transfer(tokenSeller.address, parseUnits(narrowRange.balanceA, decimalsA));
+        await tokenSeller.openPosition();
+        await expect(tokenSeller.openPosition()).revertedWithCustomError(tokenSeller, "AlreadyOpened");
+      });
+
+      it("should revert if balance is zero", async () => {
+        await expect(tokenSeller.openPosition()).revertedWithCustomError(tokenSeller, "ZeroAmountA");
+      });
+
+      it("should NOT revert if try to close not opened position", async () => {
+        await tokenA.transfer(tokenSeller.address, parseUnits(narrowRange.balanceA, decimalsA));
+        await tokenSeller.openPosition();
+
+        await tokenSeller.closePosition();
+        await tokenSeller.closePosition();
+        // no exception here
       });
     });
 
@@ -1455,7 +1737,7 @@ describe('TokenSellerTest', () => {
     });
 
     describe("uniswapV3MintCallback", () => {
-      it("should NOT be able to stole the money", async () => {
+      it("should revert if not the pool", async () => {
         const mockedPool = await MockHelper.createMockUniswapV3Pool(signer);
 
         await mockedPool.setTokens(tokenA.address, tokenB.address);

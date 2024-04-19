@@ -191,10 +191,8 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
 
   //region ---------------------- UniswapV3 callbacks
   /// @notice Uniswap V3 callback fn, called back on pool.mint
-  function uniswapV3MintCallback(uint amount0Owed, uint amount1Owed, bytes calldata data) external override {
+  function uniswapV3MintCallback(uint amount0Owed, uint amount1Owed, bytes calldata /* data */) external override {
     if (msg.sender != address(pool)) revert OnlyPool();
-
-    onlyOwnerOrOperator(abi.decode(data, (address))); // todo do we need this check?
 
     if (amount0Owed != 0) {
       IERC20(IUniswapV3Pool(msg.sender).token0()).transfer(msg.sender, amount0Owed);

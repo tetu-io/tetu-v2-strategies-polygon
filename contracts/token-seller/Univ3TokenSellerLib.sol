@@ -4,6 +4,7 @@ pragma solidity 0.8.17;
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "../integrations/uniswap/IUniswapV3Pool.sol";
 import "../strategies/uniswap/UniswapV3Lib.sol";
+import "hardhat/console.sol";
 
 library Univ3TokenSellerLib {
   //region ---------------------- Constants
@@ -145,19 +146,31 @@ library Univ3TokenSellerLib {
     bool poolSwapTokens
   ) internal view returns (bool) {
     NeedToRefreshLocal memory v;
+    console.log("state.liquidityAmount", state.liquidityAmount);
+    console.log("block.timestamp", block.timestamp);
+    console.log("state.lastRefreshPoolTimestamp", state.lastRefreshPoolTimestamp);
+    console.log("config.thresholdLastRefreshPoolSec", config.thresholdLastRefreshPoolSec);
     if (state.liquidityAmount != 0 && block.timestamp > state.lastRefreshPoolTimestamp + config.thresholdLastRefreshPoolSec) {
       v.lowerTick = state.lowerTick;
       v.upperTick = state.upperTick;
       (v.sqrtPriceX96, v.tick, ,,,,) = pool.slot0();
+      console.log("v.lowerTick");console.logInt(v.lowerTick);
+      console.log("v.upperTick");console.logInt(v.upperTick);
+      console.log("v.tick");console.logInt(v.tick);
 
       if (poolSwapTokens) {
         if (v.tick >= v.upperTick) {
+          console.log("1.tickSpacing");console.logInt(tickSpacing);
           // new price is greater upper tick, tick range should be moved
           // difference in 1 tickSpacing is allowed, it's exist right after the call of refreshPool()
+          console.log("v.tick - v.upperTick > tickSpacing", v.tick - v.upperTick > tickSpacing);
           return v.tick - v.upperTick > tickSpacing;
         } else {
+          console.log("2");
           v.ratio = uint(int(v.upperTick - v.tick)) * DENOMINATOR / uint(int((v.upperTick - v.lowerTick)));
-          // new price is higher the lower tick
+          console.log("v.ratio", v.ratio);
+          console.log("v.thresholdRatio", config.thresholdRatio);
+          // new price is higher the lower tick. There is a problem here: amountB doesn't take into account fees
           (uint amountB, ) = UniswapV3Lib.getAmountsForLiquidity(v.sqrtPriceX96, v.lowerTick, v.upperTick, pool.liquidity());
           return amountB > config.thresholdTokenB && v.ratio > config.thresholdRatio;
         }
@@ -168,7 +181,7 @@ library Univ3TokenSellerLib {
           return v.lowerTick - v.tick > tickSpacing;
         } else {
           v.ratio = uint(int(v.tick - v.lowerTick)) * DENOMINATOR / uint(int((v.upperTick - v.lowerTick)));
-          // new price is higher the lower tick
+          // new price is higher the lower tick. There is a problem here: amountB doesn't take into account fees
           (, uint amountB) = UniswapV3Lib.getAmountsForLiquidity(v.sqrtPriceX96, v.lowerTick, v.upperTick, pool.liquidity());
           return amountB > config.thresholdTokenB && v.ratio > config.thresholdRatio;
         }
