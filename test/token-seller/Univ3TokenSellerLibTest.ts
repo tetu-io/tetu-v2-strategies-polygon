@@ -725,6 +725,13 @@ describe('Univ3TokenSellerLibTest', () => {
           expect(ret.isMintCalled).eq(true);
         });
       });
+
+      it("should revert if liquidity is 0", async () => {
+        await expect(makeTest({
+          ...NORMAL_CASE,
+          amountA: "0" // (!)
+        })).revertedWithCustomError(facade, "ErrorZeroLiquidityToMint");
+      });
     });
 
     describe("exit", () => {
