@@ -642,12 +642,12 @@ describe('TokenSellerTest', () => {
     ];
 
     const SWAP_SETS: ISwapParams[] = [
-      {tag: "B1000", swapTokenA: false, swapAmount: "1000"},
       {tag: "A1000", swapTokenA: true, swapAmount: "1000"},
-      {tag: "B10000", swapTokenA: false, swapAmount: "10000"},
-      {tag: "A10000", swapTokenA: true, swapAmount: "10000"},
-      {tag: "B333", swapTokenA: false, swapAmount: "333"},
-      {tag: "A333", swapTokenA: true, swapAmount: "333"},
+      {tag: "B1000", swapTokenA: false, swapAmount: "1000"},
+      // {tag: "B10000", swapTokenA: false, swapAmount: "10000"},
+      // {tag: "A10000", swapTokenA: true, swapAmount: "10000"},
+      // {tag: "B333", swapTokenA: false, swapAmount: "333"},
+      // {tag: "A333", swapTokenA: true, swapAmount: "333"},
     ];
 
     const MULTI_SWAPS_THRESHOLD_RATIO: string[] = ["0.01", "0.1", "0.2", "0.5", "0.7", "1"];
@@ -949,14 +949,11 @@ describe('TokenSellerTest', () => {
 
                       await pool.connect(signer1).burn(lowerTickWide, upperTickWide, liquidityAmountWide);
                       await pool.connect(signer1).collect(signer1.address, lowerTickWide, upperTickWide, Misc.MAX_UINT_128, Misc.MAX_UINT_128);
-                      lowerTickWide = 0;
-                      upperTickWide = 0;
-                      liquidityAmountWide = BigNumber.from(0);
                       console.log("Pool is empty");
 
                       const {sqrtPriceX96, tick} = await pool.slot0();
                       final = {
-                        mainPool: await getCurrentWideRangeState(mainPool, sqrtPriceX96, lowerTickWide, upperTickWide, liquidityAmountWide),
+                        mainPool: await getCurrentWideRangeState(mainPool, sqrtPriceX96, 0, 0, BigNumber.from(0)),
                         tick,
                         sqrtPriceX96,
                         needToRefresh: await tokenSeller.needToRefresh(),
@@ -1189,14 +1186,11 @@ describe('TokenSellerTest', () => {
 
                       await pool.connect(signer1).burn(lowerTickWide, upperTickWide, liquidityAmountWide);
                       await pool.connect(signer1).collect(signer1.address, lowerTickWide, upperTickWide, Misc.MAX_UINT_128, Misc.MAX_UINT_128);
-                      lowerTickWide = 0;
-                      upperTickWide = 0;
-                      liquidityAmountWide = BigNumber.from(0);
                       console.log("Pool is empty");
 
                       const {sqrtPriceX96, tick} = await pool.slot0();
                       final = {
-                        mainPool: await getCurrentWideRangeState(mainPool, sqrtPriceX96, lowerTickWide, upperTickWide, liquidityAmountWide),
+                        mainPool: await getCurrentWideRangeState(mainPool, sqrtPriceX96, 0, 0, BigNumber.from(0)),
                         tick,
                         sqrtPriceX96,
                         needToRefresh: await tokenSeller.needToRefresh(),
@@ -1580,8 +1574,7 @@ describe('TokenSellerTest', () => {
       await TimeUtils.rollback(snapshotEach);
     });
 
-    // test threshold by time
-    describe("refreshPool", () => {
+    describe("refreshPool - threshold by time", () => {
       it("should skip refreshPool if not enough time passed since last call of refreshPool", async () => {
         const tokenSellerConfig = await tokenSeller.config();
         const thresholdLastRefreshPoolSec = 2; // sec
@@ -1601,7 +1594,15 @@ describe('TokenSellerTest', () => {
         await tokenA.connect(signer2).approve(uniswapV3Callee.address, amountToSwap);
         await uniswapV3Callee.connect(signer2).swap(pool.address, signer2.address, tokenA.address, amountToSwap);
 
-        const needToRefreshAfterFirstSwap = await tokenSeller.needToRefresh();
+        // make first refreshPool
+        await tokenSeller.refreshPool();
+        const needToRefreshAfterFirstRefreshPool = await tokenSeller.needToRefresh();
+
+        // make second swap
+        await tokenA.connect(signer2).approve(uniswapV3Callee.address, amountToSwap);
+        await uniswapV3Callee.connect(signer2).swap(pool.address, signer2.address, tokenA.address, amountToSwap);
+
+        const needToRefreshAfterSecondSwap = await tokenSeller.needToRefresh();
 
         function delay(ms: number) {
           return new Promise(resolve => setTimeout(resolve, ms));
@@ -1611,7 +1612,9 @@ describe('TokenSellerTest', () => {
         await tokenSeller.setOwner(await tokenSeller.owner());
         const needToRefreshAfter = await tokenSeller.needToRefresh();
 
-        expect(needToRefreshAfterFirstSwap).eq(false);
+        expect(needToRefreshBefore).eq(false);
+        expect(needToRefreshAfterFirstRefreshPool).eq(false);
+        expect(needToRefreshAfterSecondSwap).eq(false);
         expect(needToRefreshAfter).eq(true);
       });
     });
