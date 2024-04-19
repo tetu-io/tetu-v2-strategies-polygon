@@ -49,11 +49,14 @@ export async function txParamsBasic(provider: providers.Provider, hre: HardhatRu
 
     }
 
-    const maxPriorityFeePerGas = Math.min(
-      feeData.maxPriorityFeePerGas.toNumber(),
-      maxFeesPerNetwork(hre),
+    const maxPriorityFeePerGas = Math.max(
+      minFeesPerNetwork(hre),
+      Math.min(
+        feeData.maxPriorityFeePerGas.toNumber(),
+        maxFeesPerNetwork(hre),
+      ),
     );
-    const maxFeePerGas = (feeData.maxFeePerGas?.toNumber() ?? 1) * 2;
+    const maxFeePerGas = Math.max(minFeesPerNetwork(hre), (feeData.maxFeePerGas?.toNumber() ?? 1) * 2);
     return {
       maxPriorityFeePerGas: maxPriorityFeePerGas.toFixed(0),
       maxFeePerGas: maxFeePerGas.toFixed(0),
@@ -78,6 +81,17 @@ function maxFeesPerNetwork(hre: HardhatRuntimeEnvironment) {
   }
   if (network === 'matic' || network === 'polygon') {
     fee = 100;
+  }
+
+  return parseUnits(fee.toFixed(9), 9).toNumber();
+}
+
+function minFeesPerNetwork(hre: HardhatRuntimeEnvironment) {
+  const network = hre.network.name;
+  let fee = 0;
+
+  if (network === 'matic' || network === 'polygon') {
+    fee = 30;
   }
 
   return parseUnits(fee.toFixed(9), 9).toNumber();
