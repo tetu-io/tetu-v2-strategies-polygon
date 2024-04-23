@@ -32,7 +32,7 @@ contract FacadeUniv3TokenSellerLib {
   function getNarrowTickRange(
     uint160 sqrtRatioX96,
     int24 tick,
-    int24 tickRangeSize,
+    uint tickRangeSize,
     int24 tickSpacing,
     int24 tickLimit,
     bool poolSwapTokens

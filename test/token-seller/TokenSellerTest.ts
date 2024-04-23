@@ -4,7 +4,6 @@ import {ethers} from "hardhat";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {DeployerUtils} from "../../scripts/utils/DeployerUtils";
 import {
-  FacadeCalcLib,
   FacadeUniv3TokenSellerLib,
   MockToken,
   UniswapV3Callee,
@@ -21,6 +20,7 @@ import {writeFileSync} from "fs";
 import {Univ3TokenSellerLib} from "../../typechain/contracts/token-seller/Univ3TokenSeller";
 import TokenSellerConfigStruct = Univ3TokenSellerLib.TokenSellerConfigStruct;
 import {MockHelper} from "../baseUT/helpers/MockHelper";
+import {UniswapV3Utils} from "../../scripts/utils/UniswapV3Utils";
 
 /**
  * There is uniswap v3 pool with two tokens:
@@ -84,9 +84,6 @@ describe('TokenSellerTest', () => {
   let facadeUni: UniswapV3LibFacade;
   let facadeLib: FacadeUniv3TokenSellerLib;
 
-  /** we need log and sqrt for BigNumber */
-  let calcLib: FacadeCalcLib;
-
   let tokenA: MockToken;
   let tokenB: MockToken;
   const decimalsA = 18;
@@ -101,7 +98,6 @@ describe('TokenSellerTest', () => {
 
     facadeUni = (await DeployerUtils.deployContract(signer, "UniswapV3LibFacade")) as UniswapV3LibFacade;
     facadeLib = (await DeployerUtils.deployContract(signer, "FacadeUniv3TokenSellerLib")) as FacadeUniv3TokenSellerLib;
-    calcLib = (await DeployerUtils.deployContract(signer, "FacadeCalcLib")) as FacadeCalcLib;
 
     // create uniswapV3-factory and helper classes
     uniswapV3Factory = (await DeployerUtils.deployContract(signer, "UniswapV3Factory")) as UniswapV3Factory;
@@ -306,12 +302,9 @@ describe('TokenSellerTest', () => {
     const amountB = parseUnits(mainPool.amountB, decimalsB);
     console.log("amountB", amountB);
 
-    const price36 = mainPool.poolSwapTokens
-      ? amountA.mul(parseUnits("1", 36)).div(amountB)
-      : amountB.mul(parseUnits("1", 36)).div(amountA);
-    const sqrtPrice18 = await calcLib.sqrt(price36);
-    const sqrtPriceX96 = sqrtPrice18.mul(BigNumber.from(2).pow(96)).div(parseUnits("1", 18)); // 18 = sqrt of 36
+    const sqrtPriceX96 = await UniswapV3Utils.getInitialSqrtPriceX96(amountA, amountB, mainPool.poolSwapTokens);
     console.log("sqrtPriceX96", sqrtPriceX96);
+
     await pool.initialize(sqrtPriceX96);
     return {sqrtPriceX96, amountA, amountB}
   }
@@ -380,7 +373,8 @@ describe('TokenSellerTest', () => {
     pool: UniswapV3Pool,
     mainPool: IMainPoolParams,
     narrowRange: INarrowRangeParams,
-    openPosition: boolean = true
+    openPosition: boolean = true,
+    sqrtPriceX96LimitMultiplier: string = "0"
   ): Promise<Univ3TokenSeller> {
     const poolInfo = await pool.slot0();
 
@@ -401,10 +395,21 @@ describe('TokenSellerTest', () => {
       thresholdLastRefreshPoolSec: 0 // todo
     }
 
+    const slot0 = await pool.slot0();
+
     const tokenSeller = (await DeployerUtils.deployContract(
       signer,
       "Univ3TokenSeller",
-      tokenA.address, tokenB.address, pool.address, tokenSellerConfig, signer.address,
+      tokenA.address,
+      tokenB.address,
+      pool.address,
+      tokenSellerConfig,
+      sqrtPriceX96LimitMultiplier
+        ? slot0.sqrtPriceX96
+          .mul(parseUnits(sqrtPriceX96LimitMultiplier, 5))
+          .div(parseUnits("1", 5))
+        : 0,
+      signer.address,
     )) as Univ3TokenSeller;
     console.log("Token seller is created");
 
@@ -1044,10 +1049,13 @@ describe('TokenSellerTest', () => {
                   listAfterSwap = [];
 
                   const tokenSellerConfig = await tokenSeller.config();
-                  await tokenSeller.setConfig({
-                    ...tokenSellerConfig,
-                    thresholdRatio: parseUnits(thresholdRatio, 5)
-                  })
+                  await tokenSeller.setConfig(
+                    {
+                      ...tokenSellerConfig,
+                      thresholdRatio: parseUnits(thresholdRatio, 5),
+                    },
+                    0
+                  )
 
                   totalSwapAmount = 0;
                   for (const amountB of MULTI_SWAPS_AMOUNTS_B) {
@@ -1540,15 +1548,18 @@ describe('TokenSellerTest', () => {
     before(async function () {
         snapshot1 = await TimeUtils.snapshot();
 
-        pool = UniswapV3Pool__factory.connect(await uniswapV3Factory.callStatic.createPool(
-          mainPool.poolSwapTokens ? tokenB.address : tokenA.address,
-          mainPool.poolSwapTokens ? tokenA.address : tokenB.address,
-          mainPool.fee
-        ), signer);
         await uniswapV3Factory.createPool(
           mainPool.poolSwapTokens ? tokenB.address : tokenA.address,
           mainPool.poolSwapTokens ? tokenA.address : tokenB.address,
           mainPool.fee
+        );
+        pool = UniswapV3Pool__factory.connect(
+          await uniswapV3Factory.getPool(
+            mainPool.poolSwapTokens ? tokenB.address : tokenA.address,
+            mainPool.poolSwapTokens ? tokenA.address : tokenB.address,
+            mainPool.fee
+          ),
+          signer
         );
 
         // initialize pool, put liquidity into wide range
@@ -1562,7 +1573,13 @@ describe('TokenSellerTest', () => {
         );
 
         // create token seller, put liquidity into narrow range
-        tokenSeller = await createTokenSeller(pool, mainPool, narrowRange, false);
+        tokenSeller = await createTokenSeller(
+          pool,
+          mainPool,
+          narrowRange,
+          false,
+          "100"
+        );
     });
     after(async function () {
       await TimeUtils.rollback(snapshot1);
@@ -1578,11 +1595,14 @@ describe('TokenSellerTest', () => {
       it("should skip refreshPool if not enough time passed since last call of refreshPool", async () => {
         const tokenSellerConfig = await tokenSeller.config();
         const thresholdLastRefreshPoolSec = 2; // sec
-        await tokenSeller.setConfig({
-          ...tokenSellerConfig,
-          thresholdRatio: parseUnits("0", 5),
-          thresholdLastRefreshPoolSec
-        })
+        await tokenSeller.setConfig(
+          {
+            ...tokenSellerConfig,
+            thresholdRatio: parseUnits("0", 5),
+            thresholdLastRefreshPoolSec
+          },
+          0
+        )
 
         await tokenA.transfer(tokenSeller.address, parseUnits(narrowRange.balanceA, decimalsA));
         await tokenSeller.openPosition();
@@ -1622,6 +1642,7 @@ describe('TokenSellerTest', () => {
     describe("setConfig", () => {
       interface IParams {
         config: TokenSellerConfigStruct;
+        sqrtPriceX96Limit?: BigNumber;
         notOwner?: boolean;
       }
 
@@ -1633,7 +1654,10 @@ describe('TokenSellerTest', () => {
         const user = p.notOwner
           ? await Misc.impersonate(ethers.Wallet.createRandom().address)
           : signer;
-        await tokenSeller.connect(user).setConfig(p.config);
+        await tokenSeller.connect(user).setConfig(
+          p.config,
+          p?.sqrtPriceX96Limit ?? 0
+        );
         return {config: await tokenSeller.config()};
       }
 
@@ -1653,6 +1677,18 @@ describe('TokenSellerTest', () => {
         expect(config.tickRangeSize).eq(NEW_CONFIG.tickRangeSize);
         expect(config.thresholdTokenB).eq(NEW_CONFIG.thresholdTokenB);
         expect(config.thresholdLastRefreshPoolSec).eq(NEW_CONFIG.thresholdLastRefreshPoolSec);
+      });
+
+      it("should recalculate tickLimit", async () => {
+        const {sqrtPriceX96} = await pool.slot0();
+        const {config} = await makeTest({
+          config: {
+            ...NEW_CONFIG,
+            tickLimit: await facadeUni._getTickAtSqrtRatio(sqrtPriceX96.mul(5)),
+          },
+          sqrtPriceX96Limit: sqrtPriceX96.div(10)
+        });
+        expect(config.tickLimit).eq(await facadeUni._getTickAtSqrtRatio(sqrtPriceX96.div(10)));
       });
 
       it("should revert if not owner", async () => {

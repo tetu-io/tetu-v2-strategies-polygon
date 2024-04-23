@@ -68,16 +68,21 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
   //endregion ---------------------- Errors
 
   //region ---------------------- Constructor
+  /// @param sqrtPriceX96Limit If not 0 then auto calculate config_.tickLimit on the fly using given value
   constructor (
     address tokenA_,
     address tokenB_,
     address pool_,
     Univ3TokenSellerLib.TokenSellerConfig memory config_,
+    uint160 sqrtPriceX96Limit,
     address owner_
   ) {
     tokenA = tokenA_;
     tokenB = tokenB_;
     pool = IUniswapV3Pool(pool_);
+    if (sqrtPriceX96Limit != 0) {
+      config_.tickLimit = UniswapV3Lib._getTickAtSqrtRatio(sqrtPriceX96Limit);
+    }
     config = config_;
     tickSpacing = IUniswapV3Pool(pool_).tickSpacing();
     owner = owner_;
@@ -111,9 +116,13 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
   //endregion ---------------------- View
 
   //region ---------------------- Configure
-  function setConfig(Univ3TokenSellerLib.TokenSellerConfig memory config_) external {
+  /// @param sqrtPriceX96Limit If not 0 then auto calculate config_.tickLimit on the fly using given value
+  function setConfig(Univ3TokenSellerLib.TokenSellerConfig memory config_, uint160 sqrtPriceX96Limit) external {
     onlyOwner();
 
+    if (sqrtPriceX96Limit != 0) {
+      config_.tickLimit = UniswapV3Lib._getTickAtSqrtRatio(sqrtPriceX96Limit);
+    }
     config = config_;
   }
 
