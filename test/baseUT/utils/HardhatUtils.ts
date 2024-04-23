@@ -7,6 +7,7 @@ export const POLYGON_NETWORK_ID = 137;
 export const BASE_NETWORK_ID = 8453;
 
 export const ZKEVM_NETWORK_ID = 1101;
+export const FTM_NETWORK_ID = 250;
 
 interface IEnvData {
   rpcUrl: string;
