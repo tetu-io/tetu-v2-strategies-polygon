@@ -37,6 +37,7 @@ export class DeployTokenSellerUtils {
 
     const tokenSeller = (await DeployerUtils.deployContract(
       signer,
+      "Univ3TokenSeller",
       tokenA,
       tokenB,
       pool,
