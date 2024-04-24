@@ -63,4 +63,21 @@ contract UniswapV3LibFacade {
   function _getFinalTick(int256 log_2, uint160 sqrtPriceX96) external pure returns (int24 tick) {
     return UniswapV3Lib._getFinalTick(log_2, sqrtPriceX96);
   }
+
+  function _getLiquidityForAmount0(uint160 sqrtRatioAX96, uint160 sqrtRatioBX96, uint amount0) external pure returns (uint128 liquidity) {
+    return UniswapV3Lib._getLiquidityForAmount0(sqrtRatioAX96, sqrtRatioBX96, amount0);
+  }
+
+  function _getLiquidityForAmount1(uint160 sqrtRatioAX96, uint160 sqrtRatioBX96, uint amount1) external pure returns (uint128 liquidity) {
+    return UniswapV3Lib._getLiquidityForAmount1(sqrtRatioAX96, sqrtRatioBX96, amount1);
+  }
+
+  function _getAmount0ForLiquidity(uint160 sqrtRatioAX96, uint160 sqrtRatioBX96, uint128 liquidity) external pure returns (uint amount0) {
+    return UniswapV3Lib._getAmount0ForLiquidity(sqrtRatioAX96, sqrtRatioBX96, liquidity);
+  }
+
+  function _getAmount1ForLiquidity(uint160 sqrtRatioAX96, uint160 sqrtRatioBX96, uint128 liquidity) external pure returns (uint amount1) {
+    return UniswapV3Lib._getAmount1ForLiquidity(sqrtRatioAX96, sqrtRatioBX96, liquidity);
+  }
+
 }
