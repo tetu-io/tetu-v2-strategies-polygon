@@ -24,7 +24,7 @@ import {
   PLAN_REPAY_SWAP_REPAY_1, PLAN_SWAP_ONLY_2,
   PLAN_SWAP_REPAY_0
 } from "../../baseUT/AppConstants";
-import {HARDHAT_NETWORK_ID, HardhatUtils} from '../../baseUT/utils/HardhatUtils';
+import {HARDHAT_NETWORK_ID, HardhatUtils} from '../../../scripts/utils/HardhatUtils';
 import {buildEntryData1} from "../../baseUT/utils/EntryDataUtils";
 
 describe('PairBasedStrategyLibTest', () => {

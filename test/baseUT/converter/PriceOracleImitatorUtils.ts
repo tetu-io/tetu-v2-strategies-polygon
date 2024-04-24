@@ -19,7 +19,7 @@ import {
 } from "../../../typechain";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {BigNumber} from "ethers";
-import {BASE_NETWORK_ID, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from "../utils/HardhatUtils";
+import {BASE_NETWORK_ID, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from "../../../scripts/utils/HardhatUtils";
 import {BaseAddresses} from "../../../scripts/addresses/BaseAddresses";
 import {parseUnits} from "ethers/lib/utils";
 import {ZkevmAddresses} from "../../../scripts/addresses/ZkevmAddresses";

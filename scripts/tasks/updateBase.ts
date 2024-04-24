@@ -12,7 +12,7 @@ import {MaticAddresses} from "../addresses/MaticAddresses";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {formatUnits} from "ethers/lib/utils";
 import {IController__factory} from "../../typechain/factories/@tetu_io/tetu-converter/contracts/interfaces";
-import {HARDHAT_NETWORK_ID, HardhatUtils} from "../../test/baseUT/utils/HardhatUtils";
+import {HARDHAT_NETWORK_ID, HardhatUtils} from "../utils/HardhatUtils";
 import {RunHelper} from "../utils/RunHelper";
 import {ethers} from "hardhat";
 

@@ -13,7 +13,7 @@ import {
   StrategySplitterV2__factory, TetuVaultV2__factory
 } from "../../typechain";
 import {UniversalTestUtils} from "../baseUT/utils/UniversalTestUtils";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../baseUT/utils/HardhatUtils';
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../scripts/utils/HardhatUtils';
 
 /**
  * Test to check upgrade BalancerBoostedStrategy 1.0.0 to 1.0.1 (move to balancer gauges v2)

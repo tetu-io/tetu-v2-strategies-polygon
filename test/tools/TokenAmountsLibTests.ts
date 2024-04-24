@@ -12,7 +12,7 @@ import {
   GAS_FILTER_2_SECOND_AMOUNT_ZERO,
 } from '../baseUT/GasLimits';
 import { controlGasLimitsEx } from '../../scripts/utils/GasLimitUtils';
-import { HARDHAT_NETWORK_ID, HardhatUtils } from '../baseUT/utils/HardhatUtils';
+import { HARDHAT_NETWORK_ID, HardhatUtils } from '../../scripts/utils/HardhatUtils';
 
 
 const { expect } = chai;

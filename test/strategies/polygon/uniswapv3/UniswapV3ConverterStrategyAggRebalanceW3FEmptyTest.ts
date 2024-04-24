@@ -5,7 +5,7 @@ import hre, {ethers} from "hardhat";
 import {UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory,} from "../../../../typechain";
 import {Web3FunctionHardhat} from "@gelatonetwork/web3-functions-sdk/hardhat-plugin";
 import {Web3FunctionResultV2, Web3FunctionUserArgs} from "@gelatonetwork/web3-functions-sdk";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../../scripts/utils/HardhatUtils';
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 const { w3f } = hre;
 

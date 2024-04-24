@@ -37,7 +37,7 @@ import { ToolsAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/T
 import { DeployerUtils } from './DeployerUtils';
 import { Misc } from './Misc';
 import {BaseAddresses} from "../addresses/BaseAddresses";
-import {BASE_NETWORK_ID, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from "../../test/baseUT/utils/HardhatUtils";
+import {BASE_NETWORK_ID, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from "./HardhatUtils";
 import {ZkevmAddresses} from "../addresses/ZkevmAddresses";
 
 // tslint:disable-next-line:no-var-requires

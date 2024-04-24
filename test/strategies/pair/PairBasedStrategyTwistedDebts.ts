@@ -40,7 +40,7 @@ import {
 } from "../../baseUT/AppConstants";
 import {BigNumber} from "ethers";
 import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
-import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from '../../baseUT/utils/HardhatUtils';
+import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from '../../../scripts/utils/HardhatUtils';
 import {
   PairWithdrawByAggUtils
 } from "../../baseUT/strategies/pair/PairWithdrawByAggUtils";

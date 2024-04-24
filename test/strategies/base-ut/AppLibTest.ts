@@ -6,7 +6,7 @@ import {AppLibFacade, MockToken} from '../../../typechain';
 import {expect} from 'chai';
 import {MockHelper} from '../../baseUT/helpers/MockHelper';
 import {Misc} from "../../../scripts/utils/Misc";
-import { HARDHAT_NETWORK_ID, HardhatUtils } from '../../baseUT/utils/HardhatUtils';
+import { HARDHAT_NETWORK_ID, HardhatUtils } from '../../../scripts/utils/HardhatUtils';
 import {BigNumber} from "ethers";
 import { parseUnits } from 'ethers/lib/utils';
 

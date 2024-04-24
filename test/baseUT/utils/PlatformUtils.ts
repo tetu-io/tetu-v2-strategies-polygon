@@ -1,4 +1,4 @@
-import {BASE_NETWORK_ID, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from "./HardhatUtils";
+import {BASE_NETWORK_ID, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from "../../../scripts/utils/HardhatUtils";
 import {BaseAddresses} from "../../../scripts/addresses/BaseAddresses";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 import {ZkevmAddresses} from "../../../scripts/addresses/ZkevmAddresses";

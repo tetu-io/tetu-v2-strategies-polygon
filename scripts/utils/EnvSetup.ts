@@ -49,6 +49,10 @@ export class EnvSetup {
           type: 'string',
         },
 
+        ftmRpcUrl: {
+          type: 'string',
+        },
+
         /////// BLOCKS
 
         maticForkBlock: {
@@ -66,6 +70,11 @@ export class EnvSetup {
           default: 9158459, // 9027243, // 8805209, // 8587141,
         },
 
+        ftmForkBlock: {
+          type: 'number',
+          default: 79877252,
+        },
+
         /////// NETWORK EXPLORERS
 
         networkScanKey: {
@@ -73,6 +82,18 @@ export class EnvSetup {
         },
 
         networkScanKeyBase: {
+          type: 'string',
+        },
+
+        networkScanKeyMatic: {
+          type: 'string',
+        },
+
+        networkScanKeyZkevm: {
+          type: 'string',
+        },
+
+        networkScanKeyFtm: {
           type: 'string',
         },
 

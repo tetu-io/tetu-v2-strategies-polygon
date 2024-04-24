@@ -10,7 +10,7 @@ import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/add
 import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon';
 import { DeployerUtilsLocal } from '../../../scripts/utils/DeployerUtilsLocal';
 import { Misc } from '../../../scripts/utils/Misc';
-import {BASE_NETWORK_ID, ZKEVM_NETWORK_ID} from "../utils/HardhatUtils";
+import {BASE_NETWORK_ID, ZKEVM_NETWORK_ID} from "../../../scripts/utils/HardhatUtils";
 import {BaseAddresses} from "../../../scripts/addresses/BaseAddresses";
 import {ZkevmAddresses} from "../../../scripts/addresses/ZkevmAddresses";
 

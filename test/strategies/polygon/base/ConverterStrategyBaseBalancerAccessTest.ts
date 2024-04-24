@@ -38,7 +38,7 @@ import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { expect } from 'chai';
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {StateUtils, IState, IPutInitialAmountsBalancesResults} from "../../../baseUT/universalTestUtils/StateUtils";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../../scripts/utils/HardhatUtils';
 
 /**
  * Test of ConverterStrategyBase using direct access to internal functions

@@ -24,7 +24,7 @@ import {
   AggregatorUtils
 } from "../../baseUT/utils/AggregatorUtils";
 import {IterationPlanLib} from "../../../typechain/contracts/test/facades/PairBasedStrategyLibFacade";
-import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from '../../baseUT/utils/HardhatUtils';
+import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from '../../../scripts/utils/HardhatUtils';
 import {TokenUtils} from "../../../scripts/utils/TokenUtils";
 import {PLAN_REPAY_SWAP_REPAY_1, PLATFORM_KIND_AAVE2_2, PLATFORM_KIND_AAVE3_3} from "../../baseUT/AppConstants";
 import {InjectUtils} from "../../baseUT/strategies/InjectUtils";

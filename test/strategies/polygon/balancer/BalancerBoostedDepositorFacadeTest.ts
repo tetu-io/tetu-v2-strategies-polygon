@@ -28,7 +28,7 @@ import {
   BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_WEIGHTS,
   BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_QUOTE_EXIT,
 } from '../../../baseUT/GasLimits';
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../../scripts/utils/HardhatUtils';
 
 describe.skip('BalancerBoostedDepositorFacadeTest', function() {
   //region Constants

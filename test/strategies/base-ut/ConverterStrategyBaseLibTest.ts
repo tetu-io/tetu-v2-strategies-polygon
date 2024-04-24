@@ -33,7 +33,7 @@ import {
 } from "../../baseUT/GasLimits";
 import {IERC20Metadata__factory} from "../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
 import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
-import {HardhatUtils, HARDHAT_NETWORK_ID} from '../../baseUT/utils/HardhatUtils';
+import {HardhatUtils, HARDHAT_NETWORK_ID} from '../../../scripts/utils/HardhatUtils';
 import {REQUESTED_BALANCE_GAP} from "../../baseUT/AppConstants";
 
 /**

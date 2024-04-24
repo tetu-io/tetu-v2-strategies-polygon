@@ -6,7 +6,7 @@ import {
 } from "../../typechain";
 import {ethers} from "hardhat";
 import {TimeUtils} from "../../scripts/utils/TimeUtils";
-import {HARDHAT_NETWORK_ID, HardhatUtils} from "../baseUT/utils/HardhatUtils";
+import {FTM_NETWORK_ID, HARDHAT_NETWORK_ID, HardhatUtils} from "../../scripts/utils/HardhatUtils";
 import {DeployerUtils} from "../../scripts/utils/DeployerUtils";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {BigNumber} from "ethers";
@@ -43,7 +43,7 @@ describe('SpookySwapTokenSellerTest', () => {
   before(async function () {
     [signer, signer1, signer2] = await ethers.getSigners();
     snapshotBefore = await TimeUtils.snapshot();
-    await HardhatUtils.setupBeforeTest(HARDHAT_NETWORK_ID);
+    await HardhatUtils.setupBeforeTest(FTM_NETWORK_ID);
 
     tokenA = IERC20Metadata__factory.connect(TOKEN_A, signer);
     tokenB = IERC20Metadata__factory.connect(TOKEN_B, signer);
