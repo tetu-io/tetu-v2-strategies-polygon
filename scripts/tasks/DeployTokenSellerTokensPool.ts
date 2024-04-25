@@ -1,15 +1,12 @@
 import {ethers, network} from "hardhat";
 import {DeployTokenSellerUtils} from "./DeployTokenSellerUtils";
-import {FtmAddresses} from "../addresses/FtmAddresses";
 import {writeFileSyncRestoreFolder} from "../../test/baseUT/utils/FileUtils";
 import {DeployerUtils} from "../utils/DeployerUtils";
 import {
-  FacadeUniv3TokenSellerLib,
   MockToken,
-  UniswapV3Callee,
-  UniswapV3Factory,
+  UniswapV3Callee, UniswapV3Factory,
   UniswapV3Factory__factory, UniswapV3LibFacade, UniswapV3Pool,
-  UniswapV3Pool__factory, Univ3TokenSeller
+  UniswapV3Pool__factory, Univ3TokenSeller__factory
 } from "../../typechain";
 import {RunHelper} from "../utils/RunHelper";
 import {parseUnits} from "ethers/lib/utils";
@@ -31,6 +28,7 @@ const decimalsB = 6;
 
 const AMOUNT_A_TO_SIGNER = "1000000";
 const AMOUNT_B_TO_SIGNER = "1000000";
+const AMOUNT_A_TO_TOKEN_SELLER = "10000";
 
 const AMOUNT_A_WIDE = "10000";
 const AMOUNT_B_WIDE = "10000";
@@ -70,11 +68,18 @@ async function putLiquidityToRangeWide(
   const tickRange = Math.ceil(
     (Math.round((tickUpper0 - tickLower0) / 2)) / tickSpacing
   ) * tickSpacing;
-  console.log("************ tickLower0, tickUpper0:", tickLower0, tickUpper0);
+  console.log("************ tickCurrent", tickCurrent);
+  console.log("************ tickLower0", tickLower0);
+  console.log("************ tickUpper0", tickUpper0);
+  console.log("************ tickRange", tickRange);
+  console.log("************ tickCurrent - tickRange", tickCurrent - tickRange);
+  console.log("************ (tickCurrent - tickRange) / tickSpacing", (tickCurrent - tickRange) / tickSpacing);
+  console.log("************ Math.ceil(tickCurrent - tickRange) / tickSpacing)", Math.ceil(tickCurrent - tickRange) / tickSpacing);
+  console.log("************ (Math.ceil((tickCurrent - tickRange) / tickSpacing) - 1) * tickSpacing", (Math.ceil((tickCurrent - tickRange) / tickSpacing) - 1) * tickSpacing);
 
   const lowerTick = (tickCurrent < 0 && tickCurrent / tickSpacing * tickSpacing !== tickCurrent)
     ? (Math.floor((tickCurrent - tickRange) / tickSpacing) - 1) * tickSpacing
-    : (Math.floor(tickCurrent - tickRange) / tickSpacing) * tickSpacing;
+    : Math.floor((tickCurrent - tickRange) / tickSpacing) * tickSpacing;
   const upperTick = tickRange === 0 ? lowerTick + tickSpacing : lowerTick + tickRange * 2;
 
   console.log("************ lowerTick, upperTick:", lowerTick, upperTick);
@@ -88,12 +93,15 @@ async function putLiquidityToRangeWide(
     signer,
     tokenA.populateTransaction.approve(uniswapV3Callee.address, poolSwapTokens ? requiredAmounts.amount1 : requiredAmounts.amount0)
   );
+  console.log("balance A", await tokenA.balanceOf(signer.address));
   await RunHelper.runAndWait2ExplicitSigner(
     signer,
     tokenB.populateTransaction.approve(uniswapV3Callee.address, poolSwapTokens ? requiredAmounts.amount0 : requiredAmounts.amount1)
   );
+  console.log("balance B", await tokenB.balanceOf(signer.address));
 
   console.log("************ mint liquidityAmount", liquidityAmount);
+  // await uniswapV3Callee.mint(pool.address, signer.address, lowerTick, upperTick, liquidityAmount, {gasLimit: 9_000_000})
   await RunHelper.runAndWait2ExplicitSigner(
     signer,
     uniswapV3Callee.populateTransaction.mint(pool.address, signer.address, lowerTick, upperTick, liquidityAmount, {gasLimit: 9_000_000})
@@ -132,6 +140,7 @@ async function main() {
   );
 
   console.log("************ Create a pool");
+  // const uniswapV3Factory = (await DeployerUtils.deployContract(signer, "UniswapV3Factory")) as UniswapV3Factory;
   const uniswapV3Factory = UniswapV3Factory__factory.connect(POOL_SPOOKY_SWAP_FACTORY, signer);
   await RunHelper.runAndWait2ExplicitSigner(
     signer,
@@ -154,22 +163,10 @@ async function main() {
     poolSwapTokens
   );
 
-  console.log("************ Initialize the pool");
+  console.log("************ Initialize the pool, sqrtPriceX96", sqrtPriceX96);
   await RunHelper.runAndWait2ExplicitSigner(
     signer,
     UniswapV3Pool__factory.connect(pool, signer).populateTransaction.initialize(sqrtPriceX96)
-  );
-
-  console.log("************ Deploy token seller");
-  const tokenSeller = await DeployTokenSellerUtils.deployTokenSeller(
-    signer,
-    tokenA.address,
-    tokenB.address,
-    pool,
-    SIGNER_AMOUNT_A,
-    tickRangeSize,
-    thresholdRatio,
-    thresholdLastRefreshPoolSec
   );
 
   console.log("************ Deploy uniswapV3Callee");
@@ -189,7 +186,33 @@ async function main() {
     parseUnits(AMOUNT_B_WIDE, decimalsB),
     tokenA,
     tokenB
-  )
+  );
+
+  console.log("************ Deploy token seller");
+  const tokenSeller = await DeployTokenSellerUtils.deployTokenSeller(
+    signer,
+    tokenA.address,
+    tokenB.address,
+    pool,
+    SIGNER_AMOUNT_A,
+    tickRangeSize,
+    thresholdRatio,
+    thresholdLastRefreshPoolSec
+  );
+
+  await RunHelper.runAndWait2ExplicitSigner(
+    signer,
+    tokenA.populateTransaction.mint(tokenSeller, parseUnits(AMOUNT_A_TO_TOKEN_SELLER, decimalsA))
+  );
+  await RunHelper.runAndWait2ExplicitSigner(
+    signer,
+    Univ3TokenSeller__factory.connect(tokenSeller, signer).populateTransaction.openPosition()
+  );
+  const isPositionOpened = await Univ3TokenSeller__factory.connect(tokenSeller, signer).isPositionOpened();
+  const config = await Univ3TokenSeller__factory.connect(tokenSeller, signer).config();
+
+  const slot0 = await UniswapV3Pool__factory.connect(pool, signer).slot0();
+  const liquidity = await UniswapV3Pool__factory.connect(pool, signer).liquidity();
 
   writeFileSyncRestoreFolder(destPathTxt, `tokenA: ${tokenA.address}\n`, { encoding: 'utf8', flag: 'a' });
   writeFileSyncRestoreFolder(destPathTxt, `tokenB: ${tokenB.address}\n`, { encoding: 'utf8', flag: 'a' });
@@ -200,6 +223,10 @@ async function main() {
   writeFileSyncRestoreFolder(destPathTxt, `wide.lowerTick: ${r.lowerTick}\n`, { encoding: 'utf8', flag: 'a' });
   writeFileSyncRestoreFolder(destPathTxt, `wide.upperTick: ${r.upperTick}\n`, { encoding: 'utf8', flag: 'a' });
   writeFileSyncRestoreFolder(destPathTxt, `wide.liquidityAmount: ${r.liquidityAmount}\n`, { encoding: 'utf8', flag: 'a' });
+  writeFileSyncRestoreFolder(destPathTxt, `slot0: ${slot0}\n`, { encoding: 'utf8', flag: 'a' });
+  writeFileSyncRestoreFolder(destPathTxt, `liquidity: ${liquidity}\n`, { encoding: 'utf8', flag: 'a' });
+  writeFileSyncRestoreFolder(destPathTxt, `Token seller position opened: ${isPositionOpened}\n`, { encoding: 'utf8', flag: 'a' });
+  writeFileSyncRestoreFolder(destPathTxt, `Token seller config: ${config}\n`, { encoding: 'utf8', flag: 'a' });
 }
 
 main()

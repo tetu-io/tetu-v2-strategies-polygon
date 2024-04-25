@@ -54,6 +54,11 @@ contract UniswapV3Callee is IUniswapV3MintCallback, IUniswapV3SwapCallback {
     int24 tickUpper,
     uint128 amount
   ) external {
+//    console.log("UniswapV3Calee.pool", pool);
+//    console.log("UniswapV3Calee.recipient", recipient);
+//    console.log("UniswapV3Calee.amount", amount);
+//    console.log("UniswapV3Calee.tickSpacing");console.logInt(IUniswapV3Pool(pool).tickSpacing());
+
     IUniswapV3Pool(pool).mint(recipient, tickLower, tickUpper, amount, abi.encode(msg.sender));
   }
 
