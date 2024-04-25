@@ -262,4 +262,68 @@ library Univ3TokenSellerLib {
     return a < b ? a : b;
   }
   //endregion ------------------------------ Utils
+
+  //region ------------------------------ Calculate amount required to swap
+  /// @notice Calculate what amount should be swapped to move current price to given target value.
+  /// @param targetSqrtPriceX96 Required price after the swap (sqrt price * 2pow96)
+  /// @param swapToken1 True if pool.token1 should be swapped
+  /// @param amountToSwap Amount of token 0 or 1 (depends on swapToken1) that should be swapped
+  /// to set current price in the pool equal to the {targetSqrtPriceX96}
+  function getAmountToSwap(IUniswapV3Pool pool, uint160 targetSqrtPriceX96) internal view returns (
+    bool swapToken1,
+    uint amountToSwap
+  ) {
+    (uint160 sqrtPriceX96, int24 tick,,,,,) = pool.slot0();
+    int24 tickSpacing = pool.tickSpacing();
+    uint128 liquidity = pool.liquidity();
+    int24 lowerTick = (tick / tickSpacing) * tickSpacing == tick
+      ? tick
+      : (tick / tickSpacing) * tickSpacing - tickSpacing;
+    int24 upperTick = lowerTick + tickSpacing;
+    swapToken1 = targetSqrtPriceX96 > sqrtPriceX96;
+
+    if (swapToken1) {
+      // it's necessary to swap token1 => token0
+      while (targetSqrtPriceX96 > sqrtPriceX96) {
+        uint160 upperSqrtPriceX96 = UniswapV3Lib._getSqrtRatioAtTick(upperTick);
+        amountToSwap += UniswapV3Lib._getAmount1ForLiquidity(sqrtPriceX96, upperSqrtPriceX96, liquidity);
+        if (targetSqrtPriceX96 > upperSqrtPriceX96) {
+          (,int128 liquidityNet,,,,,,) = pool.ticks(upperTick);
+          if (liquidityNet > 0) {
+            liquidity += uint128(liquidityNet);
+          } else {
+            liquidity -= uint128(-liquidityNet);
+          }
+          sqrtPriceX96 = upperSqrtPriceX96;
+          lowerTick += tickSpacing;
+          upperTick += tickSpacing;
+        } else {
+          sqrtPriceX96 = targetSqrtPriceX96;
+        }
+      }
+    } else {
+      // it's necessary to swap token0 => token1
+      while (targetSqrtPriceX96 < sqrtPriceX96) {
+        uint160 lowerSqrtPriceX96 = UniswapV3Lib._getSqrtRatioAtTick(lowerTick);
+        amountToSwap += UniswapV3Lib._getAmount0ForLiquidity(sqrtPriceX96, lowerSqrtPriceX96, liquidity);
+        if (targetSqrtPriceX96 < lowerSqrtPriceX96) {
+          (,int128 liquidityNet,,,,,,) = pool.ticks(lowerTick);
+          if (liquidityNet > 0) {
+            liquidity -= uint128(liquidityNet);
+          } else {
+            liquidity += uint128(-liquidityNet);
+          }
+          sqrtPriceX96 = lowerSqrtPriceX96;
+          lowerTick -= tickSpacing;
+          upperTick -= tickSpacing;
+        } else {
+          sqrtPriceX96 = targetSqrtPriceX96;
+        }
+      }
+    }
+
+    return (swapToken1, amountToSwap);
+  }
+  //endregion ------------------------------ Calculate amount required to swap
+
 }

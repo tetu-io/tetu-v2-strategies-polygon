@@ -11,19 +11,18 @@ import {
   UniswapV3LibFacade, UniswapV3Pool,
   UniswapV3Pool__factory, Univ3TokenSeller
 } from "../../typechain";
-import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
-import {BigNumber, Signer} from "ethers";
+import {formatUnits, parseUnits} from "ethers/lib/utils";
+import {BigNumber} from "ethers";
 import {expect} from "chai";
 import {Misc} from "../../scripts/utils/Misc";
 import {writeFileSyncRestoreFolder} from "../baseUT/utils/FileUtils";
 import {writeFileSync} from "fs";
 import {Univ3TokenSellerLib} from "../../typechain/contracts/token-seller/Univ3TokenSeller";
 import TokenSellerConfigStruct = Univ3TokenSellerLib.TokenSellerConfigStruct;
-import {MockHelper} from "../baseUT/helpers/MockHelper";
 import {UniswapV3Utils} from "../../scripts/utils/UniswapV3Utils";
 
 describe('FindAmountTest', () => {
-  const pathWithoutExt = `./tmp/TokenSellerTest`;
+  const pathWithoutExt = `./tmp/FindAmountTest`;
   const SIGNER_AMOUNT_A = "10000000";
   const SIGNER_AMOUNT_B = "100000";
   let snapshotBefore: string;
@@ -41,7 +40,7 @@ describe('FindAmountTest', () => {
   const decimalsA = 18;
   const decimalsB = 6;
 
-  const states: IStateHistory[] = [];
+  const states: IState[] = [];
 
   before(async function () {
     [signer, signer1, signer2, signer3] = await ethers.getSigners();
@@ -130,17 +129,6 @@ describe('FindAmountTest', () => {
     swapAmount: string;
   }
 
-  interface IInputParams {
-    mainPool: IMainPoolParams;
-    narrowRange: INarrowRangeParams;
-    swapParams: ISwapParams;
-  }
-
-  interface IDerivedValues {
-    tickLimit: number;
-    tickSpacing: number;
-  }
-
   interface IRangeState {
     lowerTick: number;
     upperTick: number;
@@ -150,44 +138,30 @@ describe('FindAmountTest', () => {
   }
 
   interface IState {
-    sqrtPriceX96: BigNumber;
-    tick: number;
-    needToRefresh: boolean;
-    isPositionOpened: boolean;
-
-    mainPool: IRangeState;
-    narrowRange: IRangeState;
-
-    /** Balances of token A and B of TokenSeller contract */
-    balancesAbTokenSeller: number[];
-    /** Balances of token A and B of signer 1 (wide range owner) */
-    balancesAbSigner1: number[];
-    /** Balances of token A and B of signer (narrow range owner) */
-    balancesAbSigner: number[];
-    /** Balances of token A and B of signer 2 (swapper) */
-    balancesAbSigner2: number[];
-  }
-
-  /**
-   * Results of following actions:
-   * 1) signer1 deposits to wide range
-   * 2) signer deposits to narrow range using TokenSeller
-   * 3) signer2 makes a swap
-   * 4) TokenSeller.refreshPool
-   * 5) signer closes narrow position
-   * 6) signer1 closes wide position
-   */
-  interface IStateHistory {
-    inputParams: IInputParams;
-    derivedValues: {
-      tickLimit: number;
-      tickSpacing: number;
+    delta: number;
+    tickSpacing: number;
+    init: {
+      price: number;
+      tick: number;
     }
-    start: IState;
-    init: IState;
-    afterSwap: IState[];
-    afterRefresh: IState;
-    final: IState;
+    target: {
+      price: number;
+      tick: number;
+    }
+    final: {
+      price: number;
+      tick: number;
+      priceDiff: number;
+      tickDiff: number;
+    }
+    toSwapTS: {
+      tokenB: boolean,
+      amountToSwap: number,
+    }
+    toSwapSolidity: {
+      tokenB: boolean,
+      amountToSwap: number,
+    }
   }
 
   interface IWidePoolData {
@@ -204,51 +178,6 @@ describe('FindAmountTest', () => {
   //endregion Data types
 
   //region Utils
-  async function getCurrentNarrowRangeState(mainPool: IMainPoolParams, tokenSeller: Univ3TokenSeller, sqrtPriceX96: BigNumber): Promise<IRangeState> {
-    const state = await tokenSeller.state();
-    const resultAmounts = await facadeUni.getAmountsForLiquidity(
-      sqrtPriceX96,
-      state.lowerTick,
-      state.upperTick,
-      state.liquidityAmount
-    );
-
-    return {
-      lowerTick: state.lowerTick,
-      upperTick: state.upperTick,
-      liquidityAmount: state.liquidityAmount,
-      amountsAB: [
-        +formatUnits(mainPool.poolSwapTokens ? resultAmounts[1] : resultAmounts[0], decimalsA),
-        +formatUnits(mainPool.poolSwapTokens ? resultAmounts[0] : resultAmounts[1], decimalsB),
-      ]
-    }
-  }
-
-  async function getCurrentWideRangeState(
-    mainPool: IMainPoolParams,
-    sqrtPriceX96: BigNumber,
-    lowerTickWide: number,
-    upperTickWide: number,
-    liquidityAmountWide: BigNumber
-  ): Promise<IRangeState> {
-    const resultAmounts = await facadeUni.getAmountsForLiquidity(
-      sqrtPriceX96,
-      lowerTickWide,
-      upperTickWide,
-      liquidityAmountWide
-    );
-
-    return {
-      lowerTick: lowerTickWide,
-      upperTick: upperTickWide,
-      liquidityAmount: liquidityAmountWide,
-      amountsAB: [
-        +formatUnits(mainPool.poolSwapTokens ? resultAmounts[1] : resultAmounts[0], decimalsA),
-        +formatUnits(mainPool.poolSwapTokens ? resultAmounts[0] : resultAmounts[1], decimalsB),
-      ]
-    }
-  }
-
   async function initializePool(mainPool: IMainPoolParams, pool: UniswapV3Pool): Promise<IInitPoolResults> {
     // let's calculate initial price, see https://uniswapv3book.com/milestone_1/calculating-liquidity.html
     const amountA = parseUnits(mainPool.amountA, decimalsA);
@@ -263,9 +192,10 @@ describe('FindAmountTest', () => {
     return {sqrtPriceX96, amountA, amountB}
   }
 
-  async function putLiquidityToWideRange(
+  async function putLiquidityToRangeWide(
     pool: UniswapV3Pool,
-    mainPool: IMainPoolParams,
+    poolSwapTokens: boolean,
+    pricesRange: string[],
     sqrtPriceX96: BigNumber,
     amountA: BigNumber,
     amountB: BigNumber,
@@ -274,16 +204,16 @@ describe('FindAmountTest', () => {
     const tickCurrent = await facadeUni._getTickAtSqrtRatio(sqrtPriceX96);
     console.log("tickCurrent", tickCurrent);
     const priceLowerSquareX96 = sqrtPriceX96.mul(
-      parseUnits(mainPool.pricesRange[0], 5)
+      parseUnits(pricesRange[0], 5)
     ).mul(
-      parseUnits(mainPool.pricesRange[0], 5)
+      parseUnits(pricesRange[0], 5)
     ).div(
       parseUnits("1", 5 + 5)
     );
     const priceUpperSquareX96 = sqrtPriceX96.mul(
-      parseUnits(mainPool.pricesRange[1], 5)
+      parseUnits(pricesRange[1], 5)
     ).mul(
-      parseUnits(mainPool.pricesRange[1], 5)
+      parseUnits(pricesRange[1], 5)
     ).div(
       parseUnits("1", 5 + 5)
     );
@@ -291,7 +221,7 @@ describe('FindAmountTest', () => {
     console.log("priceUpperSquareX96", priceUpperSquareX96);
     const tickLower0 = await facadeUni._getTickAtSqrtRatio(priceLowerSquareX96);
     const tickUpper0 = await facadeUni._getTickAtSqrtRatio(priceUpperSquareX96);
-    const tickSpacing = await facadeUni.getTickSpacing(mainPool.fee)
+    const tickSpacing = await pool.tickSpacing();
     const tickRange = Math.ceil(
       (Math.round((tickUpper0 - tickLower0) / 2)) / tickSpacing
     ) * tickSpacing;
@@ -303,7 +233,7 @@ describe('FindAmountTest', () => {
     const {lowerTick, upperTick} = await facadeLib.calcTickRange(tickCurrent, tickRange, tickSpacing);
     console.log("lowerTick", lowerTick);
     console.log("upperTick", upperTick);
-    const liquidityAmount = mainPool.poolSwapTokens
+    const liquidityAmount = poolSwapTokens
       ? await facadeUni.getLiquidityForAmounts(sqrtPriceX96, lowerTick, upperTick, amountB, amountA)
       : await facadeUni.getLiquidityForAmounts(sqrtPriceX96, lowerTick, upperTick, amountA, amountB);
     console.log("liquidityAmount", liquidityAmount);
@@ -311,14 +241,46 @@ describe('FindAmountTest', () => {
     console.log("requiredAmounts", requiredAmounts);
 
     // prepare initial amounts of both token
-    await tokenA.connect(signer1).approve(uniswapV3Callee.address, mainPool.poolSwapTokens ? requiredAmounts.amount1 : requiredAmounts.amount0);
-    await tokenB.connect(signer1).approve(uniswapV3Callee.address, mainPool.poolSwapTokens ? requiredAmounts.amount0 : requiredAmounts.amount1);
+    await tokenA.connect(signer1).approve(uniswapV3Callee.address, poolSwapTokens ? requiredAmounts.amount1 : requiredAmounts.amount0);
+    await tokenB.connect(signer1).approve(uniswapV3Callee.address, poolSwapTokens ? requiredAmounts.amount0 : requiredAmounts.amount1);
 
     console.log("signer1.balance before A0", await tokenA.balanceOf(signer1.address));
     console.log("balance before B0", await tokenB.balanceOf(signer1.address));
     await uniswapV3Callee.connect(signer1).mint(pool.address, signer1.address, lowerTick, upperTick, liquidityAmount, {gasLimit: 9_000_000});
     console.log("signer1.balance after A0", await tokenA.balanceOf(signer1.address));
     console.log("signer1.balance after B0", await tokenB.balanceOf(signer1.address));
+
+    return {lowerTick, upperTick, liquidityAmount};
+  }
+
+  async function putLiquidityToRangeNarrow(
+    pool: UniswapV3Pool,
+    poolSwapTokens: boolean,
+    tickLower0: number,
+    tickUpper0: number,
+    sqrtPriceX96: BigNumber,
+    amountA: BigNumber,
+    amountB: BigNumber,
+  ): Promise<IWidePoolData> {
+    // provide liquidity in wide range
+    const tickCurrent = await facadeUni._getTickAtSqrtRatio(sqrtPriceX96);
+
+    const tickSpacing = await pool.tickSpacing();
+    const tickRange = Math.ceil(
+      (Math.round((tickUpper0 - tickLower0) / 2)) / tickSpacing
+    ) * tickSpacing;
+
+    const {lowerTick, upperTick} = await facadeLib.calcTickRange(tickCurrent, tickRange, tickSpacing);
+    const liquidityAmount = poolSwapTokens
+      ? await facadeUni.getLiquidityForAmounts(sqrtPriceX96, lowerTick, upperTick, amountB, amountA)
+      : await facadeUni.getLiquidityForAmounts(sqrtPriceX96, lowerTick, upperTick, amountA, amountB);
+    const requiredAmounts = await facadeUni.getAmountsForLiquidity(sqrtPriceX96, lowerTick, upperTick, liquidityAmount);
+
+    // prepare initial amounts of both token
+    await tokenA.connect(signer1).approve(uniswapV3Callee.address, poolSwapTokens ? requiredAmounts.amount1 : requiredAmounts.amount0);
+    await tokenB.connect(signer1).approve(uniswapV3Callee.address, poolSwapTokens ? requiredAmounts.amount0 : requiredAmounts.amount1);
+
+    await uniswapV3Callee.connect(signer1).mint(pool.address, signer1.address, lowerTick, upperTick, liquidityAmount, {gasLimit: 9_000_000});
 
     return {lowerTick, upperTick, liquidityAmount};
   }
@@ -378,162 +340,42 @@ describe('FindAmountTest', () => {
   //endregion Utils
 
   //region Stat utils
-  async function getBalancesAB(user: string): Promise<number[]> {
-    return [
-      +formatUnits(await tokenA.balanceOf(user), decimalsA),
-      +formatUnits(await tokenB.balanceOf(user), decimalsB),
-    ]
-  }
-
-  function rangeStateToArrayHeaders(): string[] {
-    return [
-      "lowerTick",
-      "upperTick",
-      "liquidityAmount",
-      "pool=>amountA",
-      "pool=>amountB"
-    ];
-  }
-  function rangeStateToArray(r: IRangeState) {
-    return [
-      r.lowerTick,
-      r.upperTick,
-      r.liquidityAmount,
-      r.amountsAB[0],
-      r.amountsAB[1],
-    ]
-  }
-
-  function stateToArrayHeaders(): string[] {
-    return [
-      "tick",
-      "sqrtPriceX96",
-      ...rangeStateToArrayHeaders().map(x => "main." + x),
-      ...rangeStateToArrayHeaders().map(x => "narrow." + x),
-      "tokenSeller.balanceA",
-      "tokenSeller.balanceB",
-      "signer.balanceA",
-      "signer.balanceB",
-      "poolOwner.balanceA",
-      "poolOwner.balanceB",
-      "swapper.balanceA",
-      "swapper.balanceB",
-      "needToRefresh",
-      "isPositionOpened",
-    ]
-  }
-  function stateToArray(state: IState) {
-    return [
-      state.tick,
-      state.sqrtPriceX96,
-
-      ...rangeStateToArray(state.mainPool),
-      ...rangeStateToArray(state.narrowRange),
-
-      state.balancesAbTokenSeller[0],
-      state.balancesAbTokenSeller[1],
-
-      state.balancesAbSigner[0],
-      state.balancesAbSigner[1],
-
-      state.balancesAbSigner1[0],
-      state.balancesAbSigner1[1],
-
-      state.balancesAbSigner2[0],
-      state.balancesAbSigner2[1],
-
-      state.needToRefresh ? 1 : 0,
-      state.isPositionOpened ? 1 : 0,
-  ]
-  }
-
-  function stateHistoryToArrayHeaders(): string[] {
-    return [
-      "input.main.tag",
-      "input.main.fee",
-      "input.main.poolSwapTokens",
-      "input.main.amountA",
-      "input.main.amountB",
-      "input.main.priceRangeFrom",
-      "input.main.priceRangeTo",
-
-      "input.narrow.tag",
-      "input.narrow.balanceA",
-      "input.narrow.amountA",
-      "input.narrow.tickRangeSize",
-      "input.narrow.sqrtMinPriceRatio",
-      "input.narrow.thresholdRatio",
-      "input.narrow.thresholdTokenB",
-
-      "input.swap.tag",
-      "input.swap.swapTokenA",
-      "input.swap.swapAmount",
-
-      "tickLimit",
-      "tickSpacing",
-    ]
-  }
-  function stateHistoryToArray(state: IStateHistory): (string | number | BigNumber)[]{
-    return [
-      state.inputParams.mainPool.tag,
-      state.inputParams.mainPool.fee,
-      state.inputParams.mainPool.poolSwapTokens ? 1 : 0,
-      state.inputParams.mainPool.amountA,
-      state.inputParams.mainPool.amountB,
-      state.inputParams.mainPool.pricesRange[0],
-      state.inputParams.mainPool.pricesRange[1],
-
-      state.inputParams.narrowRange.tag,
-      state.inputParams.narrowRange.balanceA,
-      state.inputParams.narrowRange.amountA,
-      state.inputParams.narrowRange.tickRangeSize,
-      state.inputParams.narrowRange.sqrtMinPriceRatio,
-      state.inputParams.narrowRange.thresholdRatio,
-      state.inputParams.narrowRange.thresholdTokenB,
-
-      state.inputParams.swapParams.tag,
-      state.inputParams.swapParams.swapTokenA ? 1 : 0,
-      state.inputParams.swapParams.swapAmount,
-
-      state.derivedValues.tickLimit,
-      state.derivedValues.tickSpacing
-    ];
-  }
-
-  function saveToCsv(states: IStateHistory[], tag?: string) {
+  function saveToCsv(states: IState[], tag?: string) {
     const pathOut = `${pathWithoutExt}${tag}.csv`
-    const firstRow = ["param"];
-    for (let i = 0; i < states.length; ++i) {
-      const items = [
-        `start:${i}`,
-        `init:${i}`,
-        ...states[i].afterSwap.map((x, index) => `afterSwap:${i}:${index}`),
-        `afterRefresh:${i}`,
-        `final:${i}`,
-      ];
-      firstRow.push(...items);
-    }
-    writeFileSyncRestoreFolder(pathOut, firstRow.join(";") + '\n', { encoding: 'utf8', flag: 'w'});
+    const headers = [
+      "delta",
+      "tickSpacing",
+      "init.tick",
+      "init.price",
+      "target.tick",
+      "target.price",
+      "final.tick",
+      "final.price",
+      "diff-price",
+      "diff-tick",
+      "ts.tokenB",
+      "ts.amountToSwap",
+      "solidity.tokenB",
+      "solidity.amountToSwap",
+    ];
+    writeFileSyncRestoreFolder(pathOut, headers.join(";") + '\n', { encoding: 'utf8', flag: 'w'});
 
-    const column0 = stateToArrayHeaders();
-    const columns: (string | number | BigNumber)[][] = [];
     for (let i = 0; i < states.length; ++i) {
-      columns.push(
-        stateToArray(states[i].start),
-        stateToArray(states[i].init),
-      );
-      columns.push(
-        ...states[i].afterSwap.map(x => stateToArray(x)),
-      );
-      columns.push(
-        stateToArray(states[i].afterRefresh),
-        stateToArray(states[i].final),
-      );
-    }
-    for (let i = 0; i < column0.length; ++i) {
       const line = [
-        column0[i],
-        ...columns.map(x => x[i])
+        states[i].delta,
+        states[i].tickSpacing,
+        states[i].init.tick,
+        states[i].init.price,
+        states[i].target.tick,
+        states[i].target.price,
+        states[i].final.tick,
+        states[i].final.price,
+        states[i].final.priceDiff,
+        states[i].final.tickDiff,
+        states[i].toSwapTS.tokenB,
+        states[i].toSwapTS.amountToSwap,
+        states[i].toSwapSolidity.tokenB,
+        states[i].toSwapSolidity.amountToSwap,
       ]
       writeFileSync(
         pathOut,
@@ -541,64 +383,23 @@ describe('FindAmountTest', () => {
         { encoding: 'utf8', flag: 'a' },
       );
     }
-
-    // input params
-    const headers = stateHistoryToArrayHeaders();
-    const data = states.map(x => stateHistoryToArray(x));
-    for (let i = 0; i < headers.length; ++i) {
-      const line: (string | number | BigNumber)[] = [headers[i]];
-      for (let j = 0; j < data.length; ++j) {
-        const x = data[j];
-        line.push(x[i]);
-        line.push(""); // init
-        line.push(...states[j].afterSwap.map(_ => ""));
-        line.push(""); // afterRefresh
-        line.push(""); // final
-      }
-      writeFileSync(
-        pathOut,
-        line.join(';') + '\n',
-        { encoding: 'utf8', flag: 'a' },
-      );
-    }
-
   }
   //endregion Stat utils
 
   describe("refreshPool (init => {swap => refreshPool} * N => withdraw)", () => {
     //region Test data
     const MAIN_POOLS: IMainPoolParams[] = [
-// Main set
       {tag: "price 1:1,0.03%", fee: 3000, amountA: "10000", amountB: "10000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
-
-      // {tag: "price 1000:1,0.01%", fee: 100, amountA: "1000", amountB: "1", pricesRange: ["0.01", "100"], poolSwapTokens: false},
-      // {tag: "price 1:1000,0.01%", fee: 100, amountA: "1", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
-      //
-      // {tag: "price 1:1, swapped, 0.03%", fee: 3000, amountA: "1000", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: true},
-      // {tag: "price 1:1000, swapped, 0.03%", fee: 3000, amountA: "1", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: true},
-      // {tag: "price 1000:1, swapped, 0.03%", fee: 3000, amountA: "1000", amountB: "1", pricesRange: ["0.01", "100"], poolSwapTokens: true},
-
-// Additional set (study)
-      // {tag: "price 1:1, swapped, 0.01%", fee: 100, amountA: "1000", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: true},
-      // {tag: "price 1:1000, swapped, 0.01%", fee: 100, amountA: "1", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: true},
-      // {tag: "price 1000:1, swapped, 0.01%", fee: 100, amountA: "1000", amountB: "1", pricesRange: ["0.01", "100"], poolSwapTokens: true},
-
-      // {tag: "price 1000:1,1%", fee: 10000, amountA: "1000", amountB: "1", pricesRange: ["0.01", "100"], poolSwapTokens: false},
-      // {tag: "price 1:1,1%", fee: 10000, amountA: "1000", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
-      // {tag: "price 1:1000,1%", fee: 10000, amountA: "1", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
-      // {tag: "price 1000:1,0.3%", fee: 3000, amountA: "1000", amountB: "1", pricesRange: ["0.01", "100"], poolSwapTokens: false},
-      // {tag: "price 1:1,0.3%", fee: 3000, amountA: "1000", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
-      // {tag: "price 1:1000,0.3%", fee: 3000, amountA: "1", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
-    ];
-
-    const NARROW_RANGES: INarrowRangeParams[] = [
-      {tag: "10ths,5", balanceA: "50000", amountA: "10000", sqrtMinPriceRatio: "0.1", thresholdRatio: "0", thresholdTokenB: "0", tickRangeSize: 15},
-      // {tag: "100ths,3", balanceA: "500000", amountA: "100000", sqrtMinPriceRatio: "0.01", thresholdRatio: "0", thresholdTokenB: "0", tickRangeSize: 3},
+      {tag: "price 1000:1,0.01%", fee: 100, amountA: "1000", amountB: "1", pricesRange: ["0.01", "100"], poolSwapTokens: false},
+      {tag: "price 1:1, swapped, 1%", fee: 10000, amountA: "1000", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
+      {tag: "price 1:1000, swapped, 0.03%", fee: 3000, amountA: "1", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
     ];
 
     const SWAP_SETS: ISwapParams[] = [
       {tag: "A1", swapTokenA: true, swapAmount: "1"},
-      {tag: "B1", swapTokenA: false, swapAmount: "1"},
+      // {tag: "B1", swapTokenA: false, swapAmount: "1"},
+      // {tag: "A11", swapTokenA: true, swapAmount: "11"},
+      {tag: "B7", swapTokenA: false, swapAmount: "7"},
     ];
     //endregion Test data
 
@@ -606,38 +407,11 @@ describe('FindAmountTest', () => {
       describe(`Main pool: ${mainPool.tag}`, () => {
         let snapshot1: string;
         let pool: UniswapV3Pool;
-        let lowerTickWide: number;
-        let upperTickWide: number;
-        let liquidityAmountWide: BigNumber;
-        let sqrtPriceX96Wide: BigNumber;
-        let wideRangeState0: IRangeState;
-        let start: IState;
+        let tokenSeller: Univ3TokenSeller;
 
         before(async function () {
           snapshot1 = await TimeUtils.snapshot();
 
-          start = {
-            mainPool: {
-              lowerTick: 0,
-              upperTick: 0,
-              liquidityAmount: BigNumber.from(0),
-              amountsAB: [0, 0],
-            },
-            tick: 0,
-            sqrtPriceX96: BigNumber.from(0),
-            needToRefresh: false,
-            isPositionOpened: false,
-            narrowRange: {
-              lowerTick: 0,
-              upperTick: 0,
-              liquidityAmount: BigNumber.from(0),
-              amountsAB: [0, 0],
-            },
-            balancesAbTokenSeller: [0, 0],
-            balancesAbSigner: await getBalancesAB(signer.address),
-            balancesAbSigner1: await getBalancesAB(signer1.address),
-            balancesAbSigner2: await getBalancesAB(signer2.address),
-          }
           pool = UniswapV3Pool__factory.connect(await uniswapV3Factory.callStatic.createPool(
             mainPool.poolSwapTokens ? tokenB.address : tokenA.address,
             mainPool.poolSwapTokens ? tokenA.address : tokenB.address,
@@ -650,221 +424,237 @@ describe('FindAmountTest', () => {
           );
 
           // initialize the pool
-
           const {sqrtPriceX96, amountA, amountB} = await initializePool(mainPool, pool);
 
-          const {lowerTick, upperTick, liquidityAmount} = await putLiquidityToWideRange(
+          const {lowerTick, upperTick, liquidityAmount} = await putLiquidityToRangeWide(
             pool,
-            mainPool,
+            mainPool.poolSwapTokens,
+            mainPool.pricesRange,
             sqrtPriceX96,
             amountA,
             amountB
           );
 
-          lowerTickWide = lowerTick;
-          upperTickWide = upperTick;
-          liquidityAmountWide = liquidityAmount;
-          sqrtPriceX96Wide = sqrtPriceX96;
+          for (let i = 0; i < 5; ++i) {
+            const tickSpacing = await pool.tickSpacing();
+            const tick = await facadeUni._getTickAtSqrtRatio(sqrtPriceX96);
+            await putLiquidityToRangeNarrow(
+              pool,
+              mainPool.poolSwapTokens,
+              tick - tickSpacing * (i + 1),
+              tick - tickSpacing * (i + 2),
+              sqrtPriceX96,
+              amountA.div(10),
+              amountB.div(10)
+            );
+            await putLiquidityToRangeNarrow(
+              pool,
+              mainPool.poolSwapTokens,
+              tick + tickSpacing * (i + 1),
+              tick + tickSpacing * (i + 2),
+              sqrtPriceX96,
+              amountA.div(10),
+              amountB.div(10)
+            );
+          }
 
-          wideRangeState0 = await getCurrentWideRangeState(mainPool, sqrtPriceX96, lowerTickWide, upperTickWide, liquidityAmountWide);
-          console.log("Main pool is initialized");
-          console.log("lowerTickWide", lowerTickWide);
-          console.log("upperTick", upperTick);
-          console.log("liquidityAmountWide", liquidityAmountWide);
-          console.log("sqrtPriceX96Wide", sqrtPriceX96Wide);
+          const tokenSellerConfig: TokenSellerConfigStruct = {
+            amountA: parseUnits("1", decimalsA),
+            tickRangeSize: 1,
+            tickLimit: 0,
+            thresholdTokenB: 0,
+            thresholdRatio: parseUnits("0.1", 5),
+            thresholdLastRefreshPoolSec: 100
+          }
+          const slot0 = await pool.slot0();
+          tokenSeller = (await DeployerUtils.deployContract(
+            signer,
+            "Univ3TokenSeller",
+            tokenA.address,
+            tokenB.address,
+            pool.address,
+            tokenSellerConfig,
+            slot0.sqrtPriceX96,
+            signer.address,
+
+          )) as Univ3TokenSeller;
         });
 
         after(async function () {
           await TimeUtils.rollback(snapshot1);
         });
 
-        NARROW_RANGES.forEach(function (narrowRange: INarrowRangeParams) {
-          describe(`Narrow range: ${narrowRange.tag}`, () => {
-            let tokenSeller: Univ3TokenSeller;
-            let snapshot2: string;
-            let init: IState;
-            let derivedValues: IDerivedValues;
+        SWAP_SETS.forEach(function (swapParams: ISwapParams) {
+          describe(`Swap ${swapParams.tag}`, () => {
+            let snapshot3: string;
+
+            async function makeSwap(swapSigner: SignerWithAddress, swapToken: MockToken, amountToSwap: BigNumber) {
+              console.log("Prepare to swap, balance", await swapToken.balanceOf(swapSigner.address), amountToSwap);
+              await swapToken.connect(swapSigner).approve(uniswapV3Callee.address, amountToSwap);
+              await uniswapV3Callee.connect(swapSigner).swap(pool.address, swapSigner.address, swapToken.address, amountToSwap);
+              console.log("Swap is done");
+            }
+
             before(async function () {
-              console.log("Set up token seller");
-              snapshot2 = await TimeUtils.snapshot();
+              snapshot3 = await TimeUtils.snapshot();
 
-              tokenSeller = await createTokenSeller(pool, mainPool, narrowRange);
+              await makeSwap(
+                signer2,
+                swapParams.swapTokenA ? tokenA : tokenB,
+                parseUnits(swapParams.swapAmount, swapParams.swapTokenA ? decimalsA : decimalsB)
+              )
 
-              const poolInfo = await pool.slot0();
-              init = {
-                mainPool: wideRangeState0,
-                tick: poolInfo.tick,
-                sqrtPriceX96: poolInfo.sqrtPriceX96,
-                needToRefresh: await tokenSeller.needToRefresh(),
-                isPositionOpened: await tokenSeller.isPositionOpened(),
-                narrowRange: await getCurrentNarrowRangeState(mainPool, tokenSeller, poolInfo.sqrtPriceX96),
-                balancesAbTokenSeller: await getBalancesAB(tokenSeller.address),
-                balancesAbSigner: await getBalancesAB(signer.address),
-                balancesAbSigner1: await getBalancesAB(signer1.address),
-                balancesAbSigner2: await getBalancesAB(signer2.address),
-              }
-
-              const config = await tokenSeller.config();
-              derivedValues = {
-                tickLimit: config.tickLimit,
-                tickSpacing: await tokenSeller.tickSpacing(),
-              }
-
-              console.log("init", init);
+              const {sqrtPriceX96, tick} = await pool.slot0();
             });
             after(async function () {
-              await TimeUtils.rollback(snapshot2);
+              await TimeUtils.rollback(snapshot3);
             });
 
-            SWAP_SETS.forEach(function (swapParams: ISwapParams) {
-              describe(`Swap ${swapParams.tag}`, () => {
-                let snapshot3: string;
-                let afterSwap0: IState;
+            interface IGetAmountToSwapResults {
+              swapB: boolean;
+              amountToSwap: BigNumber;
+              liquidityAfterSwap: BigNumber;
+            }
 
-                async function makeSwap(swapSigner: SignerWithAddress, swapToken: MockToken, amountToSwap: BigNumber) {
-                  console.log("Prepare to swap, balance", await swapToken.balanceOf(swapSigner.address), amountToSwap);
-                  await swapToken.connect(swapSigner).approve(uniswapV3Callee.address, amountToSwap);
-                  await uniswapV3Callee.connect(swapSigner).swap(pool.address, swapSigner.address, swapToken.address, amountToSwap);
-                  console.log("Swap is done");
-                }
+            /**
+             * Calculate what amount should be swapped to move current price to given target value.
+             * The implementation is based on the following code:
+             * https://ethereum.stackexchange.com/questions/120828/uniswap-v3-calculate-volume-to-reach-target-price
+             */
+            async function getAmountToSwap(targetSqrtPriceX96: BigNumber): Promise<IGetAmountToSwapResults> {
+              const slot0 = await pool.slot0();
+              const tickSpacing = await pool.tickSpacing();
 
-                before(async function () {
-                  snapshot3 = await TimeUtils.snapshot();
+              let sqrtPriceX96 = slot0.sqrtPriceX96;
+              let liquidity = await pool.liquidity();
 
-                  await makeSwap(
-                    signer2,
-                    swapParams.swapTokenA ? tokenA : tokenB,
-                    parseUnits(swapParams.swapAmount, swapParams.swapTokenA ? decimalsA : decimalsB)
-                  )
+              let lowerTick = Math.floor(slot0.tick / tickSpacing) * tickSpacing;
+              let upperTick = lowerTick + tickSpacing;
 
-                  const {sqrtPriceX96, tick} = await pool.slot0();
-                  afterSwap0 = {
-                    mainPool: await getCurrentWideRangeState(mainPool, sqrtPriceX96, lowerTickWide, upperTickWide, liquidityAmountWide),
-                    tick,
-                    sqrtPriceX96,
-                    needToRefresh: await tokenSeller.needToRefresh(),
-                    isPositionOpened: await tokenSeller.isPositionOpened(),
-                    narrowRange: await getCurrentNarrowRangeState(mainPool, tokenSeller, sqrtPriceX96),
-                    balancesAbTokenSeller: await getBalancesAB(tokenSeller.address),
-                    balancesAbSigner: await getBalancesAB(signer.address),
-                    balancesAbSigner1: await getBalancesAB(signer1.address),
-                    balancesAbSigner2: await getBalancesAB(signer2.address),
-                  }
-                  console.log("init", init)
-                  console.log("afterSwap", afterSwap0)
-                });
-                after(async function () {
-                  await TimeUtils.rollback(snapshot3);
-                });
+              let amountToSwap = BigNumber.from(0);
+              const swapB = targetSqrtPriceX96.gt(sqrtPriceX96);
 
-                interface IGetAmountToSwapResults {
-                  swapB: boolean;
-                  amountToSwap: BigNumber;
-                  liquidityAfterSwap: BigNumber;
-                }
+              if (swapB) {
+                while (targetSqrtPriceX96.gt(sqrtPriceX96)) {
+                  const upperSqrtPriceX96 = await facadeUni._getSqrtRatioAtTick(upperTick);
 
-                /**
-                 * Calculate what amount should be swapped to move current price to given target value.
-                 * The implementation is based on the following code:
-                 * https://ethereum.stackexchange.com/questions/120828/uniswap-v3-calculate-volume-to-reach-target-price
-                 */
-                async function getAmountToSwap(targetSqrtPriceX96: BigNumber): Promise<IGetAmountToSwapResults> {
-                  const slot0 = await pool.slot0();
-                  const tickSpacing = await pool.tickSpacing();
+                  if (targetSqrtPriceX96.gt(upperSqrtPriceX96)) {
+                    const toSellB = await facadeUni._getAmount1ForLiquidity(sqrtPriceX96, upperSqrtPriceX96, liquidity);
+                    amountToSwap = amountToSwap.add(toSellB);
 
-                  let sqrtPriceX96 = slot0.sqrtPriceX96;
-                  let liquidity = await pool.liquidity();
-
-                  let lowerTick = Math.floor(slot0.tick / tickSpacing) * tickSpacing;
-                  let upperTick = lowerTick + tickSpacing;
-
-                  let amountToSwap = BigNumber.from(0);
-                  const swapB = targetSqrtPriceX96.gt(sqrtPriceX96);
-
-                  if (swapB) {
-                    while (targetSqrtPriceX96.gt(sqrtPriceX96)) {
-                      const upperSqrtPriceX96 = await facadeUni._getSqrtRatioAtTick(upperTick);
-
-                      if (targetSqrtPriceX96.gt(upperSqrtPriceX96)) {
-                        const toSellB = await facadeUni._getAmount1ForLiquidity(sqrtPriceX96, upperSqrtPriceX96, liquidity);
-                        amountToSwap = amountToSwap.add(toSellB);
-
-                        const nextTick = await pool.ticks(upperTick);
-                        liquidity = liquidity.add(nextTick.liquidityNet);
-                        sqrtPriceX96 = upperSqrtPriceX96;
-                        lowerTick += tickSpacing;
-                        upperTick += tickSpacing;
-                      } else {
-                        const toSellB = await facadeUni._getAmount1ForLiquidity(sqrtPriceX96, upperSqrtPriceX96, liquidity);
-                        amountToSwap = amountToSwap.add(toSellB);
-                        sqrtPriceX96 = targetSqrtPriceX96;
-                      }
-                    }
+                    const nextTick = await pool.ticks(upperTick);
+                    liquidity = liquidity.add(nextTick.liquidityNet);
+                    sqrtPriceX96 = upperSqrtPriceX96;
+                    lowerTick += tickSpacing;
+                    upperTick += tickSpacing;
                   } else {
-                    while (targetSqrtPriceX96.lt(sqrtPriceX96)) {
-                      const lowerSqrtPriceX96 = await facadeUni._getSqrtRatioAtTick(lowerTick);
-
-                      if (targetSqrtPriceX96.lt(lowerSqrtPriceX96)) {
-                        const toSellA = await facadeUni._getAmount0ForLiquidity(sqrtPriceX96, lowerSqrtPriceX96, liquidity);
-                        amountToSwap = amountToSwap.add(toSellA);
-
-                        const nextTick = await pool.ticks(lowerTick);
-                        liquidity = liquidity.sub(nextTick.liquidityNet);
-                        sqrtPriceX96 = lowerSqrtPriceX96;
-                        lowerTick -= tickSpacing;
-                        upperTick -= tickSpacing;
-                      } else {
-                        const toSellA = await facadeUni._getAmount0ForLiquidity(sqrtPriceX96, lowerSqrtPriceX96, liquidity);
-                        amountToSwap = amountToSwap.add(toSellA);
-                        sqrtPriceX96 = targetSqrtPriceX96;
-                      }
-                    }
-                  }
-
-                  return {
-                    swapB,
-                    amountToSwap,
-                    liquidityAfterSwap: liquidity
+                    const toSellB = await facadeUni._getAmount1ForLiquidity(sqrtPriceX96, upperSqrtPriceX96, liquidity);
+                    amountToSwap = amountToSwap.add(toSellB);
+                    sqrtPriceX96 = targetSqrtPriceX96;
                   }
                 }
+              } else {
+                while (targetSqrtPriceX96.lt(sqrtPriceX96)) {
+                  const lowerSqrtPriceX96 = await facadeUni._getSqrtRatioAtTick(lowerTick);
 
-                it("should move price to next upper tick", async () => {
-                  const slot0 = await pool.slot0();
-                  const tickSpacing = await pool.tickSpacing();
-                  console.log("slot0", slot0);
-                  console.log("tickSpacing", tickSpacing);
+                  if (targetSqrtPriceX96.lt(lowerSqrtPriceX96)) {
+                    const toSellA = await facadeUni._getAmount0ForLiquidity(sqrtPriceX96, lowerSqrtPriceX96, liquidity);
+                    amountToSwap = amountToSwap.add(toSellA);
 
-                  const currentTickInfo = await pool.ticks(slot0.tick);
-                  console.log("currentTickInfo", currentTickInfo);
+                    const nextTick = await pool.ticks(lowerTick);
+                    liquidity = liquidity.sub(nextTick.liquidityNet);
+                    sqrtPriceX96 = lowerSqrtPriceX96;
+                    lowerTick -= tickSpacing;
+                    upperTick -= tickSpacing;
+                  } else {
+                    const toSellA = await facadeUni._getAmount0ForLiquidity(sqrtPriceX96, lowerSqrtPriceX96, liquidity);
+                    amountToSwap = amountToSwap.add(toSellA);
+                    sqrtPriceX96 = targetSqrtPriceX96;
+                  }
+                }
+              }
 
-                  const sqrtPriceX96 = slot0.sqrtPriceX96;
-                  const liquidityInitial = await pool.liquidity();
+              return {
+                swapB,
+                amountToSwap,
+                liquidityAfterSwap: liquidity
+              }
+            }
 
-                  const targetTick = slot0.tick - 10 * tickSpacing;
-                  const targetSqrtPriceX96 = await facadeUni._getSqrtRatioAtTick(targetTick);
-                  console.log("targetTick", targetTick);
-                  console.log("targetPrice", targetSqrtPriceX96);
+            [-200, -100, -10, -4, -2, -1, 0, 1, 2, 4, 10, 100, 200].forEach(function(delta: number) {
+              it(`should move price to next upper tick delta=${delta}`, async () => {
+                const slot0 = await pool.slot0();
+                const tickSpacing = await pool.tickSpacing();
+                console.log("slot0", slot0);
+                console.log("tickSpacing", tickSpacing);
 
-                  const r = await getAmountToSwap(targetSqrtPriceX96);
+                const currentTickInfo = await pool.ticks(slot0.tick);
+                console.log("currentTickInfo", currentTickInfo);
 
-                  await makeSwap(signer3, r.swapB ? tokenB : tokenA, r.amountToSwap);
-                  const slot0after = await pool.slot0();
-                  const liquidityAfter = await pool.liquidity();
-                  console.log("slot0 after swap", slot0after);
-                  console.log("liquidity after swap", liquidityAfter);
+                const sqrtPriceX96 = slot0.sqrtPriceX96;
+                const liquidityInitial = await pool.liquidity();
 
-                  console.log("expected price", sqrtPriceX96);
-                  console.log("expected liquidity after swap", liquidityInitial);
+                const targetTick = slot0.tick - delta * tickSpacing;
+                const targetSqrtPriceX96 = await facadeUni._getSqrtRatioAtTick(targetTick);
+                console.log("targetTick", targetTick);
+                console.log("targetPrice", targetSqrtPriceX96);
 
-                  const QX96 = BigNumber.from(2).pow(96);
-                  const priceExpected = (sqrtPriceX96.mul(Misc.ONE18).mul(sqrtPriceX96).div(QX96).div(QX96)).toNumber();
-                  const priceReal = (slot0after.sqrtPriceX96.mul(Misc.ONE18).mul(slot0after.sqrtPriceX96).div(QX96).div(QX96)).toNumber();
-                  console.log("priceExpected, priceReal", priceExpected, priceReal);
-                  console.log("liquidityAfter, liquidity", liquidityAfter, liquidityInitial);
+                const r = await getAmountToSwap(targetSqrtPriceX96);
+                const rOnChain = await tokenSeller.getAmountToSwap(pool.address, targetSqrtPriceX96);
 
-                  expect(liquidityAfter).eq(liquidityInitial);
-                  expect((priceReal - priceExpected) * 100 / priceExpected).lt(0.5); // less 0.5%
-                });
+                await makeSwap(signer3, r.swapB ? tokenB : tokenA, r.amountToSwap);
+                const slot0after = await pool.slot0();
+                const liquidityAfter = await pool.liquidity();
+                console.log("slot0 after swap", slot0after);
+                console.log("liquidity after swap", liquidityAfter);
+
+                console.log("expected price", sqrtPriceX96);
+                console.log("expected liquidity after swap", liquidityInitial);
+
+                const QX96 = BigNumber.from(2).pow(96);
+                const priceExpected = (targetSqrtPriceX96.mul(Misc.ONE18).mul(targetSqrtPriceX96).div(QX96).div(QX96)).toNumber();
+                const priceReal = (slot0after.sqrtPriceX96.mul(Misc.ONE18).mul(slot0after.sqrtPriceX96).div(QX96).div(QX96)).toNumber();
+                console.log("priceExpected, priceReal", priceExpected, priceReal);
+                console.log("liquidityAfter, liquidity", liquidityAfter, liquidityInitial);
+
+                const state: IState = {
+                  delta,
+                  tickSpacing,
+                  init: {
+                    tick: slot0.tick,
+                    price: (sqrtPriceX96.mul(Misc.ONE18).mul(sqrtPriceX96).div(QX96).div(QX96)).toNumber()
+                  },
+                  target: {
+                    tick: targetTick,
+                    price: (targetSqrtPriceX96.mul(Misc.ONE18).mul(targetSqrtPriceX96).div(QX96).div(QX96)).toNumber()
+                  },
+                  final: {
+                    tick: slot0after.tick,
+                    price: (slot0after.sqrtPriceX96.mul(Misc.ONE18).mul(slot0after.sqrtPriceX96).div(QX96).div(QX96)).toNumber(),
+                    priceDiff: (priceReal - priceExpected) * 100 / priceExpected,
+                    tickDiff: Math.abs(slot0after.tick - targetTick) / tickSpacing
+                  },
+                  toSwapTS: {
+                    tokenB: r.swapB,
+                    amountToSwap: +formatUnits(
+                      r.amountToSwap,
+                      r.swapB ? decimalsB : decimalsA
+                    )
+                  },
+                  toSwapSolidity: {
+                    tokenB: rOnChain.swapToken1,
+                    amountToSwap: +formatUnits(
+                      rOnChain.amountToSwap,
+                      rOnChain.swapToken1 ? decimalsB : decimalsA
+                    )
+                  },
+                };
+                states.push(state);
+                console.log(states[states.length - 1]);
+                // expect(liquidityAfter).eq(liquidityInitial);
+                expect(state.final.tickDiff <= 1 || state.final.priceDiff === 0).eq(true);
+                expect(state.toSwapTS.amountToSwap).eq(state.toSwapSolidity.amountToSwap);
+                expect(state.toSwapTS.tokenB).eq(state.toSwapSolidity.tokenB);
               });
             });
           });

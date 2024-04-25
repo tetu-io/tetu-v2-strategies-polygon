@@ -113,6 +113,18 @@ contract Univ3TokenSeller is IUniswapV3MintCallback {
   function isPositionOpened() public view returns (bool) {
     return state.liquidityAmount != 0;
   }
+
+  /// @notice Calculate what amount should be swapped to move current price to given target value.
+  /// @param targetSqrtPriceX96 Required price after the swap (sqrt price * 2pow96)
+  /// @param swapToken1 True if pool.token1 should be swapped
+  /// @param amountToSwap Amount of token 0 or 1 (depends on swapToken1) that should be swapped
+  /// to set current price in the pool equal to the {targetSqrtPriceX96}
+  function getAmountToSwap(IUniswapV3Pool pool_, uint160 targetSqrtPriceX96) external view returns (
+    bool swapToken1,
+    uint amountToSwap
+  ) {
+    return Univ3TokenSellerLib.getAmountToSwap(pool_, targetSqrtPriceX96);
+  }
   //endregion ---------------------- View
 
   //region ---------------------- Configure
