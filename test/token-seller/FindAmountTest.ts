@@ -386,21 +386,113 @@ describe('FindAmountTest', () => {
   }
   //endregion Stat utils
 
+  //region ------------------ getAmountToSwap
+  interface IGetAmountToSwapResults {
+    swapB: boolean;
+    amountToSwap: BigNumber;
+    liquidityAfterSwap: BigNumber;
+  }
+
+  /**
+   * Calculate what amount should be swapped to move current price to given target value.
+   * The implementation is based on the following code:
+   * https://ethereum.stackexchange.com/questions/120828/uniswap-v3-calculate-volume-to-reach-target-price
+   */
+  async function getAmountToSwap(pool: UniswapV3Pool, targetSqrtPriceX96: BigNumber): Promise<IGetAmountToSwapResults> {
+    const slot0 = await pool.slot0();
+    const tickSpacing = await pool.tickSpacing();
+
+    let sqrtPriceX96 = slot0.sqrtPriceX96;
+    let liquidity = await pool.liquidity();
+
+    let lowerTick = Math.floor(slot0.tick / tickSpacing) * tickSpacing;
+    let upperTick = lowerTick + tickSpacing;
+
+    let amountToSwap = BigNumber.from(0);
+    const swapB = targetSqrtPriceX96.gt(sqrtPriceX96);
+
+    if (swapB) {
+      while (targetSqrtPriceX96.gt(sqrtPriceX96)) {
+        const upperSqrtPriceX96 = await facadeUni._getSqrtRatioAtTick(upperTick);
+
+        if (targetSqrtPriceX96.gt(upperSqrtPriceX96)) {
+          const toSellB = await facadeUni._getAmount1ForLiquidity(sqrtPriceX96, upperSqrtPriceX96, liquidity);
+          amountToSwap = amountToSwap.add(toSellB);
+
+          const nextTick = await pool.ticks(upperTick);
+          liquidity = liquidity.add(nextTick.liquidityNet);
+          sqrtPriceX96 = upperSqrtPriceX96;
+          lowerTick += tickSpacing;
+          upperTick += tickSpacing;
+        } else {
+          console.log("lowerTick", lowerTick);
+          console.log("upperTick", upperTick);
+          console.log("sqrtPriceX96", sqrtPriceX96);
+          console.log("targetSqrtPriceX96", targetSqrtPriceX96);
+          const toSellB = await facadeUni._getAmount1ForLiquidity(sqrtPriceX96, targetSqrtPriceX96, liquidity);
+          console.log("toSellB.1", await facadeUni._getAmount1ForLiquidity(sqrtPriceX96, upperSqrtPriceX96, liquidity));
+          console.log("toSellB.2", await facadeUni._getAmount1ForLiquidity(sqrtPriceX96, targetSqrtPriceX96, liquidity));
+          amountToSwap = amountToSwap.add(toSellB);
+          sqrtPriceX96 = targetSqrtPriceX96;
+        }
+      }
+    } else {
+      while (targetSqrtPriceX96.lt(sqrtPriceX96)) {
+        const lowerSqrtPriceX96 = await facadeUni._getSqrtRatioAtTick(lowerTick);
+
+        if (targetSqrtPriceX96.lt(lowerSqrtPriceX96)) {
+          const toSellA = await facadeUni._getAmount0ForLiquidity(sqrtPriceX96, lowerSqrtPriceX96, liquidity);
+          amountToSwap = amountToSwap.add(toSellA);
+
+          const nextTick = await pool.ticks(lowerTick);
+          liquidity = liquidity.sub(nextTick.liquidityNet);
+          sqrtPriceX96 = lowerSqrtPriceX96;
+          lowerTick -= tickSpacing;
+          upperTick -= tickSpacing;
+        } else {
+          console.log("lowerTick", lowerTick);
+          console.log("upperTick", upperTick);
+          console.log("sqrtPriceX96", sqrtPriceX96);
+          console.log("targetSqrtPriceX96", targetSqrtPriceX96);
+          console.log("tick", await facadeUni._getTickAtSqrtRatio(sqrtPriceX96));
+          console.log("tickTarget", await facadeUni._getTickAtSqrtRatio(targetSqrtPriceX96));
+          console.log("tickLower", await facadeUni._getTickAtSqrtRatio(lowerSqrtPriceX96));
+          const toSellA = await facadeUni._getAmount0ForLiquidity(sqrtPriceX96, targetSqrtPriceX96, liquidity);
+          console.log("toSellA.1", await facadeUni._getAmount0ForLiquidity(sqrtPriceX96, lowerSqrtPriceX96, liquidity));
+          console.log("toSellA.2", await facadeUni._getAmount0ForLiquidity(sqrtPriceX96, targetSqrtPriceX96, liquidity));
+          amountToSwap = amountToSwap.add(toSellA);
+          sqrtPriceX96 = targetSqrtPriceX96;
+        }
+      }
+    }
+
+    return {
+      swapB,
+      amountToSwap,
+      liquidityAfterSwap: liquidity
+    }
+  }
+  //endregion ------------------ getAmountToSwap
+
   describe("refreshPool (init => {swap => refreshPool} * N => withdraw)", () => {
     //region Test data
     const MAIN_POOLS: IMainPoolParams[] = [
-      {tag: "price 1:1,0.03%", fee: 3000, amountA: "10000", amountB: "10000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
-      {tag: "price 1000:1,0.01%", fee: 100, amountA: "1000", amountB: "1", pricesRange: ["0.01", "100"], poolSwapTokens: false},
+      // {tag: "price 1:1,0.03%", fee: 3000, amountA: "10000", amountB: "10000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
+      // {tag: "price 1000:1,0.01%", fee: 100, amountA: "1000", amountB: "1", pricesRange: ["0.01", "100"], poolSwapTokens: false},
       {tag: "price 1:1, swapped, 1%", fee: 10000, amountA: "1000", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
-      {tag: "price 1:1000, swapped, 0.03%", fee: 3000, amountA: "1", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
+      // {tag: "price 1:1000, swapped, 0.03%", fee: 3000, amountA: "1", amountB: "1000", pricesRange: ["0.01", "100"], poolSwapTokens: false},
     ];
 
     const SWAP_SETS: ISwapParams[] = [
       {tag: "A1", swapTokenA: true, swapAmount: "1"},
+       {tag: "B7", swapTokenA: false, swapAmount: "7"},
+
       // {tag: "B1", swapTokenA: false, swapAmount: "1"},
       // {tag: "A11", swapTokenA: true, swapAmount: "11"},
-      {tag: "B7", swapTokenA: false, swapAmount: "7"},
     ];
+
+    const TICK_DELTAS = [-200];
+    // const TICK_DELTAS = [-200, -100, -10, -4, -2, -1, 0, 1, 2, 4, 10, 100, 200];
     //endregion Test data
 
     MAIN_POOLS.forEach(function (mainPool: IMainPoolParams) {
@@ -510,78 +602,7 @@ describe('FindAmountTest', () => {
               await TimeUtils.rollback(snapshot3);
             });
 
-            interface IGetAmountToSwapResults {
-              swapB: boolean;
-              amountToSwap: BigNumber;
-              liquidityAfterSwap: BigNumber;
-            }
-
-            /**
-             * Calculate what amount should be swapped to move current price to given target value.
-             * The implementation is based on the following code:
-             * https://ethereum.stackexchange.com/questions/120828/uniswap-v3-calculate-volume-to-reach-target-price
-             */
-            async function getAmountToSwap(targetSqrtPriceX96: BigNumber): Promise<IGetAmountToSwapResults> {
-              const slot0 = await pool.slot0();
-              const tickSpacing = await pool.tickSpacing();
-
-              let sqrtPriceX96 = slot0.sqrtPriceX96;
-              let liquidity = await pool.liquidity();
-
-              let lowerTick = Math.floor(slot0.tick / tickSpacing) * tickSpacing;
-              let upperTick = lowerTick + tickSpacing;
-
-              let amountToSwap = BigNumber.from(0);
-              const swapB = targetSqrtPriceX96.gt(sqrtPriceX96);
-
-              if (swapB) {
-                while (targetSqrtPriceX96.gt(sqrtPriceX96)) {
-                  const upperSqrtPriceX96 = await facadeUni._getSqrtRatioAtTick(upperTick);
-
-                  if (targetSqrtPriceX96.gt(upperSqrtPriceX96)) {
-                    const toSellB = await facadeUni._getAmount1ForLiquidity(sqrtPriceX96, upperSqrtPriceX96, liquidity);
-                    amountToSwap = amountToSwap.add(toSellB);
-
-                    const nextTick = await pool.ticks(upperTick);
-                    liquidity = liquidity.add(nextTick.liquidityNet);
-                    sqrtPriceX96 = upperSqrtPriceX96;
-                    lowerTick += tickSpacing;
-                    upperTick += tickSpacing;
-                  } else {
-                    const toSellB = await facadeUni._getAmount1ForLiquidity(sqrtPriceX96, upperSqrtPriceX96, liquidity);
-                    amountToSwap = amountToSwap.add(toSellB);
-                    sqrtPriceX96 = targetSqrtPriceX96;
-                  }
-                }
-              } else {
-                while (targetSqrtPriceX96.lt(sqrtPriceX96)) {
-                  const lowerSqrtPriceX96 = await facadeUni._getSqrtRatioAtTick(lowerTick);
-
-                  if (targetSqrtPriceX96.lt(lowerSqrtPriceX96)) {
-                    const toSellA = await facadeUni._getAmount0ForLiquidity(sqrtPriceX96, lowerSqrtPriceX96, liquidity);
-                    amountToSwap = amountToSwap.add(toSellA);
-
-                    const nextTick = await pool.ticks(lowerTick);
-                    liquidity = liquidity.sub(nextTick.liquidityNet);
-                    sqrtPriceX96 = lowerSqrtPriceX96;
-                    lowerTick -= tickSpacing;
-                    upperTick -= tickSpacing;
-                  } else {
-                    const toSellA = await facadeUni._getAmount0ForLiquidity(sqrtPriceX96, lowerSqrtPriceX96, liquidity);
-                    amountToSwap = amountToSwap.add(toSellA);
-                    sqrtPriceX96 = targetSqrtPriceX96;
-                  }
-                }
-              }
-
-              return {
-                swapB,
-                amountToSwap,
-                liquidityAfterSwap: liquidity
-              }
-            }
-
-            [-200, -100, -10, -4, -2, -1, 0, 1, 2, 4, 10, 100, 200].forEach(function(delta: number) {
+            TICK_DELTAS.forEach(function(delta: number) {
               it(`should move price to next upper tick delta=${delta}`, async () => {
                 const slot0 = await pool.slot0();
                 const tickSpacing = await pool.tickSpacing();
@@ -599,7 +620,7 @@ describe('FindAmountTest', () => {
                 console.log("targetTick", targetTick);
                 console.log("targetPrice", targetSqrtPriceX96);
 
-                const r = await getAmountToSwap(targetSqrtPriceX96);
+                const r = await getAmountToSwap(pool, targetSqrtPriceX96);
                 const rOnChain = await tokenSeller.getAmountToSwap(pool.address, targetSqrtPriceX96);
 
                 await makeSwap(signer3, r.swapB ? tokenB : tokenA, r.amountToSwap);

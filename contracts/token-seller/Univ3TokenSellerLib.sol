@@ -286,8 +286,8 @@ library Univ3TokenSellerLib {
       // it's necessary to swap token1 => token0
       while (targetSqrtPriceX96 > sqrtPriceX96) {
         uint160 upperSqrtPriceX96 = UniswapV3Lib._getSqrtRatioAtTick(upperTick);
-        amountToSwap += UniswapV3Lib._getAmount1ForLiquidity(sqrtPriceX96, upperSqrtPriceX96, liquidity);
         if (targetSqrtPriceX96 > upperSqrtPriceX96) {
+          amountToSwap += UniswapV3Lib._getAmount1ForLiquidity(sqrtPriceX96, upperSqrtPriceX96, liquidity);
           (,int128 liquidityNet,,,,,,) = pool.ticks(upperTick);
           if (liquidityNet > 0) {
             liquidity += uint128(liquidityNet);
@@ -298,6 +298,7 @@ library Univ3TokenSellerLib {
           lowerTick += tickSpacing;
           upperTick += tickSpacing;
         } else {
+          amountToSwap += UniswapV3Lib._getAmount1ForLiquidity(sqrtPriceX96, targetSqrtPriceX96, liquidity);
           sqrtPriceX96 = targetSqrtPriceX96;
         }
       }
@@ -305,8 +306,8 @@ library Univ3TokenSellerLib {
       // it's necessary to swap token0 => token1
       while (targetSqrtPriceX96 < sqrtPriceX96) {
         uint160 lowerSqrtPriceX96 = UniswapV3Lib._getSqrtRatioAtTick(lowerTick);
-        amountToSwap += UniswapV3Lib._getAmount0ForLiquidity(sqrtPriceX96, lowerSqrtPriceX96, liquidity);
         if (targetSqrtPriceX96 < lowerSqrtPriceX96) {
+          amountToSwap += UniswapV3Lib._getAmount0ForLiquidity(sqrtPriceX96, lowerSqrtPriceX96, liquidity);
           (,int128 liquidityNet,,,,,,) = pool.ticks(lowerTick);
           if (liquidityNet > 0) {
             liquidity -= uint128(liquidityNet);
@@ -317,6 +318,7 @@ library Univ3TokenSellerLib {
           lowerTick -= tickSpacing;
           upperTick -= tickSpacing;
         } else {
+          amountToSwap += UniswapV3Lib._getAmount0ForLiquidity(sqrtPriceX96, targetSqrtPriceX96, liquidity);
           sqrtPriceX96 = targetSqrtPriceX96;
         }
       }
