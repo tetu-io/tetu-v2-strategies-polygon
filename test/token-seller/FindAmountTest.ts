@@ -424,6 +424,7 @@ describe('FindAmountTest', () => {
           sqrtPriceX96 = upperSqrtPriceX96;
           lowerTick += tickSpacing;
           upperTick += tickSpacing;
+
         } else {
           console.log("lowerTick", lowerTick);
           console.log("upperTick", upperTick);

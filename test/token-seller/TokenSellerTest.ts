@@ -9,7 +9,7 @@ import {
   UniswapV3Callee,
   UniswapV3Factory,
   UniswapV3LibFacade, UniswapV3Pool,
-  UniswapV3Pool__factory, Univ3TokenSeller
+  UniswapV3Pool__factory, Univ3TokenSeller, Univ3TokenSellerResolver, Univ3TokenSellerResolverCaller
 } from "../../typechain";
 import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
 import {BigNumber} from "ethers";
@@ -75,6 +75,8 @@ describe('TokenSellerTest', () => {
   const pathWithoutExt = `./tmp/TokenSellerTest`;
   const SIGNER_AMOUNT_A = "10000000";
   const SIGNER_AMOUNT_B = "100000";
+  const DEFAULT_REFRESH_DELAY = 0;
+
   let snapshotBefore: string;
   let signer: SignerWithAddress;
   let signer1: SignerWithAddress;
@@ -392,7 +394,7 @@ describe('TokenSellerTest', () => {
       tickLimit: await facadeUni._getTickAtSqrtRatio(minSqrtPriceX96),
       thresholdTokenB: parseUnits(narrowRange.thresholdTokenB, decimalsB),
       thresholdRatio: parseUnits(narrowRange.thresholdRatio, 5),
-      thresholdLastRefreshPoolSec: 0 // todo
+      thresholdLastRefreshPoolSec: DEFAULT_REFRESH_DELAY
     }
 
     const slot0 = await pool.slot0();
@@ -1817,6 +1819,266 @@ describe('TokenSellerTest', () => {
         await tokenSeller.connect(operator).refreshPool();
         await tokenSeller.connect(owner).setOperator(operator.address, false);
         await expect(tokenSeller.connect(operator).refreshPool()).revertedWithCustomError(tokenSeller, "OnlyOwnerOrOperator");
+      });
+    });
+  });
+
+  describe("Univ3TokenSellerResolver", () => {
+    const NOT_CALLED_0 = 0;
+    const SUCCESS_1 = 1;
+    const FAILED_2 = 2;
+
+    const mainPool: IMainPoolParams = {
+      tag: "price 1:1, swapped, 0.03%",
+      fee: 3000,
+      amountA: "1000",
+      amountB: "1000",
+      pricesRange: ["0.01", "100"],
+      poolSwapTokens: true
+    };
+    const narrowRange: INarrowRangeParams = {
+      tag: "test",
+      thresholdTokenB: "0",
+      sqrtMinPriceRatio: "0.1",
+      thresholdRatio: "0.01",
+      tickRangeSize: 3,
+      amountA: "10000",
+      balanceA: "20000"
+    }
+
+    let snapshot1: string;
+    let pool: UniswapV3Pool;
+    let tokenSeller: Univ3TokenSeller;
+
+    before(async function () {
+      snapshot1 = await TimeUtils.snapshot();
+
+      await uniswapV3Factory.createPool(
+        mainPool.poolSwapTokens ? tokenB.address : tokenA.address,
+        mainPool.poolSwapTokens ? tokenA.address : tokenB.address,
+        mainPool.fee
+      );
+      pool = UniswapV3Pool__factory.connect(
+        await uniswapV3Factory.getPool(
+          mainPool.poolSwapTokens ? tokenB.address : tokenA.address,
+          mainPool.poolSwapTokens ? tokenA.address : tokenB.address,
+          mainPool.fee
+        ),
+        signer
+      );
+
+      // initialize pool, put liquidity into wide range
+      const {sqrtPriceX96, amountA, amountB} = await initializePool(mainPool, pool);
+      await putLiquidityToWideRange(
+        pool,
+        mainPool,
+        sqrtPriceX96,
+        amountA,
+        amountB
+      );
+
+      // create token seller, put liquidity into narrow range
+      tokenSeller = await createTokenSeller(
+        pool,
+        mainPool,
+        narrowRange,
+        false,
+        "100"
+      );
+    });
+    after(async function () {
+      await TimeUtils.rollback(snapshot1);
+    });
+
+    async function makeTestSwap(swapTokenA: boolean, swapAmount: string) {
+      const amountToSwap = parseUnits(swapAmount, swapTokenA ? decimalsA : decimalsB);
+
+      if (swapTokenA) {
+        await tokenA.connect(signer2).approve(uniswapV3Callee.address, amountToSwap);
+      } else {
+        await tokenB.connect(signer2).approve(uniswapV3Callee.address, amountToSwap);
+      }
+
+      await uniswapV3Callee.connect(signer2).swap(
+        pool.address,
+        signer2.address,
+        swapTokenA ? tokenA.address : tokenB.address,
+        amountToSwap
+      );
+    }
+
+    describe("unit tests", () => {
+      let snapshotEach: string;
+
+      let snapshot2: string;
+      let resolver: Univ3TokenSellerResolver;
+      let caller: Univ3TokenSellerResolverCaller;
+
+      before(async function () {
+        snapshot2 = await TimeUtils.snapshot();
+        resolver = (await DeployerUtils.deployContract(
+          signer,
+          "Univ3TokenSellerResolver",
+          tokenSeller.address,
+          DEFAULT_REFRESH_DELAY
+        )) as Univ3TokenSellerResolver;
+        await tokenSeller.setOperator(resolver.address, true);
+
+        caller = (await DeployerUtils.deployContract(
+          signer,
+          "Univ3TokenSellerResolverCaller",
+          resolver.address
+        )) as Univ3TokenSellerResolverCaller;
+        await resolver.changeOperatorStatus(caller.address, true);
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshot2);
+      });
+
+      beforeEach(async function () {
+        snapshotEach = await TimeUtils.snapshot();
+      });
+      afterEach(async function () {
+        await TimeUtils.rollback(snapshotEach);
+      });
+
+      it("should not call refreshPool", async () => {
+        expect(await tokenSeller.needToRefresh()).eq(false);
+        await caller.callChecker();
+        expect(await caller.lastCallResults()).eq(NOT_CALLED_0);
+      });
+      it("should call refreshPool", async () => {
+        // open position
+        await tokenA.transfer(tokenSeller.address, parseUnits(narrowRange.balanceA, decimalsA));
+        await tokenSeller.openPosition();
+        expect(await tokenSeller.isPositionOpened()).eq(true);
+
+        // make test swap
+        expect(await tokenSeller.needToRefresh()).eq(false);
+        await makeTestSwap(true, "1000");
+        expect(await tokenSeller.needToRefresh()).eq(true);
+
+        // run checker
+        await caller.callChecker();
+        expect(await caller.lastCallResults()).eq(SUCCESS_1);
+
+        // ensure that token seller has updated the range
+        expect(await tokenSeller.needToRefresh()).eq(false);
+      });
+      it("should catch error from refreshPool", async () => {
+        // open position
+        await tokenA.transfer(tokenSeller.address, parseUnits(narrowRange.balanceA, decimalsA));
+        await tokenSeller.openPosition();
+        expect(await tokenSeller.isPositionOpened()).eq(true);
+
+        // make test swap
+        expect(await tokenSeller.needToRefresh()).eq(false);
+        await makeTestSwap(true, "1000");
+        expect(await tokenSeller.needToRefresh()).eq(true);
+
+        // run checker
+        await caller.callChecker();
+        expect(await caller.lastCallResults()).eq(SUCCESS_1);
+
+        // make second swap
+        expect(await tokenSeller.needToRefresh()).eq(false);
+        await makeTestSwap(true, "2000");
+        expect(await tokenSeller.needToRefresh()).eq(true);
+
+        // remove operator-rights from the resolver to produce error inside callChecker
+        await tokenSeller.setOperator(resolver.address, false);
+
+        // try (unsuccessfully) to refresh the pool
+        await caller.callChecker();
+        expect(await caller.lastCallResults()).eq(FAILED_2);
+        expect(await tokenSeller.needToRefresh()).eq(true);
+      });
+
+      it("should revert if call is called by not operator", async () => {
+        // open position
+        await tokenA.transfer(tokenSeller.address, parseUnits(narrowRange.balanceA, decimalsA));
+        await tokenSeller.openPosition();
+        expect(await tokenSeller.isPositionOpened()).eq(true);
+
+        // make test swap
+        expect(await tokenSeller.needToRefresh()).eq(false);
+        await makeTestSwap(true, "1000");
+        expect(await tokenSeller.needToRefresh()).eq(true);
+
+        // run checker
+        const notOperator = await Misc.impersonate(ethers.Wallet.createRandom().address);
+        expect(await caller.connect(notOperator).callChecker()).revertedWith("!operator");
+      });
+
+      describe("change operator status", () => {
+        it("normal case", async () => {
+          const newOperator = ethers.Wallet.createRandom().address;
+          const owner = await Misc.impersonate(await resolver.owner());
+
+          await resolver.connect(owner).changeOperatorStatus(newOperator, true);
+          expect(await resolver.operators(newOperator)).eq(true);
+
+          await resolver.connect(owner).changeOperatorStatus(newOperator, false);
+          expect(await resolver.operators(newOperator)).eq(false);
+        });
+        it("revert if not owner", async () => {
+          const notOwner = await Misc.impersonate(ethers.Wallet.createRandom().address);
+          await expect(resolver.connect(notOwner).changeOperatorStatus(notOwner.address, true)).revertedWith("!owner");
+        });
+      });
+
+      describe("change owner", () => {
+        it("change owner", async () => {
+          const newOwner = await Misc.impersonate(ethers.Wallet.createRandom().address);
+          const owner = await resolver.owner();
+
+          await resolver.offerOwnership(newOwner.address);
+          await resolver.connect(newOwner).acceptOwnership();
+
+          expect(await resolver.owner()).eq(newOwner.address);
+        });
+        it("revert if not owner", async () => {
+          const notOwner = await Misc.impersonate(ethers.Wallet.createRandom().address);
+          const newOwner = await Misc.impersonate(ethers.Wallet.createRandom().address);
+
+          await expect(resolver.connect(notOwner).offerOwnership(newOwner.address)).revertedWith("!owner");
+        });
+        it("revert if not new owner", async () => {
+          const notNewOwner = await Misc.impersonate(ethers.Wallet.createRandom().address);
+          const newOwner = await Misc.impersonate(ethers.Wallet.createRandom().address);
+
+          await resolver.offerOwnership(newOwner.address);
+          await expect(resolver.connect(notNewOwner).acceptOwnership()).revertedWith("!pendingOwner");
+        });
+      });
+
+      describe("change delay", () => {
+        it("normal case", async () => {
+          const newDelay = (await resolver.delay()).toNumber() + 1;
+          const owner = await Misc.impersonate(await resolver.owner());
+
+          await resolver.connect(owner).setDelay(newDelay);
+          expect(await resolver.delay()).eq(newDelay);
+        });
+        it("revert if not owner", async () => {
+          const notOwner = await Misc.impersonate(ethers.Wallet.createRandom().address);
+          await expect(resolver.connect(notOwner).setDelay(1)).revertedWith("!owner");
+        });
+      });
+
+      describe("change tokenSeller", () => {
+        it("normal case", async () => {
+          const owner = await Misc.impersonate(await resolver.owner());
+          const newTokenSeller = ethers.Wallet.createRandom().address;
+
+          await resolver.connect(owner).setTokenSeller(newTokenSeller);
+          expect(await resolver.tokenSeller()).eq(newTokenSeller);
+        });
+        it("revert if not owner", async () => {
+          const newTokenSeller = ethers.Wallet.createRandom().address;
+          const notOwner = await Misc.impersonate(ethers.Wallet.createRandom().address);
+          await expect(resolver.connect(notOwner).setTokenSeller(newTokenSeller)).revertedWith("!owner");
+        });
       });
     });
   });

@@ -5,6 +5,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "../integrations/uniswap/IUniswapV3Pool.sol";
 import "../integrations/uniswap/IUniswapV3MintCallback.sol";
+import "../interfaces/IUniv3TokenSeller.sol";
 import "./Univ3TokenSellerLib.sol";
 
 /// @notice Deposit amount of token A to the pool under control using narrow tick range P <= Pa < Pb
@@ -12,9 +13,9 @@ import "./Univ3TokenSellerLib.sol";
 /// After any swapping current price is moved from P to P'. If the price is moved far enough,
 /// {refreshPool} closes exist position and opens new one with fixe tick range (again, P' <= Pa < Pb)
 /// Only A token is deposited to the pool. If B token appears on the balance, it's withdrawn to the given receiver.
-contract Univ3TokenSeller is IUniswapV3MintCallback {
+contract Univ3TokenSeller is IUniswapV3MintCallback, IUniv3TokenSeller {
   //region ---------------------- Constants
-  string constant public TOKEN_SELLER_VERSION = "1.0.0";
+  string constant public TOKEN_SELLER_VERSION = "1.0.1";
   //endregion ---------------------- Constants
 
   //region ---------------------- Members
