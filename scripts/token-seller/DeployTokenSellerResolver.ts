@@ -6,7 +6,7 @@ import {DeployerUtils} from "../utils/DeployerUtils";
 import {UniswapV3Callee} from "../../typechain";
 
 /**
- * npx hardhat run scripts/tasks/DeployTokenSellerResolver.ts
+ * npx hardhat run scripts/token-seller/DeployTokenSellerResolver.ts
  */
 async function main() {
   const destPathTxt = "tmp/deployed.txt";

@@ -116,7 +116,7 @@ async function putLiquidityToRangeWide(
  * Put liquidity to wide range.
  * Deploy TokenSeller, put liquidity to narrow range.
  *
- * npx hardhat run scripts/tasks/DeployTokenSellerTokensPool.ts
+ * npx hardhat run scripts/token-seller/DeployTokenSellerTokensPool.ts
  */
 async function main() {
   const destPathTxt = "tmp/deployed.txt";

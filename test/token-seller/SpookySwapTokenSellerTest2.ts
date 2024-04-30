@@ -13,7 +13,7 @@ import {BigNumber} from "ethers";
 import {writeFileSyncRestoreFolder} from "../baseUT/utils/FileUtils";
 import {writeFileSync} from "fs";
 import {expect} from "chai";
-import {DeployTokenSellerUtils} from "../../scripts/tasks/DeployTokenSellerUtils";
+import {DeployTokenSellerUtils} from "../../scripts/token-seller/DeployTokenSellerUtils";
 import {TokenUtils} from "../../scripts/utils/TokenUtils";
 import {FtmAddresses} from "../../scripts/addresses/FtmAddresses";
 import {Misc} from "../../scripts/utils/Misc";
@@ -327,10 +327,14 @@ describe('SpookySwapTokenSellerTest2', () => {
           await DeployTokenSellerUtils.deployTokenSeller(signer, tokenA.address, tokenB.address, POOL, SIGNER_AMOUNT_A, tickRangeSize),
           signer
         );
+        console.log("5");
         poolSwapTokens = await tokenSeller.poolSwapTokens();
+        console.log("6");
 
         await tokenA.transfer(tokenSeller.address, parseUnits(SIGNER_AMOUNT_A, decimalsA));
+        console.log("7");
         await tokenSeller.openPosition();
+        console.log("8");
 
         const poolInfo = await pool.slot0();
         init = {
@@ -344,6 +348,7 @@ describe('SpookySwapTokenSellerTest2', () => {
           balancesAbSigner1: await getBalancesAB(signer1.address),
           balancesAbSigner2: await getBalancesAB(signer2.address),
         }
+        console.log("9");
 
         const config = await tokenSeller.config();
         derivedValues = {

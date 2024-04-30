@@ -13,7 +13,7 @@ import {BigNumber} from "ethers";
 import {writeFileSyncRestoreFolder} from "../baseUT/utils/FileUtils";
 import {writeFileSync} from "fs";
 import {expect} from "chai";
-import {DeployTokenSellerUtils} from "../../scripts/tasks/DeployTokenSellerUtils";
+import {DeployTokenSellerUtils} from "../../scripts/token-seller/DeployTokenSellerUtils";
 import {TokenUtils} from "../../scripts/utils/TokenUtils";
 import {FtmAddresses} from "../../scripts/addresses/FtmAddresses";
 

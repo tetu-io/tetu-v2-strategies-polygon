@@ -72,7 +72,7 @@ export class EnvSetup {
 
         ftmForkBlock: {
           type: 'number',
-          default: 79877252,
+          default: 80210808,
         },
 
         /////// NETWORK EXPLORERS

@@ -4,7 +4,7 @@ import {FtmAddresses} from "../addresses/FtmAddresses";
 import {writeFileSyncRestoreFolder} from "../../test/baseUT/utils/FileUtils";
 
 /**
- * npx hardhat run scripts/tasks/DeployTokenSeller.ts
+ * npx hardhat run scripts/token-seller/DeployTokenSeller.ts
  */
 async function main() {
   const destPathTxt = "tmp/deployed.txt";
