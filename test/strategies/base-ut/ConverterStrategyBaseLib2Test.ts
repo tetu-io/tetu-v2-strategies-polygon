@@ -33,7 +33,7 @@ import {
   UncoveredLossEventObject
 } from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib2";
 import {Misc} from "../../../scripts/utils/Misc";
-import { HARDHAT_NETWORK_ID, HardhatUtils } from '../../baseUT/utils/HardhatUtils';
+import { HARDHAT_NETWORK_ID, HardhatUtils } from '../../../scripts/utils/HardhatUtils';
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade

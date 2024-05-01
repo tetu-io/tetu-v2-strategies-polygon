@@ -10,7 +10,7 @@ import {IERC20Metadata__factory} from "../../typechain/factories/@tetu_io/tetu-l
 import {PLAN_SWAP_REPAY_0} from "../../test/baseUT/AppConstants";
 import {RunHelper} from "./RunHelper";
 import {ethers} from "hardhat";
-import {POLYGON_NETWORK_ID} from "../../test/baseUT/utils/HardhatUtils";
+import {POLYGON_NETWORK_ID} from "./HardhatUtils";
 
 export interface IMakeFullWithdraw {
   entryToPool: number;

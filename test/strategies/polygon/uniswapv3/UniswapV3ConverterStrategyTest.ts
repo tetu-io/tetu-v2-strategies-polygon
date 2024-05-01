@@ -31,7 +31,7 @@ import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../../scripts/utils/HardhatUtils';
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 const { expect } = chai;

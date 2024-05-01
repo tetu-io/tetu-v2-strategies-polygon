@@ -10,7 +10,7 @@ import { parseUnits } from 'ethers/lib/utils';
 import { BigNumber } from 'ethers';
 import { controlGasLimitsEx } from '../../../../scripts/utils/GasLimitUtils';
 import { BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_BPT_AMOUNTS_OUT } from '../../../baseUT/GasLimits';
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../../scripts/utils/HardhatUtils';
 
 const { expect } = chai;
 chai.use(chaiAsPromised);

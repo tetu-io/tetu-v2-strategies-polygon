@@ -1,11 +1,56 @@
 /* tslint:disable:no-trailing-whitespace */
 import {BigNumber, ethers} from "ethers";
-import {IERC20Metadata__factory, UniswapV3Pool__factory} from "../../typechain";
+import {IERC20Metadata__factory, UniswapV3Pool, UniswapV3Pool__factory} from "../../typechain";
 import fs from "fs";
 import { createClient } from 'urql'
 import 'isomorphic-unfetch';
 import {Misc} from "./Misc";
 import { EnvSetup } from './EnvSetup';
+import {parseUnits} from "ethers/lib/utils";
+import bn from 'bignumber.js'
+
+//region Data types
+export interface IPoolData {
+  token0: string
+  token0Symbol: string
+  token1: string
+  token1Symbol: string
+  fee: number
+  tickSpacing: number
+}
+
+export interface IPoolTransaction {
+  type: TransactionType
+  timestamp: number
+  amount0: string
+  amount1: string
+  amount?: string
+  tickLower?: number
+  tickUpper?: number
+}
+
+export enum TransactionType {
+  MINT,
+  BURN,
+  SWAP
+}
+
+export interface IPoolLiquiditySnapshot {
+  pool: string
+  block: number
+  currentTick: number
+  currentSqrtPriceX96: string
+  numSurroundingTicks: number
+  ticks: ITickProcessed[]
+}
+
+interface ITickProcessed {
+  tickIdx: number
+  liquidityGross: string
+  liquidityNet: string
+  liquidityActive: string
+}
+//endregion Data types
 
 export class UniswapV3Utils {
   public static async getPoolPrice(poolAddr: string): Promise<BigNumber> {
@@ -367,45 +412,16 @@ export class UniswapV3Utils {
 
     return [fee0, fee1]
   }
-}
 
-export interface IPoolData {
-  token0: string
-  token0Symbol: string
-  token1: string
-  token1Symbol: string
-  fee: number
-  tickSpacing: number
-}
-
-export interface IPoolTransaction {
-  type: TransactionType
-  timestamp: number
-  amount0: string
-  amount1: string
-  amount?: string
-  tickLower?: number
-  tickUpper?: number
-}
-
-export enum TransactionType {
-  MINT,
-  BURN,
-  SWAP
-}
-
-export interface IPoolLiquiditySnapshot {
-  pool: string
-  block: number
-  currentTick: number
-  currentSqrtPriceX96: string
-  numSurroundingTicks: number
-  ticks: ITickProcessed[]
-}
-
-interface ITickProcessed {
-  tickIdx: number
-  liquidityGross: string
-  liquidityNet: string
-  liquidityActive: string
+  public static async getInitialSqrtPriceX96(
+    amountA: BigNumber,
+    amountB: BigNumber,
+    poolSwapTokens: boolean
+  ): Promise<BigNumber> {
+    const price36 = poolSwapTokens
+      ? amountA.mul(parseUnits("1", 36)).div(amountB)
+      : amountB.mul(parseUnits("1", 36)).div(amountA);
+    const sqrtPrice18 = BigNumber.from(new bn(price36.toString()).sqrt().toFixed().split('.')[0]);
+    return sqrtPrice18.mul(BigNumber.from(2).pow(96)).div(parseUnits("1", 18)); // 18 = sqrt of 36
+  }
 }

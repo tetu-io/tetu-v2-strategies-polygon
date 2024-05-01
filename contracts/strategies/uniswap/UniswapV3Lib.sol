@@ -49,7 +49,11 @@ library UniswapV3Lib {
     fee1 = _computeFeesEarned(position, false, feeGrowthInside1Last, tick) + uint(tokensOwed1);
   }
 
-  function addLiquidityPreview(address pool_, int24 lowerTick_, int24 upperTick_, uint amount0Desired_, uint amount1Desired_) external view returns (uint amount0Consumed, uint amount1Consumed, uint128 liquidityOut) {
+  function addLiquidityPreview(address pool_, int24 lowerTick_, int24 upperTick_, uint amount0Desired_, uint amount1Desired_) external view returns (
+    uint amount0Consumed,
+    uint amount1Consumed,
+    uint128 liquidityOut
+  ) {
     IUniswapV3Pool pool = IUniswapV3Pool(pool_);
     (uint160 sqrtRatioX96, , , , , ,) = pool.slot0();
     liquidityOut = getLiquidityForAmounts(sqrtRatioX96, lowerTick_, upperTick_, amount0Desired_, amount1Desired_);
@@ -58,6 +62,10 @@ library UniswapV3Lib {
 
   /// @notice Computes the maximum amount of liquidity received for a given amount of token0, token1, the current
   /// pool prices and the prices at the tick boundaries
+  /// @param sqrtRatioX96 A sqrt price representing the current pool prices
+  /// @param amount0 The amount of token0 being sent in
+  /// @param amount1 The amount of token1 being sent in
+  /// @return liquidity The maximum amount of liquidity received
   function getLiquidityForAmounts(
     uint160 sqrtRatioX96,
     int24 lowerTick,

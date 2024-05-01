@@ -1,5 +1,5 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {BASE_NETWORK_ID, HardhatUtils, ZKEVM_NETWORK_ID} from "../../../baseUT/utils/HardhatUtils";
+import {BASE_NETWORK_ID, HardhatUtils, ZKEVM_NETWORK_ID} from "../../../../scripts/utils/HardhatUtils";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {ethers} from "hardhat";
 import {

@@ -21,7 +21,7 @@ import {PairStrategyFixtures} from "../../baseUT/strategies/pair/PairStrategyFix
 import {PairBasedStrategyPrepareStateUtils} from "../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {UniversalUtils} from "../../baseUT/strategies/UniversalUtils";
-import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from '../../baseUT/utils/HardhatUtils';
+import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from '../../../scripts/utils/HardhatUtils';
 import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
 import {PlatformUtils} from "../../baseUT/utils/PlatformUtils";
 import {AGGREGATOR_TETU_LIQUIDATOR_AS_AGGREGATOR} from "../../baseUT/utils/AggregatorUtils";

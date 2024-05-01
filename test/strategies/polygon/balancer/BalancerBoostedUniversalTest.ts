@@ -23,7 +23,7 @@ import {BalancerRewardsHardwork} from "./utils/BalancerRewardsHardwork";
 import {BalancerStrategyUtils} from "../../../baseUT/strategies/BalancerStrategyUtils";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {LiquidatorUtils} from "./utils/LiquidatorUtils";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../../scripts/utils/HardhatUtils';
 
 // const {expect} = chai;
 chai.use(chaiAsPromised);

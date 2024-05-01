@@ -24,7 +24,7 @@ import {
   IListStates,
   PairBasedStrategyPrepareStateUtils
 } from "../../baseUT/strategies/pair/PairBasedStrategyPrepareStateUtils";
-import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from '../../baseUT/utils/HardhatUtils';
+import {BASE_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from '../../../scripts/utils/HardhatUtils';
 import {
   ENTRY_TO_POOL_DISABLED,
   ENTRY_TO_POOL_IS_ALLOWED,

@@ -16,7 +16,7 @@ import {
 } from "../../test/baseUT/AppConstants";
 import {defaultAbiCoder} from "ethers/lib/utils";
 import {Misc} from "../utils/Misc";
-import {HardhatUtils} from "../../test/baseUT/utils/HardhatUtils";
+import {HardhatUtils} from "../utils/HardhatUtils";
 
 /**
  * to run the script:

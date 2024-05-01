@@ -23,7 +23,7 @@ import {expect} from "chai";
 import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../../scripts/utils/HardhatUtils';
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {BalanceUtils} from "../../../baseUT/utils/BalanceUtils";
 import {

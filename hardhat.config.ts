@@ -58,14 +58,16 @@ export default {
           EnvSetup.getEnv().hardhatChainId === 1 ? EnvSetup.getEnv().ethRpcUrl :
             EnvSetup.getEnv().hardhatChainId === 137 ? EnvSetup.getEnv().maticRpcUrl :
                 EnvSetup.getEnv().hardhatChainId === 8453 ? EnvSetup.getEnv().baseRpcUrl :
-                    EnvSetup.getEnv().hardhatChainId === 1101? EnvSetup.getEnv().zkevmRpcUrl :
-                       undefined,
+                    EnvSetup.getEnv().hardhatChainId === 1101 ? EnvSetup.getEnv().zkevmRpcUrl :
+	                    EnvSetup.getEnv().hardhatChainId === 250 ? EnvSetup.getEnv().ftmRpcUrl :
+    	                   undefined,
         blockNumber:
           EnvSetup.getEnv().hardhatChainId === 1 ? EnvSetup.getEnv().ethForkBlock !== 0 ? EnvSetup.getEnv().ethForkBlock : undefined :
             EnvSetup.getEnv().hardhatChainId === 137 ? EnvSetup.getEnv().maticForkBlock !== 0 ? EnvSetup.getEnv().maticForkBlock : undefined :
                 EnvSetup.getEnv().hardhatChainId === 8453 ? EnvSetup.getEnv().baseForkBlock !== 0 ? EnvSetup.getEnv().baseForkBlock : undefined :
-  	            EnvSetup.getEnv().hardhatChainId === 1101 ? EnvSetup.getEnv().zkevmForkBlock !== 0 ? EnvSetup.getEnv().zkevmForkBlock : undefined :
-                        undefined,
+	  	            EnvSetup.getEnv().hardhatChainId === 1101 ? EnvSetup.getEnv().zkevmForkBlock !== 0 ? EnvSetup.getEnv().zkevmForkBlock : undefined :
+  			            EnvSetup.getEnv().hardhatChainId === 250 ? EnvSetup.getEnv().ftmForkBlock !== 0 ? EnvSetup.getEnv().ftmForkBlock : undefined :
+            	            undefined,
       } : undefined,
       accounts: {
         mnemonic: 'test test test test test test test test test test test junk',
@@ -127,6 +129,15 @@ export default {
       // gas: 50_000_000_000,
       accounts: [EnvSetup.getEnv().privateKey],
     },
+    ftm: {
+      url: EnvSetup.getEnv().ftmRpcUrl || '',
+      timeout: 99999,
+      chainId: 250,
+      gas: 10_000_000,
+      // gasPrice: 100_000_000_000,
+      // gasMultiplier: 2,
+      accounts: [EnvSetup.getEnv().privateKey],
+    },
   },
   etherscan: {
     //  https://hardhat.org/plugins/nomiclabs-hardhat-etherscan.html#multiple-api-keys-and-alternative-block-explorers
@@ -137,6 +148,7 @@ export default {
       polygon: EnvSetup.getEnv().networkScanKeyMatic || EnvSetup.getEnv().networkScanKey,
       base: EnvSetup.getEnv().networkScanKeyBase || EnvSetup.getEnv().networkScanKey,
       zkevm: EnvSetup.getEnv().networkScanKeyZkevm || EnvSetup.getEnv().networkScanKey,
+      opera: EnvSetup.getEnv().networkScanKeyFtm || EnvSetup.getEnv().networkScanKey,
     },
     customChains: [
       {

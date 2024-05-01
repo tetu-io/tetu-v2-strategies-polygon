@@ -17,7 +17,7 @@ import { Misc } from '../../../../scripts/utils/Misc';
 import { expect } from 'chai';
 import { MockHelper } from '../../../baseUT/helpers/MockHelper';
 import { BigNumber } from 'ethers';
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../../scripts/utils/HardhatUtils';
 
 /**
  * Test internal functions of ConverterStrategyBase using mocks

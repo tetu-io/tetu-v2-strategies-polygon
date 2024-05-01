@@ -1,0 +1,847 @@
+import {ethers} from "hardhat";
+import {TimeUtils} from "../../scripts/utils/TimeUtils";
+import {HARDHAT_NETWORK_ID, HardhatUtils} from "../../scripts/utils/HardhatUtils";
+import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
+import {DeployerUtils} from "../../scripts/utils/DeployerUtils";
+import {FacadeUniv3TokenSellerLib, MockUniswapV3Pool, UniswapV3LibFacade} from "../../typechain";
+import {expect} from "chai";
+import {BigNumber} from "ethers";
+import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
+import {MockHelper} from "../baseUT/helpers/MockHelper";
+import {Misc} from "../../scripts/utils/Misc";
+
+describe('Univ3TokenSellerLibTest', () => {
+  let snapshotBefore: string;
+  let signer: SignerWithAddress;
+  let facade: FacadeUniv3TokenSellerLib;
+  let facadeUni: UniswapV3LibFacade;
+  let mockedPool: MockUniswapV3Pool;
+
+  before(async function () {
+    [signer] = await ethers.getSigners();
+    snapshotBefore = await TimeUtils.snapshot();
+    await HardhatUtils.setupBeforeTest(HARDHAT_NETWORK_ID);
+    facade = (await DeployerUtils.deployContract(signer, "FacadeUniv3TokenSellerLib")) as FacadeUniv3TokenSellerLib;
+    facadeUni = (await DeployerUtils.deployContract(signer, "UniswapV3LibFacade")) as UniswapV3LibFacade;
+    mockedPool = await MockHelper.createMockUniswapV3Pool(signer);
+  });
+
+  after(async function () {
+    await TimeUtils.rollback(snapshotBefore);
+  });
+
+  async function getSqrtPriceX96(tick: number): Promise<BigNumber> {
+    return facadeUni._getSqrtRatioAtTick(tick);
+  }
+
+  async function getNarrowTickRange(tick: number, tickRangeSize: number, tickSpacing: number, tickLimit: number, poolSwapTokens: boolean): Promise<{
+    lowerTick: number,
+    upperTick: number
+  }> {
+    return facade.getNarrowTickRange(await getSqrtPriceX96(tick), tick, tickRangeSize, tickSpacing, tickLimit, poolSwapTokens);
+  }
+
+  describe("Calculate tick range", () => {
+    describe("calcTickRangeSymmetrically", () => {
+      it("should return expected values if tick > 0, tickSpacing = 5", async () => {
+        const {lowerTick, upperTick} = await facade.calcTickRange(100, 20, 5);
+        expect(lowerTick).eq(80);
+        expect(upperTick).eq(120);
+      });
+      it("should return expected values if tick > 0, tickSpacing = 3", async () => {
+        const {lowerTick, upperTick} = await facade.calcTickRange(100, 20, 3);
+        expect(lowerTick).eq(26 * 3); // 80 / 3 = 26...
+        expect(upperTick).eq(26 * 3 + 20 * 2);
+      });
+      it("should return expected values if tick < 0, tickSpacing = 5", async () => {
+        const {lowerTick, upperTick} = await facade.calcTickRange(-100, 20, 5);
+        expect(lowerTick).eq(-120);
+        expect(upperTick).eq(-80);
+      });
+      it("should return expected values if tick < 0, tickSpacing = 3", async () => {
+        const {lowerTick, upperTick} = await facade.calcTickRange(-100, 20, 3);
+        // const expectedLowerTick = ((- 100 - 20) / 3 - 1) * 3; // -123
+        expect(lowerTick).eq(-123);
+        expect(upperTick).eq(-123 + 20 * 2);
+      });
+    });
+    describe("getNarrowTickRange", () => {
+      describe("poolSwapTokens is false", () => {
+        describe("tickSpacing = 3", () => {
+          describe("tickLimit is not used", () => {
+            describe("tick != tickLower", () => {
+              it("should return expected values if tick is negative", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(-10, 2, 3, -100, false);
+                expect(lowerTick).eq(-9);
+                expect(upperTick).eq(-3);
+              });
+              it("should return expected values if tick is positive", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(10, 2, 3, -100, false);
+                expect(lowerTick).eq(12);
+                expect(upperTick).eq(18);
+              });
+            });
+            describe("tick == tickLower", () => {
+              it("should return expected values if tick is negative", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(-9, 2, 3, -100, false);
+                expect(lowerTick).eq(-9);
+                expect(upperTick).eq(-3);
+              });
+              it("should return expected values if tick is positive", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(12, 2, 3, -100, false);
+                expect(lowerTick).eq(12);
+                expect(upperTick).eq(18);
+              });
+            });
+          });
+          describe("tickLimit is used", () => {
+            describe("minTick is divisible on tickSpacing without remainder", () => {
+              describe("tick != tickLower", () => {
+                it("should return expected values if tick is negative, tick != tickLower", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(-10, 2, 3, -6, false);
+                  expect(lowerTick).eq(-6);
+                  expect(upperTick).eq(0);
+                });
+                it("should return expected values if tick is positive", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(10, 2, 3, 15, false);
+                  expect(lowerTick).eq(15);
+                  expect(upperTick).eq(21);
+                });
+              });
+              describe("tick == tickLower", () => {
+                it("should return expected values if tick is negative, tick != tickLower", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(-6, 2, 3, -6, false);
+                  expect(lowerTick).eq(-6);
+                  expect(upperTick).eq(0);
+                });
+                it("should return expected values if tick is positive", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(15, 2, 3, 15, false);
+                  expect(lowerTick).eq(15);
+                  expect(upperTick).eq(21);
+                });
+              });
+            });
+            describe("minTick is divisible on tickSpacing with remainder", () => {
+              describe("tick != tickLower", () => {
+                it("should return expected values if tick is negative", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(-10, 2, 3, -7, false);
+                  expect(lowerTick).eq(-6);
+                  expect(upperTick).eq(0);
+                });
+                it("should return expected values if tick is positive", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(10, 2, 3, 14, false);
+                  expect(lowerTick).eq(15);
+                  expect(upperTick).eq(21);
+                });
+              });
+              describe("tick == tickLower", () => {
+                it("should return expected values if tick is negative", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(-6, 2, 3, -7, false);
+                  expect(lowerTick).eq(-6);
+                  expect(upperTick).eq(0);
+                });
+                it("should return expected values if tick is positive", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(15, 2, 3, 14, false);
+                  expect(lowerTick).eq(15);
+                  expect(upperTick).eq(21);
+                });
+              });
+            });
+          });
+          describe("same ticks, different sqrtPriceX96", () => {
+            it("should reduce lowerTick on tickSpacing if tick==lowerTick but lowerPrice < price", async () => {
+              const {lowerTick, upperTick} = await facade.getNarrowTickRange(
+                (await getSqrtPriceX96(-9)).add(1),
+                -9,
+                2,
+                3,
+                -100,
+                false
+              );
+              expect(lowerTick).eq(-9+3);
+              expect(upperTick).eq(-3+3);
+            });
+            it("should NOT reduce lowerTick on tickSpacing if tick==lowerTick but lowerPrice >= price", async () => {
+              const {lowerTick, upperTick} = await facade.getNarrowTickRange(
+                (await getSqrtPriceX96(-9)),
+                -9,
+                2,
+                3,
+                -100,
+                false
+              );
+              expect(lowerTick).eq(-9);
+              expect(upperTick).eq(-3);
+            });
+          });
+        });
+        describe("tickSpacing = 1", () => {
+          describe("tickLimit is not used", () => {
+            describe("tick != tickLower", async () => {
+              it("should return expected values if tick is negative", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(-10, 2, 1, -100, false);
+                expect(lowerTick).eq(-10);
+                expect(upperTick).eq(-8);
+              });
+              it("should return expected values if tick is positive", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(10, 2, 1, -100, false);
+                expect(lowerTick).eq(10);
+                expect(upperTick).eq(12);
+              });
+            });
+            describe("tick == tickLower", async () => {
+              it("should return expected values if tick is negative", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(-9, 2, 1, -100, false);
+                expect(lowerTick).eq(-9);
+                expect(upperTick).eq(-7);
+              });
+              it("should return expected values if tick is positive", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(12, 2, 1, -100, false);
+                expect(lowerTick).eq(12);
+                expect(upperTick).eq(14);
+              });
+            });
+          });
+          describe("tickLimit is used", () => {
+            describe("tickLimit is divisible on tickSpacing without remainder", () => {
+              it("should return expected values if tick is negative, tick != tickLower", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(-10, 6, 1, -6, false);
+                expect(lowerTick).eq(-6);
+                expect(upperTick).eq(0);
+              });
+              it("should return expected values if tick is positive", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(10, 6, 1, 15, false);
+                expect(lowerTick).eq(15);
+                expect(upperTick).eq(21);
+              });
+            });
+            describe("tickLimit is divisible on tickSpacing with remainder", () => {
+              it("should return expected values if tick is negative", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(-10, 6, 1, -7, false);
+                expect(lowerTick).eq(-7);
+                expect(upperTick).eq(-1);
+              });
+              it("should return expected values if tick is positive", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(10, 6, 1, 14, false);
+                expect(lowerTick).eq(14);
+                expect(upperTick).eq(20);
+              });
+            });
+          });
+        });
+      });
+      describe("poolSwapTokens is true", () => {
+        describe("tickSpacing = 3", () => {
+          describe("tickLimit is not used", () => {
+            describe("tick != tickLower", () => {
+              it("should return expected values if tick is negative", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(-10, 2, 3, 100, true);
+                expect(lowerTick).eq(-18);
+                expect(upperTick).eq(-12);
+              });
+              it("should return expected values if tick is positive", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(10, 2, 3, 100, true);
+                expect(lowerTick).eq(3);
+                expect(upperTick).eq(9);
+              });
+            });
+            describe("tick == tickLower", () => {
+              it("should return expected values if tick is negative", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(-9, 2, 3, 100, true);
+                expect(lowerTick).eq(-15);
+                expect(upperTick).eq(-9);
+              });
+              it("should return expected values if tick is positive", async () => {
+                const {lowerTick, upperTick} = await getNarrowTickRange(12, 2, 3, 100, true);
+                expect(lowerTick).eq(6);
+                expect(upperTick).eq(12);
+              });
+            });
+          });
+          describe("tickLimit is used", () => {
+            describe("minTick is divisible on tickSpacing without remainder", () => {
+              describe("tick != tickLower", () => {
+                it("should return expected values if tick is negative, tick != tickLower", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(-10, 2, 3, -12, true);
+                  expect(lowerTick).eq(-18);
+                  expect(upperTick).eq(-12);
+                });
+                it("should return expected values if tick is positive", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(10, 2, 3, 9, true);
+                  expect(lowerTick).eq(3);
+                  expect(upperTick).eq(9);
+                });
+              });
+              describe("tick == tickLower", () => {
+                it("should return expected values if tick is negative, tick != tickLower", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(-6, 2, 3, -6, true);
+                  expect(lowerTick).eq(-12);
+                  expect(upperTick).eq(-6);
+                });
+                it("should return expected values if tick is positive", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(15, 2, 3, 15, true);
+                  expect(lowerTick).eq(9);
+                  expect(upperTick).eq(15);
+                });
+              });
+            });
+            describe("minTick is divisible on tickSpacing with remainder", () => {
+              describe("tick != tickLower", () => {
+                it("should return expected values if tick is negative", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(-10, 2, 3, -7, true);
+                  expect(lowerTick).eq(-18);
+                  expect(upperTick).eq(-12);
+                });
+                it("should return expected values if tick is positive", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(10, 2, 3, 14, true);
+                  expect(lowerTick).eq(3);
+                  expect(upperTick).eq(9);
+                });
+              });
+              describe("tick == tickLower", () => {
+                it("should return expected values if tick is negative", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(-6, 2, 3, -7, true);
+                  expect(lowerTick).eq(-15);
+                  expect(upperTick).eq(-9);
+                });
+                it("should return expected values if tick is positive", async () => {
+                  const {lowerTick, upperTick} = await getNarrowTickRange(15, 2, 3, 14, true);
+                  expect(lowerTick).eq(6);
+                  expect(upperTick).eq(12);
+                });
+              });
+            });
+          });
+          describe("same ticks, different sqrtPriceX96", () => {
+            it("should reduce upperTick on tickSpacing if tick==upperTick but upperPrice > price", async () => {
+              const {lowerTick, upperTick} = await facade.getNarrowTickRange(
+                (await getSqrtPriceX96(-9)).sub(1),
+                -9,
+                2,
+                3,
+                100,
+                true
+              );
+              expect(lowerTick).eq(-9-3-6);
+              expect(upperTick).eq(-9-3);
+            });
+            it("should NOT reduce upperTick on tickSpacing if tick==upperTick but upperPrice <= price", async () => {
+              const {lowerTick, upperTick} = await facade.getNarrowTickRange(
+                (await getSqrtPriceX96(-9)),
+                -9,
+                2,
+                3,
+                100,
+                true
+              );
+              expect(lowerTick).eq(-15);
+              expect(upperTick).eq(-9);
+            });
+          });
+        });
+      });
+    });
+  });
+
+  describe("Enter/exit logic", () => {
+    describe("needToRefresh", () => {
+      let snapshotEach: string;
+      beforeEach(async function () {
+        snapshotEach = await TimeUtils.snapshot();
+      });
+      afterEach(async function () {
+        await TimeUtils.rollback(snapshotEach);
+      });
+
+      interface IParams {
+        tickSpacing: number;
+        state: {
+          lowerTickDeltaFromTick: number;
+          upperTickDeltaFromTick: number;
+          lastRefreshPoolTimestampDelta?: number;
+        }
+        config?: {
+          thresholdLastRefreshPoolSec?: number;
+          thresholdTokenB?: string;
+          thresholdRatio?: string;
+        }
+        pool: {
+          amount0: string;
+          amount1: string;
+        }
+
+        poolSwapTokens?: boolean;
+        mainPoolSizeInTickSpacing?: number; // 100 by default
+        decimalsB?: number; // 6 by default
+        decimalsA?: number; // same by default to simplify numbers
+      }
+      interface IResults {
+        gasUsed: number;
+        needToRefresh: boolean;
+      }
+      async function makeTest(p: IParams): Promise<IResults> {
+        const poolSwapTokens = p.poolSwapTokens ?? false;
+        const decimalsA = p.decimalsA ?? 6;
+        const decimalsB = p.decimalsB ?? 6;
+// set up pool mock
+        const mainPoolSizeInTickSpacing = p?.mainPoolSizeInTickSpacing ?? 100;
+        const amount0 = parseUnits(p.pool.amount0, poolSwapTokens ? decimalsB: decimalsA);
+        const amount1 = parseUnits(p.pool.amount1, poolSwapTokens ? decimalsA: decimalsB);
+
+        // sqrt(price) = sqrt(reserves B / reserves A)
+        const sqrtPriceX96 = amount1.div(amount0).mul(BigNumber.from(2).pow(96));
+        // tick = log_{sqrt(1.0001)}(sqrt(price))
+        const tick = await facadeUni._getTickAtSqrtRatio(sqrtPriceX96);
+        // L = x * sqrt(P)
+        const liquidity = await facadeUni.getLiquidityForAmounts(
+          sqrtPriceX96,
+          tick - mainPoolSizeInTickSpacing * p.tickSpacing,
+          tick + mainPoolSizeInTickSpacing * p.tickSpacing,
+          amount0,
+          amount1
+        );
+
+        await mockedPool.setLiquidity(liquidity);
+        await mockedPool.setSlot0(sqrtPriceX96, tick,
+          // following values are not used here
+          0, 0, 0, 0, false
+        );
+
+// set up facade
+        await facade.setConfig({
+          thresholdLastRefreshPoolSec: p.config?.thresholdLastRefreshPoolSec ?? 0,
+          thresholdRatio: parseUnits(p.config?.thresholdRatio ?? "0", 5), // DENOMINATOR_INT
+          thresholdTokenB: parseUnits(p.config?.thresholdTokenB ?? "0", decimalsB),
+        // not used
+          amountA: 0,
+          tickLimit: 0,
+          tickRangeSize: 0
+        });
+
+        await facade.setState({
+          lowerTick: p.state.lowerTickDeltaFromTick + tick,
+          upperTick: p.state.upperTickDeltaFromTick + tick,
+          liquidityAmount: 1,
+          lastRefreshPoolTimestamp: p.state.lastRefreshPoolTimestampDelta
+            ? (await ethers.provider.getBlock(ethers.provider.blockNumber)).timestamp + p.state.lastRefreshPoolTimestampDelta
+            : 0,
+        });
+
+        const gasUsed = await facade.estimateGas.needToRefresh(mockedPool.address, p.tickSpacing, poolSwapTokens);
+        const needToRefresh = await facade.needToRefresh(mockedPool.address, p.tickSpacing, poolSwapTokens);
+
+        return {needToRefresh, gasUsed: gasUsed.toNumber()}
+      }
+
+      const NORMAL_CASE: IParams = {
+        pool: {amount0: "1", amount1: "100"},
+        tickSpacing: 1,
+        state: {lowerTickDeltaFromTick: 1, upperTickDeltaFromTick: 5}
+      }
+      const NORMAL_CASE_5: IParams = {
+        pool: {amount0: "1", amount1: "100"},
+        tickSpacing: 5,
+        state: {lowerTickDeltaFromTick: 5, upperTickDeltaFromTick: 25}
+      }
+      describe("poolSwapTokens is false", () => {
+        describe("tick spacing = 1", () => {
+          it("should return false in normal case (no changes)", async () => {
+            const {needToRefresh} = await makeTest(NORMAL_CASE);
+            expect(needToRefresh).eq(false);
+          });
+          it("should return true if tick moves to left on more than tickSpacing", async () => {
+            const {needToRefresh} = await makeTest({
+              ...NORMAL_CASE,
+              state: {lowerTickDeltaFromTick: 2, upperTickDeltaFromTick: 5}
+            });
+            expect(needToRefresh).eq(true);
+          });
+          it("should return false if tick moves to right but doesn't exceed ratio threshold", async () => {
+            const {needToRefresh} = await makeTest({
+              ...NORMAL_CASE,
+              config: {thresholdRatio: "0.5"}, // 50%
+              state: {lowerTickDeltaFromTick: -4, upperTickDeltaFromTick: 4}
+            });
+            expect(needToRefresh).eq(false);
+          });
+          describe("tick moves to right and exceeds ratio threshold", () => {
+            it("should return true if other thresholds are ok", async () => {
+              const {needToRefresh} = await makeTest({
+                ...NORMAL_CASE,
+                config: {thresholdRatio: "0.5"}, // 50%
+                state: {lowerTickDeltaFromTick: -5, upperTickDeltaFromTick: 4}
+              });
+              expect(needToRefresh).eq(true);
+            });
+            it("should return false if amountB is too low", async () => {
+              const {needToRefresh} = await makeTest({
+                ...NORMAL_CASE,
+                config: {thresholdRatio: "0.5", thresholdTokenB: "10000"}, // 50%, thresholdTokenB is very high
+                state: {lowerTickDeltaFromTick: -5, upperTickDeltaFromTick: 4}
+              });
+              expect(needToRefresh).eq(false);
+            });
+            describe("delay threshold is configured", () => {
+              it("should return true if enough time has passed since last call of refreshPool", async () => {
+                const {needToRefresh} = await makeTest({
+                  ...NORMAL_CASE,
+                  config: {thresholdRatio: "0.5", thresholdLastRefreshPoolSec: 1000}, // 50%
+                  state: {lowerTickDeltaFromTick: -5, upperTickDeltaFromTick: 4, lastRefreshPoolTimestampDelta: -1001},
+                });
+                expect(needToRefresh).eq(true);
+              });
+              it("should return false if not enough time has passed since last call of refreshPool", async () => {
+                const {needToRefresh} = await makeTest({
+                  ...NORMAL_CASE,
+                  config: {thresholdRatio: "0.5", thresholdLastRefreshPoolSec: 1500}, // 50%
+                  state: {lowerTickDeltaFromTick: -5, upperTickDeltaFromTick: 4, lastRefreshPoolTimestampDelta: -1000},
+                });
+                expect(needToRefresh).eq(false);
+              });
+            });
+          });
+        });
+        describe("tick spacing = 5", () => {
+          it("should return false in normal case (no changes)", async () => {
+            const {needToRefresh} = await makeTest(NORMAL_CASE_5);
+            expect(needToRefresh).eq(false);
+          });
+          it("should return true if tick moves to left on more than tickSpacing", async () => {
+            const {needToRefresh} = await makeTest({
+              ...NORMAL_CASE_5,
+              state: {lowerTickDeltaFromTick: 5+1, upperTickDeltaFromTick: 25}
+            });
+            expect(needToRefresh).eq(true);
+          });
+          it("should return false if tick moves to right but doesn't exceed ratio threshold", async () => {
+            const {needToRefresh} = await makeTest({
+              ...NORMAL_CASE,
+              config: {thresholdRatio: "0.5"}, // 50%
+              state: {lowerTickDeltaFromTick: -4*5, upperTickDeltaFromTick: 4*5}
+            });
+            expect(needToRefresh).eq(false);
+          });
+          it("should return true if tick moves to right and exceeds ratio threshold", async () => {
+            const {needToRefresh} = await makeTest({
+              ...NORMAL_CASE,
+              config: {thresholdRatio: "0.5"}, // 50%
+              state: {lowerTickDeltaFromTick: -4*5 - 1, upperTickDeltaFromTick: 4*5}
+            });
+            expect(needToRefresh).eq(true);
+          });
+        });
+      });
+      describe("poolSwapTokens", () => {
+        describe("poolSwapTokens is true", () => {
+          it("should return false if amountB is too low", async () => {
+            const {needToRefresh} = await makeTest({
+              ...NORMAL_CASE,
+              poolSwapTokens: true,
+              config: {thresholdRatio: "0.5", thresholdTokenB: "1"}, // 50%
+              state: {lowerTickDeltaFromTick: -5, upperTickDeltaFromTick: 4},
+            });
+            // v.amount0 401, v.amount1 5020275, amountB 401, config.thresholdTokenB 1000000
+            expect(needToRefresh).eq(false);
+          });
+        });
+        describe("poolSwapTokens is false", () => {
+          it("should return false if amountB is too low", async () => {
+            const {needToRefresh} = await makeTest({
+              ...NORMAL_CASE,
+              poolSwapTokens: false,
+              config: {thresholdRatio: "0.5", thresholdTokenB: "1"}, // 50%
+              state: {lowerTickDeltaFromTick: -5, upperTickDeltaFromTick: 4},
+            });
+            // v.amount0 401, v.amount1 5020275, amountB 5020275, config.thresholdTokenB 1000000
+            expect(needToRefresh).eq(true);
+          });
+        });
+      });
+
+      // todo try
+      // lowerTick: -276200
+      // upperTick: -275200
+      // tick: -276106
+      // sqrtPriceX96: 80096925681156851618385
+    });
+
+    describe("enter", () => {
+      let snapshotEach: string;
+      beforeEach(async function () {
+        snapshotEach = await TimeUtils.snapshot();
+      });
+      afterEach(async function () {
+        await TimeUtils.rollback(snapshotEach);
+      });
+
+      interface IParams {
+        tickSpacing: number;
+        amountA: string;
+        config: {
+          tickRangeSize: number;
+          tickLimit: number;
+        }
+        pool: {
+          amount0: string;
+          amount1: string;
+        }
+
+        poolSwapTokens?: boolean;
+        decimalsB?: number; // 6 by default
+        decimalsA?: number; // same by default to simplify numbers
+      }
+      interface IResults {
+        gasUsed: number;
+        state: {
+          lowerTick: number;
+          upperTick: number;
+          liquidityAmount: BigNumber;
+        }
+        expected: {
+          lowerTick: number;
+          upperTick: number;
+          liquidityAmount: BigNumber;
+        }
+        isMintCalled: boolean;
+      }
+      async function makeTest(p: IParams): Promise<IResults> {
+        const poolSwapTokens = p.poolSwapTokens ?? false;
+        const decimalsA = p.decimalsA ?? 6;
+        const decimalsB = p.decimalsB ?? 6;
+
+// set up pool mock
+        const amountA = parseUnits(p.amountA, decimalsA);
+        const amount0 = parseUnits(p.pool.amount0, poolSwapTokens ? decimalsB: decimalsA);
+        const amount1 = parseUnits(p.pool.amount1, poolSwapTokens ? decimalsA: decimalsB);
+
+        // sqrt(price) = sqrt(reserves B / reserves A)
+        const sqrtPriceX96 = amount1.div(amount0).mul(BigNumber.from(2).pow(96));
+        // tick = log_{sqrt(1.0001)}(sqrt(price))
+        const tick = await facadeUni._getTickAtSqrtRatio(sqrtPriceX96);
+
+        const expectedRange = await facade.getNarrowTickRange(
+          sqrtPriceX96,
+          tick,
+          p.config.tickRangeSize,
+          p.tickSpacing,
+          p.config.tickLimit,
+          !!p.poolSwapTokens
+        );
+        const expectedLiquidity = await facadeUni.getLiquidityForAmounts(
+          sqrtPriceX96,
+          expectedRange.lowerTick,
+          expectedRange.upperTick,
+          p.poolSwapTokens ? 0 : amountA,
+          p.poolSwapTokens ? amountA : 0,
+        );
+
+        await mockedPool.setMint(
+          facade.address,
+          expectedRange.lowerTick,
+          expectedRange.upperTick,
+          expectedLiquidity,
+          defaultAbiCoder.encode(["address"], [signer.address]),
+          41, // not used in the code
+          57, // not used in the code
+        );
+
+        await mockedPool.setSlot0(sqrtPriceX96, tick,
+          // following values are not used here
+          0, 0, 0, 0, false
+        );
+
+// set up facade
+        await facade.setConfig({
+          tickLimit: p.config.tickLimit,
+          tickRangeSize: p.config.tickRangeSize,
+          // not used
+          thresholdLastRefreshPoolSec: 0,
+          thresholdRatio: 0,
+          thresholdTokenB: 0,
+          amountA,
+        });
+
+        const tr = await facade.enter(mockedPool.address, p.tickSpacing, amountA, poolSwapTokens);
+        const cr = await tr.wait();
+        const gasUsed = cr.gasUsed.toNumber();
+
+        const stateAfter = await facade.getState();
+        const isMintCalled = await mockedPool.isMintCalled(
+          facade.address,
+          expectedRange.lowerTick,
+          expectedRange.upperTick,
+          expectedLiquidity,
+          defaultAbiCoder.encode(["address"], [signer.address]),
+        );
+
+        return {
+          gasUsed,
+          expected: {
+            lowerTick: expectedRange.lowerTick,
+            upperTick: expectedRange.upperTick,
+            liquidityAmount: expectedLiquidity
+          },
+          state: {
+            lowerTick: stateAfter.lowerTick,
+            upperTick: stateAfter.upperTick,
+            liquidityAmount: stateAfter.liquidityAmount
+          },
+          isMintCalled
+        }
+      }
+
+      const NORMAL_CASE: IParams = {
+        pool: {
+          amount0: "1",
+          amount1: "1000",
+        },
+        amountA: "5000",
+        tickSpacing: 1,
+        config: {
+          tickLimit: -100_000,
+          tickRangeSize: 10
+        }
+      }
+      describe("poolSwapTokens is false", () => {
+        it("should return expected values in normal case", async () => {
+          const ret = await makeTest(NORMAL_CASE);
+          console.log("ret", ret);
+          expect(ret.state.liquidityAmount).eq(ret.expected.liquidityAmount);
+          expect(ret.state.lowerTick).eq(ret.expected.lowerTick);
+          expect(ret.state.upperTick).eq(ret.expected.upperTick);
+          expect(ret.isMintCalled).eq(true);
+        });
+      });
+      describe("poolSwapTokens is true", () => {
+        it("should return expected values in normal case", async () => {
+          const ret = await makeTest({
+            ...NORMAL_CASE,
+            poolSwapTokens: true
+          });
+          console.log("ret", ret);
+          expect(ret.state.liquidityAmount).eq(ret.expected.liquidityAmount);
+          expect(ret.state.lowerTick).eq(ret.expected.lowerTick);
+          expect(ret.state.upperTick).eq(ret.expected.upperTick);
+          expect(ret.isMintCalled).eq(true);
+        });
+      });
+
+      it("should revert if liquidity is 0", async () => {
+        await expect(makeTest({
+          ...NORMAL_CASE,
+          amountA: "0" // (!)
+        })).revertedWithCustomError(facade, "ErrorZeroLiquidityToMint");
+      });
+    });
+
+    describe("exit", () => {
+      let snapshotEach: string;
+      beforeEach(async function () {
+        snapshotEach = await TimeUtils.snapshot();
+      });
+      afterEach(async function () {
+        await TimeUtils.rollback(snapshotEach);
+      });
+
+      interface IParams {
+        clearState: boolean;
+        state: {
+          lowerTick: number;
+          upperTick: number;
+          liquidityAmount: BigNumber;
+        }
+      }
+      interface IResults {
+        gasUsed: number;
+        state: {
+          lowerTick: number;
+          upperTick: number;
+          liquidityAmount: BigNumber;
+        }
+        isBurnCalled: boolean;
+        isCollectCalled: boolean;
+      }
+      async function makeTest(p: IParams): Promise<IResults> {
+        // set up facade
+        await facade.setState({
+          lowerTick: p.state.lowerTick,
+          upperTick: p.state.upperTick,
+          liquidityAmount: p.state.liquidityAmount,
+          lastRefreshPoolTimestamp: 0
+        });
+
+        // set up mocked pool
+        await mockedPool.setCollect(
+          facade.address,
+          p.state.lowerTick,
+          p.state.upperTick,
+          Misc.MAX_UINT_128,
+          Misc.MAX_UINT_128,
+          41, // not used here
+          71, // not used here
+        );
+
+        await mockedPool.setBurn(
+          p.state.lowerTick,
+          p.state.upperTick,
+          p.state.liquidityAmount,
+          41, // not used here
+          71, // not used here
+        );
+
+        const tr = await facade.exit(mockedPool.address, p.clearState);
+        const cr = await tr.wait();
+        const gasUsed = cr.gasUsed.toNumber();
+
+        const stateAfter = await facade.getState();
+        const isCollectCalled = await mockedPool.isCollectCalled(
+          facade.address,
+          p.state.lowerTick,
+          p.state.upperTick,
+          Misc.MAX_UINT_128,
+          Misc.MAX_UINT_128,
+        );
+        const isBurnCalled = await mockedPool.isBurnCalled(
+          p.state.lowerTick,
+          p.state.upperTick,
+          p.state.liquidityAmount,
+        );
+
+        return {
+          gasUsed,
+          state: {
+            lowerTick: stateAfter.lowerTick,
+            upperTick: stateAfter.upperTick,
+            liquidityAmount: stateAfter.liquidityAmount
+          },
+          isCollectCalled,
+          isBurnCalled
+        }
+      }
+
+      it("should call expected functions and clear state", async () => {
+        const ret = await makeTest({
+          state: {lowerTick: 1, upperTick: 2, liquidityAmount: BigNumber.from(3)},
+          clearState: true
+        });
+        console.log(ret);
+        expect(ret.isBurnCalled).eq(true);
+        expect(ret.isCollectCalled).eq(true);
+        expect(ret.state.lowerTick).eq(0);
+        expect(ret.state.upperTick).eq(0);
+        expect(ret.state.liquidityAmount).eq(0);
+      });
+      it("should call expected functions but NOT clear state", async () => {
+        const ret = await makeTest({
+          state: {lowerTick: 1, upperTick: 2, liquidityAmount: BigNumber.from(3)},
+          clearState: false
+        });
+        expect(ret.isBurnCalled).eq(true);
+        expect(ret.isCollectCalled).eq(true);
+        expect(ret.state.lowerTick).eq(1);
+        expect(ret.state.upperTick).eq(2);
+        expect(ret.state.liquidityAmount).eq(3);
+      });
+    });
+  });
+});

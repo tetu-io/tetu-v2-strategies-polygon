@@ -4,7 +4,7 @@ import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {IBuilderResults, IStrategyCustomizationParams, PairBasedStrategyBuilder} from "./PairBasedStrategyBuilder";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_PANCAKE, PLATFORM_UNIV3} from "../AppPlatforms";
 import {MockSwapper} from "../../../../typechain";
-import {BASE_NETWORK_ID, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from "../../utils/HardhatUtils";
+import {BASE_NETWORK_ID, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from "../../../../scripts/utils/HardhatUtils";
 import {BaseAddresses} from "../../../../scripts/addresses/BaseAddresses";
 import {ZkevmAddresses} from "../../../../scripts/addresses/ZkevmAddresses";
 import {ZkevmCoreTokensUtils} from "../../cores/ZkevmCoreTokens";

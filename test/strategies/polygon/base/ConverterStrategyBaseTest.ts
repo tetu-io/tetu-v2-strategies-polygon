@@ -38,7 +38,7 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {BalanceUtils} from "../../../baseUT/utils/BalanceUtils";
 import {controlGasLimitsEx} from "../../../../scripts/utils/GasLimitUtils";
 import {GAS_CONVERTER_STRATEGY_BASE_CONVERT_PREPARE_REWARDS_LIST} from "../../../baseUT/GasLimits";
-import { HARDHAT_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import { HARDHAT_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID } from '../../../../scripts/utils/HardhatUtils';
 
 /**
  * Test of ConverterStrategyBase

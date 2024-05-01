@@ -15,7 +15,7 @@ import {MockHelper} from "../../baseUT/helpers/MockHelper";
 import {IRepayParams} from "../../baseUT/mocks/TestDataTypes";
 import {setupMockedRepay} from "../../baseUT/mocks/MockRepayUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {HARDHAT_NETWORK_ID, HardhatUtils} from "../../baseUT/utils/HardhatUtils";
+import {HARDHAT_NETWORK_ID, HardhatUtils} from "../../../scripts/utils/HardhatUtils";
 import {facades} from "../../../typechain/contracts/test";
 
 /**

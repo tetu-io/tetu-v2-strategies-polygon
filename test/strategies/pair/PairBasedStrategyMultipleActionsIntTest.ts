@@ -28,7 +28,7 @@ import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {IGetStateParams, IStateNum, StateUtilsNum} from "../../baseUT/utils/StateUtilsNum";
 import {ConverterUtils} from "../../baseUT/utils/ConverterUtils";
 import {CaptureEvents} from "../../baseUT/strategies/CaptureEvents";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../scripts/utils/HardhatUtils';
 import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
 
 /**

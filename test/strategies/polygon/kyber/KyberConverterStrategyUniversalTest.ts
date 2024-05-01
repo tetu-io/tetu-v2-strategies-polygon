@@ -22,7 +22,7 @@ import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../../scripts/utils/HardhatUtils';
 import {
   KYBER_PID_DEFAULT_BLOCK,
   KYBER_USDC_DAI_PID_DEFAULT_BLOCK

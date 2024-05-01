@@ -44,7 +44,7 @@ import {parseUnits} from "ethers/lib/utils";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_PANCAKE, PLATFORM_UNIV3} from "../AppPlatforms";
 import {MockHelper} from "../../helpers/MockHelper";
 import {BaseAddresses} from "../../../../scripts/addresses/BaseAddresses";
-import {BASE_NETWORK_ID, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from "../../utils/HardhatUtils";
+import {BASE_NETWORK_ID, POLYGON_NETWORK_ID, ZKEVM_NETWORK_ID} from "../../../../scripts/utils/HardhatUtils";
 import {ITetuLiquidatorPoolInfo, TetuLiquidatorUtils} from "../../utils/TetuLiquidatorUtils";
 
 /**

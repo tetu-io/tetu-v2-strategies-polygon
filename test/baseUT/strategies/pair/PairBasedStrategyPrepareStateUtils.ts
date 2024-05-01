@@ -21,7 +21,7 @@ import {CaptureEvents, IEventsSet} from "../CaptureEvents";
 import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY_1} from "../../AppConstants";
 import {UniversalTestUtils} from "../../utils/UniversalTestUtils";
 import {trimDecimals} from "../../utils/MathUtils";
-import {ZKEVM_NETWORK_ID} from "../../utils/HardhatUtils";
+import {ZKEVM_NETWORK_ID} from "../../../../scripts/utils/HardhatUtils";
 
 export interface IPrepareOverCollateralParams {
   countRebalances: number;

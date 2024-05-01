@@ -13,7 +13,7 @@ import {
   Misc
 } from "../../../scripts/utils/Misc";
 import {setupIsConversionValid, setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
-import {HARDHAT_NETWORK_ID, HardhatUtils} from '../../baseUT/utils/HardhatUtils';
+import {HARDHAT_NETWORK_ID, HardhatUtils} from '../../../scripts/utils/HardhatUtils';
 
 describe('BorrowLibTest', () => {
   /** prop0 + prop1 */

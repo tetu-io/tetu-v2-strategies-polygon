@@ -1,12 +1,13 @@
 import hre from 'hardhat';
 import { reset } from '@nomicfoundation/hardhat-network-helpers';
-import { EnvSetup } from '../../../scripts/utils/EnvSetup';
+import { EnvSetup } from './EnvSetup';
 
 export const HARDHAT_NETWORK_ID = 31337;
 export const POLYGON_NETWORK_ID = 137;
 export const BASE_NETWORK_ID = 8453;
 
 export const ZKEVM_NETWORK_ID = 1101;
+export const FTM_NETWORK_ID = 250;
 
 interface IEnvData {
   rpcUrl: string;
@@ -70,6 +71,8 @@ export class HardhatUtils {
       );
     } else if (chainId === ZKEVM_NETWORK_ID) {
       await reset(env.zkevmRpcUrl, block ? block === -1 ? undefined : block : env.zkevmForkBlock);
+    } else if (chainId === FTM_NETWORK_ID) {
+      await reset(env.ftmRpcUrl, block ? block === -1 ? undefined : block : env.ftmForkBlock);
     } else {
       throw new Error('Unknown chain id ' + chainId);
     }
@@ -85,6 +88,8 @@ export class HardhatUtils {
       return {rpcUrl: env.baseRpcUrl, forkBlock: env.baseForkBlock};
     } else if (chainId === ZKEVM_NETWORK_ID) {
       return {rpcUrl: env.zkevmRpcUrl, forkBlock: env.zkevmForkBlock};
+    } else if (chainId === FTM_NETWORK_ID) {
+      return {rpcUrl: env.ftmRpcUrl, forkBlock: env.ftmForkBlock};
     }
   }
 }
