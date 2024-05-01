@@ -15,7 +15,7 @@ import "./Univ3TokenSellerLib.sol";
 /// Only A token is deposited to the pool. If B token appears on the balance, it's withdrawn to the given receiver.
 contract Univ3TokenSeller is IUniswapV3MintCallback, IUniv3TokenSeller {
   //region ---------------------- Constants
-  string constant public TOKEN_SELLER_VERSION = "1.0.1";
+  string constant public TOKEN_SELLER_VERSION = "1.0.2";
   //endregion ---------------------- Constants
 
   //region ---------------------- Members
@@ -233,7 +233,8 @@ contract Univ3TokenSeller is IUniswapV3MintCallback, IUniv3TokenSeller {
   //region ---------------------- Internal logic
   /// @notice Get in-amount of token A to enter to the pool
   function _getAmountA() internal view returns (uint amountA) {
-    amountA = Math.min(config.amountA, IERC20(tokenA).balanceOf(address(this)));
+    // amountA = Math.min(config.amountA, IERC20(tokenA).balanceOf(address(this)));
+    amountA = IERC20(tokenA).balanceOf(address(this));
     if (amountA == 0) revert ZeroAmountA();
   }
 

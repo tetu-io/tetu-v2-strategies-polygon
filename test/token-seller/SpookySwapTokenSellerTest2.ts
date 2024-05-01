@@ -43,7 +43,7 @@ describe('SpookySwapTokenSellerTest2', () => {
   let tokenB: IERC20;
   const decimalsA = 18;
   const decimalsB = 6;
-  const tickRangeSize = 1;
+  const tickRangeSize = 13;
   let pool: UniswapV3Pool;
   let facadeUni: UniswapV3LibFacade;
   let uniswapV3Callee: UniswapV3Callee;
@@ -68,9 +68,47 @@ describe('SpookySwapTokenSellerTest2', () => {
     saveToCsv(states, "");
   });
 
+  function getRealPrice(sqrtPrice: BigNumber): BigNumber {
+    const QX96 = BigNumber.from(2).pow(96);
+    return sqrtPrice.mul(Misc.ONE18).mul(sqrtPrice).div(QX96).div(QX96);
+  }
+
   it("calculate prices and ticks", async () => {
+    for (let tick = 40443; tick < 43810; tick += 200) {
+      const sqrt = await facadeUni._getSqrtRatioAtTick(tick);
+      const price = +formatUnits(getRealPrice(sqrt), 18);
+      console.log(tick, price);
+    }
+
     const tickCurrent = 40810;
+
+    const tickLower = 40600;
+    const tickUpper = 40800;
+
     const tickLimit = 46600;
+
+    const tickTest = 43810;
+
+    const sqrtPriceCurrent = await facadeUni._getSqrtRatioAtTick(tickCurrent);
+
+    const sqrtPriceLower = await facadeUni._getSqrtRatioAtTick(tickLower);
+    const sqrtPriceUpper = await facadeUni._getSqrtRatioAtTick(tickUpper);
+
+    const sqrtPriceLimit = await facadeUni._getSqrtRatioAtTick(tickLimit);
+
+    const sqrtPriceTest = await facadeUni._getSqrtRatioAtTick(tickTest);
+
+    const priceCurrent = +formatUnits(getRealPrice(sqrtPriceCurrent), 18);
+    const priceLower = +formatUnits(getRealPrice(sqrtPriceLower), 18);
+    const priceUpper = +formatUnits(getRealPrice(sqrtPriceUpper), 18);
+    const priceLimit = +formatUnits(getRealPrice(sqrtPriceLimit), 18);
+    const priceTest = +formatUnits(getRealPrice(sqrtPriceTest), 18);
+
+    console.log("tick, priceCurrent", tickCurrent, priceCurrent);
+    console.log("tick, priceLower", tickLower, priceLower);
+    console.log("tick, priceUpper", tickUpper, priceUpper);
+    console.log("tick, priceLimit", tickLimit, priceLimit);
+    console.log("tick, priceTest", tickTest, priceTest);
   });
 
   //region Data types
@@ -333,7 +371,14 @@ describe('SpookySwapTokenSellerTest2', () => {
         // await getToken(tokenB.address, signer2.address, parseUnits(MAX_AMOUNT_TO_SWAP_B, decimalsB));
 
         tokenSeller = Univ3TokenSeller__factory.connect(
-          await DeployTokenSellerUtils.deployTokenSeller(signer, tokenA.address, tokenB.address, POOL, SIGNER_AMOUNT_A, tickRangeSize),
+          await DeployTokenSellerUtils.deployTokenSeller(
+            signer,
+            tokenA.address,
+            tokenB.address,
+            POOL,
+            SIGNER_AMOUNT_A,
+            tickRangeSize
+          ),
           signer
         );
         poolSwapTokens = await tokenSeller.poolSwapTokens();

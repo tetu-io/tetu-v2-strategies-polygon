@@ -2,6 +2,7 @@ import {ethers, network} from "hardhat";
 import {DeployTokenSellerUtils} from "./DeployTokenSellerUtils";
 import {FtmAddresses} from "../addresses/FtmAddresses";
 import {writeFileSyncRestoreFolder} from "../../test/baseUT/utils/FileUtils";
+import {Univ3TokenSeller__factory} from "../../typechain";
 
 /**
  * npx hardhat run scripts/token-seller/DeployTokenSeller.ts
@@ -18,11 +19,11 @@ async function main() {
   const tokenB = "0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83"; // ftm
 
   const POOL = "0x56e837286dc7366ef6d6464d332ac6f9d32bc5a0"; // SpookySwap pool
-  const tickRangeSize = 10;
+  const tickRangeSize = 13; // ~30% of current price
   const SIGNER_AMOUNT_A = "1";
   const thresholdRatio = "0.1";
   const thresholdLastRefreshPoolSec = 60;
-  const tickLimit = 40810;
+  const tickLimit = 42600;
 
   const tokenSeller = await DeployTokenSellerUtils.deployTokenSeller(
     signer,
@@ -36,6 +37,9 @@ async function main() {
     tickLimit
   );
   console.log("tokenSeller", tokenSeller);
+
+  console.log("config", await Univ3TokenSeller__factory.connect(tokenSeller, signer).config());
+
   writeFileSyncRestoreFolder(destPathTxt, `tokenSeller: ${tokenSeller}\n`, { encoding: 'utf8', flag: 'a' });
 }
 

@@ -16,7 +16,7 @@ async function main() {
   const net = await ethers.provider.getNetwork();
   console.log(net, `network name="${network.name}"`);
 
-  const tokenSeller = "0x8E294388A3E91cdac5FEA95b5b75f509b85dC5E2";
+  const tokenSeller = "0x51002Cad5e6FbE3856311f431E1c41c46Acc5D47";
   const tokenSellerResolver = (await DeployerUtils.deployContract(signer, "Univ3TokenSellerResolver", tokenSeller, 60)).address;
 
   writeFileSyncRestoreFolder(destPathTxt, `tokenSellerResolver: ${tokenSellerResolver}\n`, { encoding: 'utf8', flag: 'a' });

@@ -21,7 +21,7 @@ library Univ3TokenSellerLib {
     /// @notice size of the narrow range (in tickSpacing)
     uint tickRangeSize;
 
-    /// @notice Amount ot token A to invest to the narrow range
+    /// @notice Amount ot token A to invest to the narrow range (NOT USED ANYMORE)
     uint amountA;
 
     /// @notice Min amount of token B that can be transferred to the receiver
