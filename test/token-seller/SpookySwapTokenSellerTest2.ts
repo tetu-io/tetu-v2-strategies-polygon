@@ -26,9 +26,13 @@ describe('SpookySwapTokenSellerTest2', () => {
   const MAX_AMOUNT_TO_SWAP_A = "100";
   const MAX_AMOUNT_TO_SWAP_B = "100";
 
-  const TOKEN_A = "0xF21ABFC5D68819EA0044fdB256d0AA854DC3034b";
-  const TOKEN_B = "0xF992a90B4F2D59B65548bF9766a02ee8170E7F07";
-  const POOL = "0x11aB7c23B6d05Aa08D69A1eD669Ad19f3eAC52d9";
+  // const TOKEN_A = "0xF21ABFC5D68819EA0044fdB256d0AA854DC3034b";
+  // const TOKEN_B = "0xF992a90B4F2D59B65548bF9766a02ee8170E7F07";
+  // const POOL = "0x11aB7c23B6d05Aa08D69A1eD669Ad19f3eAC52d9";
+
+  const POOL = "0x56e837286dc7366ef6d6464d332ac6f9d32bc5a0";
+  const TOKEN_A = "0xe4436821e403e78a6dd62f7a9f5611f97a18f44c"; // sacra (token to sell)
+  const TOKEN_B = "0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83"; // ftm
 
   let snapshotBefore: string;
   let signer: SignerWithAddress;
@@ -62,6 +66,11 @@ describe('SpookySwapTokenSellerTest2', () => {
   after(async function () {
     await TimeUtils.rollback(snapshotBefore);
     saveToCsv(states, "");
+  });
+
+  it("calculate prices and ticks", async () => {
+    const tickCurrent = 40810;
+    const tickLimit = 46600;
   });
 
   //region Data types
@@ -295,9 +304,9 @@ describe('SpookySwapTokenSellerTest2', () => {
   }
   //endregion Stat utils
 
-  async function getToken(token: string, signer: string, amount: BigNumber) {
-    await MockToken__factory.connect(token, await Misc.impersonate(signer)).mint(signer, amount);
-  }
+  // async function getToken(token: string, signer: string, amount: BigNumber) {
+  //   await MockToken__factory.connect(token, await Misc.impersonate(signer)).mint(signer, amount);
+  // }
 
   describe("refreshPool (init => {swap => refreshPool} * N => withdraw)", () => {
     const SWAP_SETS: ISwapParams[] = [
@@ -315,26 +324,21 @@ describe('SpookySwapTokenSellerTest2', () => {
         console.log("Set up token seller");
         snapshot2 = await TimeUtils.snapshot();
 
-        // await TokenUtils.getToken(tokenA.address, signer.address, parseUnits(SIGNER_BALANCE_A, decimalsA));
-        // await TokenUtils.getToken(tokenA.address, signer2.address, parseUnits(MAX_AMOUNT_TO_SWAP_A, decimalsA));
-        // await TokenUtils.getToken(tokenB.address, signer2.address, parseUnits(MAX_AMOUNT_TO_SWAP_B, decimalsB));
+        await TokenUtils.getToken(tokenA.address, signer.address, parseUnits(SIGNER_BALANCE_A, decimalsA));
+        await TokenUtils.getToken(tokenA.address, signer2.address, parseUnits(MAX_AMOUNT_TO_SWAP_A, decimalsA));
+        await TokenUtils.getToken(tokenB.address, signer2.address, parseUnits(MAX_AMOUNT_TO_SWAP_B, decimalsB));
 
-        await getToken(tokenA.address, signer.address, parseUnits(SIGNER_BALANCE_A, decimalsA));
-        await getToken(tokenA.address, signer2.address, parseUnits(MAX_AMOUNT_TO_SWAP_A, decimalsA));
-        await getToken(tokenB.address, signer2.address, parseUnits(MAX_AMOUNT_TO_SWAP_B, decimalsB));
+        // await getToken(tokenA.address, signer.address, parseUnits(SIGNER_BALANCE_A, decimalsA));
+        // await getToken(tokenA.address, signer2.address, parseUnits(MAX_AMOUNT_TO_SWAP_A, decimalsA));
+        // await getToken(tokenB.address, signer2.address, parseUnits(MAX_AMOUNT_TO_SWAP_B, decimalsB));
 
         tokenSeller = Univ3TokenSeller__factory.connect(
           await DeployTokenSellerUtils.deployTokenSeller(signer, tokenA.address, tokenB.address, POOL, SIGNER_AMOUNT_A, tickRangeSize),
           signer
         );
-        console.log("5");
         poolSwapTokens = await tokenSeller.poolSwapTokens();
-        console.log("6");
-
         await tokenA.transfer(tokenSeller.address, parseUnits(SIGNER_AMOUNT_A, decimalsA));
-        console.log("7");
         await tokenSeller.openPosition();
-        console.log("8");
 
         const poolInfo = await pool.slot0();
         init = {
@@ -348,13 +352,18 @@ describe('SpookySwapTokenSellerTest2', () => {
           balancesAbSigner1: await getBalancesAB(signer1.address),
           balancesAbSigner2: await getBalancesAB(signer2.address),
         }
-        console.log("9");
+        console.log("init", init);
 
         const config = await tokenSeller.config();
         derivedValues = {
           tickLimit: config.tickLimit,
           tickSpacing: await tokenSeller.tickSpacing(),
         }
+
+        console.log("config", config);
+        console.log("poolSwapTokens", await tokenSeller.poolSwapTokens());
+        console.log("tokenA", await tokenSeller.tokenA());
+        console.log("tokenB", await tokenSeller.tokenB());
       });
       after(async function () {
         await TimeUtils.rollback(snapshot2);

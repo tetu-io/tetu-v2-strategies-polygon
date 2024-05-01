@@ -10,7 +10,6 @@ contract Univ3TokenSellerResolver {
   string public constant VERSION = "1.0.0";
   //endregion ---------------------- Constants
 
-
   //region ---------------------- Variables
 
   IUniv3TokenSeller public tokenSeller;

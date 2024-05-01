@@ -1,8 +1,8 @@
-import {parseUnits} from "ethers/lib/utils";
+import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {
   IERC20Metadata__factory,
   MockToken__factory,
-  UniswapV3Callee__factory,
+  UniswapV3Callee__factory, UniswapV3Pool__factory,
   Univ3TokenSeller__factory
 } from "../../typechain";
 import {ethers, network} from "hardhat";
@@ -18,7 +18,8 @@ async function main() {
   const POOL = "0x11aB7c23B6d05Aa08D69A1eD669Ad19f3eAC52d9";
   const TOKEN_SELLER = "0x8E294388A3E91cdac5FEA95b5b75f509b85dC5E2";
 
-  const signer = (await ethers.getSigners())[0];
+  // const signer = (await ethers.getSigners())[0];
+  const signer = await Misc.impersonate("0xF1dCce3a6c321176C62b71c091E3165CC9C3816E");
   console.log("signer", signer.address);
 
   const net = await ethers.provider.getNetwork();
@@ -33,13 +34,24 @@ async function main() {
   const decimalsB = await tokenB.decimals();
 
   const tokenSeller = Univ3TokenSeller__factory.connect(TOKEN_SELLER, signer);
+  const pool = UniswapV3Pool__factory.connect(POOL, signer);
   const owner = await tokenSeller.owner();
 
-  console.log("Need to refresh", await tokenSeller.needToRefresh());
-  console.log("TokenSeller.state", await tokenSeller.state());
+  const state = await tokenSeller.state();
+  const slot0 = await pool.slot0();
+  const config = await tokenSeller.config();
+
   console.log("owner", owner);
-  console.log("BalanceA", await tokenA.balanceOf(owner));
-  console.log("BalanceB", await tokenB.balanceOf(owner));
+  console.log("TokenSeller.config", config);
+  console.log("TokenSeller.config.tickLimit", config.tickLimit);
+  console.log("TokenSeller.state", state);
+
+  console.log("Need to refresh", await tokenSeller.needToRefresh());
+  console.log("BalanceA", +formatUnits(await tokenA.balanceOf(signer.address), decimalsA));
+  console.log("BalanceB", +formatUnits(await tokenB.balanceOf(signer.address), decimalsB));
+  console.log("TokenSeller.state.lowerTick", state.lowerTick);
+  console.log("TokenSeller.state.upperTick", state.upperTick);
+  console.log("slot0Before.tick", slot0.tick);
 }
 
 main()
